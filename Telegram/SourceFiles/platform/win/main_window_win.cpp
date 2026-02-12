@@ -522,33 +522,11 @@ void MainWindow::forceIconRefresh() {
 void MainWindow::workmodeUpdated(Core::Settings::WorkMode mode) {
 	using WorkMode = Core::Settings::WorkMode;
 
-	switch (mode) {
-	case WorkMode::WindowAndTray: {
-		HWND psOwner = (HWND)GetWindowLongPtr(_hWnd, GWLP_HWNDPARENT);
-		if (psOwner) {
-			SetWindowLongPtr(_hWnd, GWLP_HWNDPARENT, 0);
-			windowHandle()->setTransientParent(nullptr);
-			forceIconRefresh();
-		}
-	} break;
-
-	case WorkMode::TrayOnly: {
-		HWND psOwner = (HWND)GetWindowLongPtr(_hWnd, GWLP_HWNDPARENT);
-		if (!psOwner) {
-			const auto hwnd = _taskbarHiderWindow->winId();
-			SetWindowLongPtr(_hWnd, GWLP_HWNDPARENT, (LONG_PTR)hwnd);
-			windowHandle()->setTransientParent(_taskbarHiderWindow.get());
-		}
-	} break;
-
-	case WorkMode::WindowOnly: {
-		HWND psOwner = (HWND)GetWindowLongPtr(_hWnd, GWLP_HWNDPARENT);
-		if (psOwner) {
-			SetWindowLongPtr(_hWnd, GWLP_HWNDPARENT, 0);
-			windowHandle()->setTransientParent(nullptr);
-			forceIconRefresh();
-		}
-	} break;
+	HWND psOwner = (HWND)GetWindowLongPtr(_hWnd, GWLP_HWNDPARENT);
+	if (psOwner) {
+		SetWindowLongPtr(_hWnd, GWLP_HWNDPARENT, 0);
+		windowHandle()->setTransientParent(nullptr);
+		forceIconRefresh();
 	}
 }
 
