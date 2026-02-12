@@ -185,10 +185,7 @@ void PeerListBox::prepare() {
 		object_ptr<PeerListContent>(
 			this,
 			_controller.get()),
-		st::boxScroll,
-		0,
-		0,
-		true /*alwaysKeepDimensionsToInner*/));
+		st::boxScroll));
 	content()->resizeToWidth(_controller->contentWidth());
 
 	_controller->setDelegate(this);
@@ -212,6 +209,15 @@ void PeerListBox::prepare() {
 
 	if (_init) {
 		_init(this);
+	}
+
+	{
+		setDimensions(
+			_controller->contentWidth(),
+			std::clamp(
+				content()->height(),
+				st::boxMaxListHeight,
+				st::boxMaxListHeight * 3));
 	}
 }
 
@@ -350,6 +356,16 @@ const style::PeerList &PeerListController::computeListSt() const {
 
 const style::MultiSelect &PeerListController::computeSelectSt() const {
 	return _selectSt ? *_selectSt : st::defaultMultiSelect;
+}
+
+void PeerListController::showFinished() {
+	if (const auto onstack = _showFinished) {
+		onstack();
+	}
+}
+
+void PeerListController::setShowFinishedCallback(Fn<void()> callback) {
+	_showFinished = std::move(callback);
 }
 
 bool PeerListController::hasComplexSearch() const {

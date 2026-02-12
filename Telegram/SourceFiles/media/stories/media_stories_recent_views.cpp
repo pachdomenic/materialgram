@@ -129,9 +129,9 @@ constexpr auto kLoadViewsPages = 2;
 		const QString &date,
 		not_null<Data::Story*> repost) {
 	return date + (repost->repostModified()
-		? (QString::fromUtf8(" \xE2\x80\xA2 ") + tr::lng_edited(tr::now))
+		? (' ' + Ui::kQBullet + ' ' + tr::lng_edited(tr::now))
 		: !repost->caption().empty()
-		? (QString::fromUtf8(" \xE2\x80\xA2 ") + tr::lng_commented(tr::now))
+		? (' ' + Ui::kQBullet + ' ' + tr::lng_commented(tr::now))
 		: QString());
 }
 
@@ -500,7 +500,7 @@ void RecentViews::showMenu() {
 	_menu->setForcedVerticalOrigin(PopupMenu::VerticalOrigin::Bottom);
 	_menu->popup(QPoint(
 		geometry.x() + (_widget->width() - size.width()) / 2,
-		geometry.y() + _widget->height()));
+		geometry.y()));
 
 	_menuEntriesCount = _menuEntriesCount.current() + added;
 }

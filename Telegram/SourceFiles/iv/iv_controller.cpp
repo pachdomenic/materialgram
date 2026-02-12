@@ -65,11 +65,11 @@ class ItemZoom final
 	, public Ui::AbstractTooltipShower {
 public:
 	ItemZoom(
-		not_null<RpWidget*> parent,
+		not_null<Ui::PopupMenu*> parent,
 		const not_null<Delegate*> delegate,
 		const style::Menu &st)
 	: Ui::Menu::Action(
-		parent,
+		parent->menu(),
 		st,
 		Ui::CreateChild<QAction>(parent),
 		nullptr,
@@ -615,7 +615,7 @@ void Controller::createWindow() {
 		updateTitleGeometry(width);
 	}, _subtitle->lifetime());
 
-	window->setGeometry(_delegate->ivGeometry());
+	window->setGeometry(_delegate->ivGeometry(window));
 	window->setMinimumSize({ st::windowMinWidth, st::windowMinHeight });
 
 	window->geometryValue(
