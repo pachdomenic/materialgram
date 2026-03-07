@@ -952,6 +952,7 @@ HistoryWidget::HistoryWidget(
 		}
 		if (flags & PeerUpdateFlag::FullInfo) {
 			fullInfoUpdated();
+			updateSendButtonType();
 			if (_peer->starsPerMessageChecked()) {
 				session().credits().load();
 			} else if (const auto channel = _peer->asChannel()) {
@@ -4739,12 +4740,12 @@ void HistoryWidget::hideSelectorControlsAnimated() {
 }
 
 Api::SendAction HistoryWidget::prepareSendAction(
-		Api::SendOptions options) const {
+		Api::SendOptions options) {
 	auto result = Api::SendAction(_history, options);
 	result.replyTo = replyTo();
 
 	if (const auto forum = _history->asForum()) {
-		if (Data::IsBotCanManageTopics(_history->peer)) {
+		if (forum->bot() && Data::IsBotUserCreatesTopics(_history->peer)) {
 			const auto readyRootId = [&]() -> MsgId {
 				if (const auto id = result.replyTo.messageId) {
 					if (const auto item = session().data().message(id)) {
@@ -4757,14 +4758,15 @@ Api::SendAction HistoryWidget::prepareSendAction(
 				result.replyTo.topicRootId = readyRootId;
 			} else {
 				if (!_creatingBotTopic) {
-					const auto &colors = Data::ForumTopicColorIds();
-					const auto colorId
-						= colors[base::RandomIndex(colors.size())];
-					_creatingBotTopic = forum->topicFor(
-						forum->reserveCreatingId(
-							tr::lng_bot_new_chat(tr::now),
-							colorId,
-							DocumentId()));
+					_creatingBotTopic = forum->reserveNewBotTopic();
+					auto draft = _history->forwardDraft(MsgId(0), PeerId());
+					if (!draft.ids.empty()) {
+						_history->setForwardDraft(MsgId(0), PeerId(), {});
+						_history->setForwardDraft(
+							_creatingBotTopic->rootId(),
+							PeerId(),
+							std::move(draft));
+					}
 				}
 				result = Api::SendAction(_creatingBotTopic, options);
 				result.replyTo.topicRootId = _creatingBotTopic->rootId();
@@ -5633,6 +5635,18 @@ void HistoryWidget::updateSendButtonType() {
 	using Type = Ui::SendButton::Type;
 
 	const auto type = computeSendButtonType();
+	const auto forbidden = [&] {
+		if (type != Type::Record && type != Type::Round) {
+			return false;
+		}
+		if (!_peer) {
+			return false;
+		}
+		const auto restriction = (type == Type::Record)
+			? ChatRestriction::SendVoiceMessages
+			: ChatRestriction::SendVideoMessages;
+		return !!Data::RestrictionError(_peer, restriction);
+	}();
 	// This logic is duplicated in ChatWidget.
 	const auto disabledBySlowmode = _peer
 		&& _peer->slowmodeApplied()
@@ -5656,6 +5670,7 @@ void HistoryWidget::updateSendButtonType() {
 		.type = (delay > 0) ? Type::Slowmode : type,
 		.slowmodeDelay = delay,
 		.starsToSend = stars,
+		.forbidden = forbidden,
 	});
 	_send->setDisabled(disabledBySlowmode
 		&& (type == Type::Send
@@ -6323,7 +6338,7 @@ void HistoryWidget::updateFieldPlaceholder() {
 			}
 		} else if (const auto user = peer->asUser()) {
 			if (const auto &info = user->botInfo) {
-				if (info->forum() && !info->canManageTopics) {
+				if (info->forum() && !info->userCreatesTopics) {
 					return tr::lng_bot_off_thread_ph();
 				}
 			}
@@ -6337,47 +6352,13 @@ void HistoryWidget::updateFieldPlaceholder() {
 
 bool HistoryWidget::showSendingFilesError(
 		const Ui::PreparedList &list) const {
-	return showSendingFilesError(list, std::nullopt);
+	const auto show = controller()->uiShow();
+	return Data::ShowSendError(show, _peer, list, std::nullopt);
 }
 
 bool HistoryWidget::showSendingFilesError(
-		const Ui::PreparedList &list,
-		std::optional<bool> compress) const {
-	const auto error = [&]() -> Data::SendError {
-		const auto error = _peer
-			? Data::FileRestrictionError(_peer, list, compress)
-			: Data::SendError();
-		if (!_peer || error) {
-			return error;
-		} else if (const auto left = _peer->slowmodeSecondsLeft()) {
-			return tr::lng_slowmode_enabled(
-				tr::now,
-				lt_left,
-				Ui::FormatDurationWordsSlowmode(left));
-		}
-		using Error = Ui::PreparedList::Error;
-		switch (list.error) {
-		case Error::None: return QString();
-		case Error::EmptyFile:
-		case Error::Directory:
-		case Error::NonLocalUrl: return tr::lng_send_image_empty(
-			tr::now,
-			lt_name,
-			list.errorData);
-		case Error::TooLargeFile: return u"(toolarge)"_q;
-		}
-		return tr::lng_forward_send_files_cant(tr::now);
-	}();
-	if (!error) {
-		return false;
-	} else if (error.text == u"(toolarge)"_q) {
-		const auto fileSize = list.files.back().size;
-		controller()->show(
-			Box(FileSizeLimitBox, &session(), fileSize, nullptr));
-		return true;
-	}
-	Data::ShowSendErrorToast(controller(), _peer, error);
-	return true;
+		const Ui::PreparedBundle &bundle) const {
+	return Data::ShowSendError(controller()->uiShow(), _peer, bundle);
 }
 
 MsgId HistoryWidget::resolveReplyToTopicRootId() {
@@ -6473,7 +6454,7 @@ bool HistoryWidget::confirmSendingFiles(
 		}
 		controller()->showToast(tr::lng_edit_caption_attach(tr::now));
 		return false;
-	} else if (showSendingFilesError(list)) {
+	} else if (!_peer || showSendingFilesError(list)) {
 		return false;
 	}
 
@@ -6490,17 +6471,9 @@ bool HistoryWidget::confirmSendingFiles(
 		sendMenuDetails());
 	_field->setTextWithTags({});
 	box->setConfirmedCallback(crl::guard(this, [=](
-			Ui::PreparedList &&list,
-			Ui::SendFilesWay way,
-			TextWithTags &&caption,
-			Api::SendOptions options,
-			bool ctrlShiftEnter) {
-		sendingFilesConfirmed(
-			std::move(list),
-			way,
-			std::move(caption),
-			options,
-			ctrlShiftEnter);
+			std::shared_ptr<Ui::PreparedBundle> bundle,
+			Api::SendOptions options) {
+		sendingFilesConfirmed(std::move(bundle), options);
 	}));
 	box->setCancelledCallback(crl::guard(this, [=] {
 		_field->setTextWithTags(text);
@@ -6525,33 +6498,12 @@ bool HistoryWidget::confirmSendingFiles(
 }
 
 void HistoryWidget::sendingFilesConfirmed(
-		Ui::PreparedList &&list,
-		Ui::SendFilesWay way,
-		TextWithTags &&caption,
-		Api::SendOptions options,
-		bool ctrlShiftEnter) {
-	Expects(list.filesToProcess.empty());
-
-	const auto compress = way.sendImagesAsPhotos();
-	if (showSendingFilesError(list, compress)) {
+		std::shared_ptr<Ui::PreparedBundle> bundle,
+		Api::SendOptions options) {
+	if (!_peer || showSendingFilesError(*bundle)) {
 		return;
 	}
 
-	auto groups = DivideByGroups(
-		std::move(list),
-		way,
-		_peer->slowmodeApplied());
-	auto bundle = PrepareFilesBundle(
-		std::move(groups),
-		way,
-		std::move(caption),
-		ctrlShiftEnter);
-	sendingFilesConfirmed(std::move(bundle), options);
-}
-
-void HistoryWidget::sendingFilesConfirmed(
-		std::shared_ptr<Ui::PreparedBundle> bundle,
-		Api::SendOptions options) {
 	const auto compress = bundle->way.sendImagesAsPhotos();
 	const auto type = compress ? SendMediaType::Photo : SendMediaType::File;
 	auto action = prepareSendAction(options);
@@ -6570,21 +6522,12 @@ void HistoryWidget::sendingFilesConfirmed(
 		return;
 	}
 
-	if (bundle->sendComment) {
-		auto message = Api::MessageToSend(action);
-		message.textWithTags = base::take(bundle->caption);
-		session().api().sendMessage(std::move(message));
-	}
+	auto &api = session().api();
 	for (auto &group : bundle->groups) {
 		const auto album = (group.type != Ui::AlbumType::None)
 			? std::make_shared<SendingAlbum>()
 			: nullptr;
-		session().api().sendFiles(
-			std::move(group.list),
-			type,
-			base::take(bundle->caption),
-			album,
-			action);
+		api.sendFiles(std::move(group.list), type, album, action);
 	}
 }
 
@@ -8985,6 +8928,7 @@ void HistoryWidget::fillSenderUserpicMenu(
 	Window::FillSenderUserpicMenu(
 		controller(),
 		peer,
+		inGroup ? _peer : nullptr,
 		(inGroup && _canSendTexts) ? _field.data() : nullptr,
 		inGroup ? _peer->owner().history(_peer) : Dialogs::Key(),
 		Ui::Menu::CreateAddActionCallback(menu));
@@ -9309,10 +9253,12 @@ void HistoryWidget::confirmDeleteSelected() {
 	}
 	const auto items = session().data().idsToItems(ids);
 	if (CanCreateModerateMessagesBox(items)) {
+		const auto opt = DefaultModerateMessagesBoxOptions();
 		controller()->show(Box(
 			CreateModerateMessagesBox,
 			items,
-			crl::guard(this, [=] { clearSelected(); })));
+			crl::guard(this, [=] { clearSelected(); }),
+			opt));
 	} else {
 		auto box = Box<DeleteMessagesBox>(&session(), std::move(ids));
 		box->setDeleteConfirmedCallback(crl::guard(this, [=] {

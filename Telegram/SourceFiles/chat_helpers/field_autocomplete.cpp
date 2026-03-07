@@ -499,7 +499,7 @@ void FieldAutocomplete::updateFiltered(bool resetScroll) {
 					sorted.emplace(byOnline(user), user);
 				}
 			}
-			for (const auto user : _chat->lastAuthors) {
+			for (const auto &user : _chat->lastAuthors) {
 				if (user->isInaccessible()) continue;
 				if (!listAllSuggestions && filterNotPassedByName(user)) continue;
 				if (indexOfInFirstN(mrows, user, recentInlineBots) >= 0) continue;
@@ -516,7 +516,7 @@ void FieldAutocomplete::updateFiltered(bool resetScroll) {
 					_channel->session().api().chatParticipants().requestAdmins(_channel);
 				} else {
 					mrows.reserve(mrows.size() + _channel->mgInfo->admins.size());
-					for (const auto &[userId, rank] : _channel->mgInfo->admins) {
+					for (const auto &userId : _channel->mgInfo->admins) {
 						if (const auto user = _channel->owner().userLoaded(userId)) {
 							if (user->isInaccessible()) continue;
 							if (!listAllSuggestions && filterNotPassedByName(user)) continue;
@@ -530,7 +530,7 @@ void FieldAutocomplete::updateFiltered(bool resetScroll) {
 					_channel);
 			} else {
 				mrows.reserve(mrows.size() + _channel->mgInfo->lastParticipants.size());
-				for (const auto user : _channel->mgInfo->lastParticipants) {
+				for (const auto &user : _channel->mgInfo->lastParticipants) {
 					if (user->isInaccessible()) continue;
 					if (!listAllSuggestions && filterNotPassedByName(user)) continue;
 					if (indexOfInFirstN(mrows, user, recentInlineBots) >= 0) continue;

@@ -45,8 +45,7 @@ jobs:
       - name: First set up.
         shell: bash
         run: |
-          DOCPATH=$TBUILD/$REPO_NAME/docs/building-win.md
-          [ "${{ matrix.arch }}" != Win32 ] && DOCPATH=$TBUILD/$REPO_NAME/docs/building-win-${{ matrix.arch }}.md
+          DOCPATH=$TBUILD/$REPO_NAME/docs/building-win-x64.md
           SDK="$(grep "SDK version" $DOCPATH | sed -r 's/.*\*\*(.*)\*\* SDK version.*/\1/')"
           echo "SDK=$SDK" >> $GITHUB_ENV
 
@@ -161,7 +160,7 @@ jobs:
           mkdir artifact
           move %OUT%\materialgram.exe artifact/
           move %OUT%\Updater.exe artifact/
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         name: Upload artifact.
         if: (env.UPLOAD_ARTIFACT == 'true') || (github.ref == 'refs/heads/nightly')
         with:

@@ -95,6 +95,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 namespace Dialogs {
 namespace {
 
+constexpr auto kFreezeTimeout = crl::time(5000);
 constexpr auto kHashtagResultsLimit = 5;
 constexpr auto kStartReorderThreshold = 30;
 constexpr auto kStartDragToFilterThresholdX = kStartReorderThreshold;
@@ -291,7 +292,8 @@ InnerWidget::InnerWidget(
 , _narrowWidth(st::defaultDialogRow.padding.left()
 	+ st::defaultDialogRow.photoSize
 	+ st::defaultDialogRow.padding.left())
-, _childListShown(std::move(childListShown)) {
+, _childListShown(std::move(childListShown))
+, _freezeTimer([=] { _shownList->unfreeze(); update(); }) {
 	setAttribute(Qt::WA_OpaquePaintEvent, true);
 
 	style::PaletteChanged(
@@ -528,17 +530,18 @@ InnerWidget::InnerWidget(
 			RowDescriptor previous,
 			RowDescriptor next) {
 		const auto update = [&](const RowDescriptor &descriptor) {
+			const auto msgId = descriptor.fullId;
 			if (const auto topic = descriptor.key.topic()) {
 				if (_openedForum == topic->forum()) {
 					updateDialogRow(descriptor);
 				} else {
-					updateDialogRow({ { topic->owningHistory() }, {} });
+					updateDialogRow({ { topic->owningHistory() }, msgId });
 				}
 			} else if (const auto sublist = descriptor.key.sublist()) {
 				if (_savedSublists == sublist->parent()) {
 					updateDialogRow(descriptor);
 				} else {
-					updateDialogRow({ { sublist->owningHistory() }, {} });
+					updateDialogRow({ { sublist->owningHistory() }, msgId });
 				}
 			} else {
 				updateDialogRow(descriptor);
@@ -1675,6 +1678,13 @@ void InnerWidget::mouseMoveEvent(QMouseEvent *e) {
 	} else if (!_mouseSelection
 		&& *_lastMousePosition == globalPosition) {
 		return;
+	}
+
+	if (_lastMousePosition && *_lastMousePosition != globalPosition) {
+		if (!_freezeTimer.isActive()) {
+			_shownList->freeze();
+		}
+		_freezeTimer.callOnce(kFreezeTimeout);
 	}
 
 	if (_pressed && (e->buttons() & Qt::LeftButton)) {
@@ -3051,6 +3061,8 @@ void InnerWidget::updateDialogRow(
 
 void InnerWidget::enterEventHook(QEnterEvent *e) {
 	setMouseTracking(true);
+	_shownList->freeze();
+	_freezeTimer.callOnce(kFreezeTimeout);
 }
 
 Row *InnerWidget::shownRowByKey(Key key) {
@@ -3133,6 +3145,7 @@ void InnerWidget::refreshShownList() {
 		? session().data().chatsFilters().chatsList(_filterId)->indexed()
 		: session().data().chatsList(_openedFolder)->indexed();
 	if (_shownList != list) {
+		_shownList->unfreeze();
 		_shownList = list;
 		_shownList->updateHeights(_narrowRatio);
 	}
@@ -3140,7 +3153,10 @@ void InnerWidget::refreshShownList() {
 
 void InnerWidget::leaveEventHook(QEvent *e) {
 	setMouseTracking(false);
+	_freezeTimer.cancel();
+	_shownList->unfreeze();
 	clearSelection();
+	update();
 }
 
 void InnerWidget::dragLeft() {
