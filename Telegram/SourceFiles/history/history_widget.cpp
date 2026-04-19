@@ -680,11 +680,6 @@ HistoryWidget::HistoryWidget(
 		item->mainView()->itemDataChanged();
 	}, lifetime());
 
-	session().data().drawToReplyRequests(
-	) | rpl::on_next([=](Data::DrawToReplyRequest request) {
-		handleDrawToReplyRequest(std::move(request));
-	}, lifetime());
-
 	Core::App().settings().largeEmojiChanges(
 	) | rpl::on_next([=] {
 		crl::on_main(this, [=] {
@@ -3972,16 +3967,16 @@ void HistoryWidget::maybeMarkReactionsRead(not_null<HistoryItem*> item) {
 	session().api().markContentsRead(item);
 }
 
-void HistoryWidget::handleDrawToReplyRequest(
+bool HistoryWidget::handleDrawToReplyRequest(
 		Data::DrawToReplyRequest request) {
 	if (!_peer || request.messageId.peer != _peer->id) {
-		return;
+		return false;
 	}
 	auto image = HistoryView::ResolveDrawToReplyImage(
 		&session().data(),
 		request);
 	if (image.isNull()) {
-		return;
+		return false;
 	}
 	const auto replyTo = request.messageId;
 	HistoryView::OpenDrawToReplyEditor(
@@ -4000,6 +3995,7 @@ void HistoryWidget::handleDrawToReplyRequest(
 				st::sendMediaPreviewSize);
 			confirmSendingFiles(std::move(list));
 		}));
+	return true;
 }
 
 void HistoryWidget::unreadCountUpdated() {

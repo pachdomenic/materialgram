@@ -2979,6 +2979,7 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 						[=] {
 							const auto cur
 								= HistoryView::CurrentVoiceTimecode(msgId);
+							_widget->replyToMessage({ .messageId = msgId });
 							_widget->insertTextAtCursor(cur.value_or(*t));
 						});
 				}
@@ -3425,6 +3426,7 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 				&session->data(),
 				pollItemId,
 				pollOptionLink,
+				_controller,
 				[=] {
 					_widget->replyToMessage({
 						.messageId = pollItemId,

@@ -56,6 +56,7 @@ msgSelectionOffset: 30px;
 msgSelectionBottomSkip: 5px;
 
 itemRevealDuration: 150;
+textRevealGradient: 24px;
 middleClickAutoscrollSpeedScale: 30px;
 middleClickAutoscrollMaxSpeed: 7200px;
 
@@ -583,6 +584,8 @@ historyVideoMessageMute: icon {{ "volume_mute", historyFileThumbIconFg }};
 historyVideoMessageMuteSelected: icon {{ "volume_mute", historyFileThumbIconFgSelected }};
 historyVideoMessageMuteSize: 25px;
 historyVideoMessageProgressOpacity: 0.72;
+historyVideoMessageSeekInset: 12px;
+historyVideoMessageSeekDotSize: 13px;
 historyVideoMessageTtlIcon: icon {{ "chat/audio_once", historyFileThumbIconFg }};
 historyVideoMessageTtlIconSelected: icon {{ "chat/audio_once", historyFileThumbIconFgSelected }};
 

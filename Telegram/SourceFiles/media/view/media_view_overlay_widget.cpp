@@ -146,6 +146,8 @@ constexpr auto kZoomToScreenLevel = 1024;
 constexpr auto kOverlayLoaderPriority = 2;
 constexpr auto kSeekTimeMs = 5 * crl::time(1000);
 constexpr auto kSeekTimeMsLong = 10 * crl::time(1000);
+constexpr auto kFrameStepFallbackFps = 30.;
+constexpr auto kFrameStepThrottleMs = crl::time(150);
 
 // macOS OpenGL renderer fails to render larger texture
 // even though it reports that max texture size is 16384.
@@ -615,6 +617,10 @@ OverlayWidget::OverlayWidget()
 
 	_speedBoostHoldTimer.setCallback([=] {
 		startSpeedBoost();
+	});
+
+	_frameStepThrottle.setCallback([=] {
+		flushPendingFrameStep();
 	});
 
 	_docRectImage = QImage(
@@ -1240,7 +1246,8 @@ QSize OverlayWidget::videoSize() const {
 	Expects(videoShown());
 
 	const auto use = (_document && _chosenQuality != _document)
-		? _document->dimensions
+		// Use chosen quality dimensions instead of original
+		? _chosenQuality->dimensions
 		: _streamed->instance.info().video.size;
 	return flipSizeByRotation(use);
 }
@@ -1969,6 +1976,7 @@ void OverlayWidget::fillContextMenuActions(
 		const auto media = _message ? _message->media() : nullptr;
 		const auto poll = media ? media->poll() : nullptr;
 		if (poll
+			&& poll->voted()
 			&& !poll->closed()
 			&& !poll->quiz()
 			&& !poll->revotingDisabled()) {
@@ -4707,8 +4715,21 @@ void OverlayWidget::initStreamingThumbnail() {
 void OverlayWidget::streamingReady(Streaming::Information &&info) {
 	markStreamedReady();
 	if (videoShown()) {
+		if (_document && _streamed && _streamed->ready) {
+			const auto targetDocument = _chosenQuality ? _chosenQuality : _document;
+			if (const auto video = targetDocument->video()) {
+				video->realVideoSize = info.video.realSize;
+			}
+		}
 		applyVideoSize();
 		_streamedQualityChangeFrame = QImage();
+		if (_streamed && _streamed->controls) {
+			crl::on_main(_widget, [=] {
+				if (_streamed && _streamed->controls) {
+					_streamed->controls->updateSpeedToggleQuality();
+				}
+			});
+		}
 	} else {
 		updateContentRect();
 	}
@@ -5070,6 +5091,21 @@ void OverlayWidget::playbackPauseResume() {
 	}
 }
 
+void OverlayWidget::flushPendingFrameStep() {
+	if (!_streamed || !_frameStepPending) {
+		_frameStepThrottle.cancel();
+		return;
+	}
+	const auto fps = _streamed->instance.info().video.fps;
+	const auto stepMs = 1000.
+		/ ((fps > 0.) ? fps : kFrameStepFallbackFps);
+	const auto shift = crl::time(std::round(_frameStepPending * stepMs));
+	_frameStepPending = 0;
+	_streamingStartPaused = true;
+	seekRelativeTime(shift);
+	_frameStepThrottle.callOnce(kFrameStepThrottleMs);
+}
+
 void OverlayWidget::seekRelativeTime(crl::time time) {
 	Expects(_streamed != nullptr);
 
@@ -5099,12 +5135,16 @@ void OverlayWidget::restartAtSeekPosition(crl::time position) {
 	}
 	const auto overrideDuration = _stories
 		|| (_chosenQuality && _chosenQuality != _document);
+	const auto durationDocument = (_chosenQuality && _chosenQuality != _document)
+		? _chosenQuality
+		: _document;
+
 	auto options = Streaming::PlaybackOptions{
 		.position = position,
 		.durationOverride = ((overrideDuration
-			&& _document
-			&& _document->hasDuration())
-			? _document->duration()
+			&& durationDocument
+			&& durationDocument->hasDuration())
+			? durationDocument->duration()
 			: crl::time(0)),
 		.hwAllowed = Core::App().settings().hardwareAcceleratedVideo(),
 		.seekable = !_stories,
@@ -5209,21 +5249,30 @@ std::vector<int> OverlayWidget::playbackControlsQualities() {
 	}
 	auto result = std::vector<int>();
 	result.reserve(list.size());
+	auto seen = std::vector<int>();
 	for (const auto &quality : list) {
-		result.push_back(quality->resolveVideoQuality());
+		const auto res = quality->resolveVideoQuality();
+		const auto value = (quality == _document)
+			? (res + Media::kVideoQualityOriginalOffset)
+			: res;
+		if (!ranges::contains(seen, value)) {
+			result.push_back(value);
+			seen.push_back(value);
+		}
 	}
 	return result;
 }
 
 VideoQuality OverlayWidget::playbackControlsCurrentQuality() {
-	return _chosenQuality
-		? VideoQuality{
-			.manual = _quality.manual,
-			.height = uint32(_chosenQuality->resolveVideoQuality()),
-		}
-		: _quality;
+	if (!_chosenQuality) {
+		return _quality;
+	}
+	auto height = uint32(_chosenQuality->resolveVideoQuality());
+	if (_chosenQuality == _document) {
+		height += Media::kVideoQualityOriginalOffset;
+	}
+	return { .manual = _quality.manual, .height = height };
 }
-
 void OverlayWidget::playbackControlsQualityChanged(int quality) {
 	applyVideoQuality({
 		.manual = (quality > 0),
@@ -5534,6 +5583,7 @@ void OverlayWidget::updatePlaybackState() {
 		_streamedPosition = state.position;
 		if (_streamed->controls) {
 			_streamed->controls->updatePlayback(state);
+			_streamed->controls->updateSpeedToggleQuality();
 			_touchbarTrackState.fire_copy(state);
 			updatePowerSaveBlocker(state);
 		}
@@ -6613,6 +6663,15 @@ void OverlayWidget::handleKeyPress(not_null<QKeyEvent*> e) {
 		} else if (key == Qt::Key_L) {
 			activateControls();
 			seekRelativeTime(kSeekTimeMsLong);
+			return;
+		} else if ((key == Qt::Key_Period || key == Qt::Key_Comma)
+			&& _streamed->instance.player().paused()) {
+			activateControls();
+			_frameStepPending += (key == Qt::Key_Period) ? 1 : -1;
+			if (!_frameStepThrottle.isActive()) {
+				flushPendingFrameStep();
+				_frameStepThrottle.callOnce(kFrameStepThrottleMs);
+			}
 			return;
 		} else if (modifiers.testFlag(Qt::AltModifier)
 			&& (key == Qt::Key_Left || key == Qt::Key_Right)
