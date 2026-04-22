@@ -72,7 +72,6 @@ private:
 	void notifySelectionChanged();
 	void startExpandAnimation(bool expanded);
 	void applyExpandProgress();
-	void paintTailBubble(QPainter &p, const QRect &bubble, float64 opacity);
 	[[nodiscard]] float64 currentExpandValue() const;
 	[[nodiscard]] int currentShownHeight() const;
 	[[nodiscard]] int tailHeight() const;

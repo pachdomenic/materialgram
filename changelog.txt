@@ -1,3 +1,28 @@
+6.7.7.1 (22.04.26)
+
+- Better platform detection for photos and profile photos
+- Show mutual contacts in contacts box
+- Material Design 3 button ripple effect
+- Hide AI composer, replace message translate button with it
+- Official changelog:
+- AI Text Editor for messages.
+- Enhanced Polls with media, locations and suggested options.
+- Bots can create and managed other Bots on your behalf.
+- Drawing tools in image editor (brush, marker, eraser, arrow).
+- Trim recorded voice messages.
+- Per-file captions when sending multiple files.
+- Audio sharing in calls on Linux.
+- Member Tags in groups.
+- Disable Sharing in Private Chats.
+- Timestamps for Polls.
+- Log In With Telegram.
+- Time and Date Formatting.
+- Leaving Groups to a New Admin.
+- Log In With Telegram.
+- Gift Crafting.
+- Colored Buttons for Bots.
+- Search in Settings.
+
 6.4.0.1 (04.01.26)
 
 - Enhance platform detection for photos

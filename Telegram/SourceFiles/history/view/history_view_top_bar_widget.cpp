@@ -137,6 +137,11 @@ TopBarWidget::TopBarWidget(
 	_sendNow->setTextTransform(Ui::RoundButtonTextTransform::ToUpper);
 	_delete->setTextTransform(Ui::RoundButtonTextTransform::ToUpper);
 
+	_clear->setFullRadius(true);
+	_forward->setFullRadius(true);
+	_sendNow->setFullRadius(true);
+	_delete->setFullRadius(true);
+
 	Lang::Updated(
 	) | rpl::on_next([=] {
 		refreshLang();

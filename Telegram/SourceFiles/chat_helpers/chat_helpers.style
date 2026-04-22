@@ -436,11 +436,6 @@ stickersEmojiPickerItemSize: 30px;
 stickersEmojiPickerItemSkip: 4px;
 stickersEmojiPickerStripHeight: 40px;
 stickersEmojiPickerExpandedHeight: 220px;
-stickersEmojiPickerStripBubble: icon{
-	{ "chat/reactions_bubble_shadow", windowShadowFg },
-	{ "chat/reactions_bubble", emojiPanBg },
-};
-stickersEmojiPickerStripBubbleRight: 20px;
 stickersEmojiPickerSelectedBg: windowBgActive;
 stickersEmojiPickerSelectedFg: windowBgActive;
 stickersEmojiPickerHeaderFg: windowSubTextFg;
