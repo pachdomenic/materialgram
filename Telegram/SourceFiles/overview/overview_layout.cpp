@@ -24,6 +24,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "storage/file_upload.h"
 #include "main/main_session.h"
 #include "media/audio/media_audio.h"
+#include "media/media_common.h"
 #include "media/player/media_player_instance.h"
 #include "storage/localstorage.h"
 #include "history/history.h"
@@ -65,9 +66,10 @@ TextParseOptions _documentNameOptions = {
 constexpr auto kMaxInlineArea = 1280 * 720;
 constexpr auto kStoryRatio = 1.46;
 
+using ::Media::ValidFrameSize;
+
 [[nodiscard]] bool CanPlayInline(not_null<DocumentData*> document) {
-	const auto dimensions = document->dimensions;
-	return dimensions.width() * dimensions.height() <= kMaxInlineArea;
+	return ValidFrameSize(document->dimensions, kMaxInlineArea);
 }
 
 [[nodiscard]] QImage CropMediaFrame(QImage image, int width, int height) {
@@ -311,6 +313,11 @@ Photo::Photo(
 			maybeClearSensitiveSpoiler();
 		})),
 		parent)
+	: _spoiler
+	? std::make_shared<LambdaClickHandler>(crl::guard(this, [=] {
+		clearSpoiler();
+		_link = makeOpenPhotoHandler();
+	}))
 	: makeOpenPhotoHandler()) {
 	if (_data->inlineThumbnailBytes().isEmpty()
 		&& (_data->hasExact(Data::PhotoSize::Small)
@@ -513,6 +520,11 @@ Video::Video(
 				setDocumentLinks(_data);
 			})),
 			parent);
+	} else if (_spoiler) {
+		_openl = std::make_shared<LambdaClickHandler>(crl::guard(this, [=] {
+			clearSpoiler();
+			setDocumentLinks(_data);
+		}));
 	}
 	if (!_videoCover) {
 		_data->loadThumbnail(parent->fullId());
@@ -1165,11 +1177,17 @@ Document::Document(
 		0);
 
 	if (withThumb()) {
-		_data->loadThumbnail(parent->fullId());
-		auto tw = style::ConvertScale(_data->thumbnailLocation().width());
-		auto th = style::ConvertScale(_data->thumbnailLocation().height());
-		if (tw > th) {
-			_thumbw = (tw * _st.fileThumbSize) / th;
+		if (_data->hasThumbnail()) {
+			_data->loadThumbnail(parent->fullId());
+			auto tw = style::ConvertScale(
+				_data->thumbnailLocation().width());
+			auto th = style::ConvertScale(
+				_data->thumbnailLocation().height());
+			if (tw > th) {
+				_thumbw = (tw * _st.fileThumbSize) / th;
+			} else {
+				_thumbw = _st.fileThumbSize;
+			}
 		} else {
 			_thumbw = _st.fileThumbSize;
 		}
@@ -1315,7 +1333,12 @@ void Document::paint(Painter &p, const QRect &clip, TextSelection selection, con
 		if (clip.intersects(rthumb)) {
 			if (wthumb) {
 				ensureDataMediaCreated();
-				const auto thumbnail = _dataMedia->thumbnail();
+				const auto good = _data->isSvgImage()
+					? _dataMedia->goodThumbnail()
+					: nullptr;
+				const auto thumbnail = good
+					? good
+					: _dataMedia->thumbnail();
 				const auto blurred = _dataMedia->thumbnailInline();
 				if (thumbnail || blurred) {
 					if (_thumb.isNull() || (thumbnail && !_thumbLoaded)) {
@@ -1611,6 +1634,10 @@ void Document::ensureDataMediaCreated() const {
 	}
 	_dataMedia = _data->createMediaView();
 	_dataMedia->thumbnailWanted(parent()->fullId());
+	if (_data->isSvgImage()) {
+		_dataMedia->goodThumbnailWanted();
+		Data::DocumentMedia::CheckGoodThumbnail(_data);
+	}
 	delegate()->registerHeavyItem(this);
 }
 
@@ -1639,7 +1666,8 @@ bool Document::iconAnimated() const {
 }
 
 bool Document::withThumb() const {
-	return !songLayout() && _data->hasThumbnail();
+	return !songLayout()
+		&& (_data->hasThumbnail() || _data->isSvgImage());
 }
 
 bool Document::updateStatusText() {
@@ -2175,10 +2203,11 @@ void Gif::clipCallback(Media::Clip::Notification notification) {
 			if (_gif->state() == State::Error) {
 				_gif.setBad();
 			} else if (_gif->ready() && !_gif->started()) {
-				if (_gif->width() * _gif->height() > kMaxInlineArea) {
-					_data->dimensions = QSize(
-						_gif->width(),
-						_gif->height());
+				const auto size = QSize(_gif->width(), _gif->height());
+				if (!ValidFrameSize(size, kMaxInlineArea)) {
+					if (!size.isEmpty()) {
+						_data->dimensions = size;
+					}
 					_gif.reset();
 				} else {
 					_gif->start({

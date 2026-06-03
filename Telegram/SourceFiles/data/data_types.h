@@ -367,6 +367,8 @@ enum class MessageFlag : uint64 {
 
 	TextAppearing         = (1ULL << 60),
 	TextAppearingStarted  = (1ULL << 61),
+
+	GuestChatViaFrom      = (1ULL << 62),
 };
 inline constexpr bool is_flag_type(MessageFlag) { return true; }
 using MessageFlags = base::flags<MessageFlag>;
@@ -387,6 +389,11 @@ enum class ForwardOptions {
 	PreserveInfo,
 	NoSenderNames,
 	NoNamesAndCaptions,
+};
+
+enum class ViewRemovalReason : uchar {
+	Removed,
+	Detached,
 };
 
 struct ForwardDraft {

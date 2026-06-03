@@ -68,7 +68,7 @@ int PremiumLimits::dialogFiltersDefault() const {
 	return appConfigLimit("dialog_filters_limit_default", 10);
 }
 int PremiumLimits::dialogFiltersPremium() const {
-	return appConfigLimit("dialog_filters_limit_premium", 20);
+	return appConfigLimit("dialog_filters_limit_premium", 30);
 }
 int PremiumLimits::dialogFiltersCurrent() const {
 	return isPremium()
@@ -215,6 +215,13 @@ int PremiumLimits::botsCreateDefault() const {
 }
 int PremiumLimits::botsCreatePremium() const {
 	return appConfigLimit("bots_create_limit_premium", 40);
+}
+
+int PremiumLimits::aiComposeSavedTonesDefault() const {
+	return appConfigLimit("aicompose_tone_saved_limit_default", 5);
+}
+int PremiumLimits::aiComposeSavedTonesPremium() const {
+	return appConfigLimit("aicompose_tone_saved_limit_premium", 20);
 }
 
 int PremiumLimits::appConfigLimit(

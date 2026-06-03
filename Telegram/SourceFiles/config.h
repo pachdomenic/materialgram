@@ -17,8 +17,6 @@ enum {
 	LocalEncryptNoPwdIterCount = 4, // key derivation iteration count without pwd (not secure anyway)
 	LocalEncryptSaltSize = 32, // 256 bit
 
-	RecentInlineBotsLimit = 10,
-
 	AutoSearchTimeout = 500, // 0.5 secs
 
 	PreloadHeightsCount = 1, // when 1 screen to scroll left make a preload request

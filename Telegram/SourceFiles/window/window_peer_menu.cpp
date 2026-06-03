@@ -47,7 +47,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "calls/calls_instance.h"
 #include "inline_bots/bot_attach_web_view.h" // InlineBots::PeerType.
 #include "ui/toast/toast.h"
-#include "ui/text/custom_emoji_helper.h"
 #include "ui/text/format_values.h"
 #include "ui/text/text_utilities.h"
 #include "ui/widgets/chat_filters_tabs_strip.h"
@@ -303,6 +302,7 @@ private:
 	void addToggleArchive();
 	void addClearHistory();
 	void addDeleteChat();
+	void addScreenshotAction();
 	void addLeaveChat();
 	void addJoinChat();
 	void addTopicLink();
@@ -799,6 +799,35 @@ void Filler::addClearHistory() {
 		tr::lng_profile_clear_history(tr::now),
 		ClearHistoryHandler(_controller, _peer),
 		&st::menuIconClear);
+}
+
+void Filler::addScreenshotAction() {
+	if (!Main::Session::screenshotAction || !_peer || !_peer->isUser()) {
+		return;
+	}
+	const auto peer = _peer;
+	_addAction(
+		tr::lng_action_you_took_screenshot(tr::now),
+		[=] {
+			peer->session().api().request(MTPmessages_SendScreenshotNotification(
+				peer->input(),
+				MTP_inputReplyToMessage(
+					MTP_flags(0),
+					MTP_int(0),
+					MTPint(),
+					MTPInputPeer(),
+					MTPstring(),
+					MTPVector<MTPMessageEntity>(),
+					MTPint(),
+					MTPInputPeer(),
+					MTPint(),
+					MTPbytes()),
+				MTP_long(base::RandomValue<uint64>())
+			)).done([=](const MTPUpdates &result) {
+				peer->session().api().applyUpdates(result);
+			}).send();
+		},
+		&st::menuIconSaveImage);
 }
 
 void Filler::addDeleteChat() {
@@ -1777,6 +1806,7 @@ void Filler::fillHistoryActions() {
 	addClearHistory();
 	addDeleteChat();
 	addLeaveChat();
+	addScreenshotAction();
 }
 
 void Filler::fillProfileActions() {
@@ -1926,7 +1956,6 @@ void Filler::addToggleFee() {
 	_addAction({ .isSeparator = true });
 	_addAction({ .make = [=](not_null<Ui::PopupMenu*> menuParent) {
 		const auto actionParent = menuParent->menu();
-		auto helper = Ui::Text::CustomEmojiHelper();
 		const auto text = feeRemoved
 			? tr::lng_context_fee_free(
 				tr::now,
@@ -1938,8 +1967,8 @@ void Filler::addToggleFee() {
 				lt_name,
 				TextWithEntities{ user->shortName() },
 				lt_amount,
-				helper.paletteDependent(
-					Ui::Earn::IconCurrencyEmojiSmall()
+				tr::marked().append(
+					st::starIconEmojiMiniFont
 				).append(Lang::FormatCountDecimal(
 					user->owner().commonStarsPerMessage(parent)
 				)),
@@ -1952,10 +1981,9 @@ void Filler::addToggleFee() {
 			action,
 			nullptr,
 			nullptr);
-		result->setMarkedText(
-			text,
-			QString(),
-			Core::TextContext({ .session = &user->session() }));
+		result->setMarkedText(text, QString(), Core::TextContext({
+			.session = &user->session(),
+		}));
 		return result;
 	} });
 }
@@ -2510,7 +2538,7 @@ void PeerMenuBlockUserBox(
 		: v::is<ClearReply>(suggestClear)
 		? box->addRow(object_ptr<Ui::Checkbox>(
 			box,
-			tr::lng_context_delete_msg(tr::now),
+			tr::lng_blocked_list_confirm_reply(tr::now),
 			true,
 			st::defaultBoxCheckbox))
 		: nullptr;
@@ -2520,7 +2548,7 @@ void PeerMenuBlockUserBox(
 	const auto allFromUser = v::is<ClearReply>(suggestClear)
 		? box->addRow(object_ptr<Ui::Checkbox>(
 			box,
-			tr::lng_delete_all_from_user(
+			tr::lng_blocked_list_confirm_reply_all(
 				tr::now,
 				lt_user,
 				tr::bold(peer->name()),
@@ -3055,7 +3083,10 @@ base::weak_qptr<Ui::BoxContent> ShowForwardMessagesBox(
 					*lastFilterId = id;
 					applyFilter(box, id);
 				},
-				Window::GifPauseReason::Layer);
+				Window::GifPauseReason::Layer,
+				nullptr,
+				false,
+				true);
 			chatsFilters->lower();
 			rpl::combine(
 				chatsFilters->heightValue(),
@@ -4097,13 +4128,23 @@ void AddSenderUserpicModerateAction(
 		&& CanCreateModerateMessagesBox(
 			HistoryItemsList{ not_null<HistoryItem*>(moderateItem) });
 	if (canDeleteAndBan) {
+		const auto itemId = moderateItem->fullId();
 		addAction({ .isSeparator = true });
 		addAction({
 			.text = tr::lng_context_delete_and_ban(tr::now),
 			.handler = [=] {
+				const auto item = controller->session().data().message(
+					itemId);
+				if (!item) {
+					return;
+				}
 				controller->show(Box(
 					CreateModerateMessagesBox,
-					HistoryItemsList{ not_null<HistoryItem*>(moderateItem) },
+					ModerateMessagesBoxEntry{
+						.items = HistoryItemsList{
+							not_null<HistoryItem*>(item),
+						},
+					},
 					nullptr,
 					ModerateMessagesBoxOptions{
 						.reportSpam = true,
@@ -4310,7 +4351,11 @@ void ForwardToSelf(
 					.to1 = session->user(),
 				})).current();
 				if (!phrase.empty()) {
-					show->showToast(std::move(phrase));
+					show->showToast({
+						.text = std::move(phrase),
+						.filter = ChatHelpers::ForwardedToSavedMessagesFilter(
+							session),
+					});
 				}
 			});
 	}

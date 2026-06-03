@@ -74,6 +74,7 @@ public:
 	bool elementAnimationsPaused() override;
 	not_null<Ui::PathShiftGradient*> elementPathShiftGradient() override;
 	Context elementContext() override;
+	bool elementHideReply(not_null<const Element*> view) override;
 
 private:
 	const not_null<QWidget*> _parent;
@@ -683,6 +684,14 @@ Context PreviewDelegate::elementContext() {
 	return Context::Replies;
 }
 
+bool PreviewDelegate::elementHideReply(not_null<const Element*> view) {
+	if (!view->isTopicRootReply()) {
+		return false;
+	}
+	const auto reply = view->data()->Get<HistoryMessageReply>();
+	return reply && !reply->fields().manualQuote;
+}
+
 void AddFilledSkip(not_null<Ui::VerticalLayout*> container) {
 	const auto skip = container->add(object_ptr<Ui::FixedHeightWidget>(
 		container,
@@ -953,12 +962,13 @@ void DraftOptionsBox(
 		const auto captionsCount = ItemsForwardCaptionsCount(items);
 		const auto hasOnlyForcedForwardedInfo = !captionsCount
 			&& HasOnlyForcedForwardedInfo(items);
+		const auto canDropNames = !hasOnlyForcedForwardedInfo
+			&& HasDropForwardedInfoSetting(items);
 		const auto dropCaptions = (now == Options::NoNamesAndCaptions);
 
 		AddFilledSkip(bottom);
 
-		if (!hasOnlyForcedForwardedInfo
-			&& HasDropForwardedInfoSetting(items)) {
+		if (canDropNames) {
 			Settings::AddButtonWithIcon(
 				bottom,
 				(dropNames
@@ -1025,9 +1035,13 @@ void DraftOptionsBox(
 		});
 
 		AddFilledSkip(bottom);
-		Ui::AddDividerText(bottom, (count == 1
-			? tr::lng_forward_about()
-			: tr::lng_forward_many_about()));
+		if (canDropNames) {
+			Ui::AddDividerText(bottom, (count == 1
+				? tr::lng_forward_about()
+				: tr::lng_forward_many_about()));
+		} else {
+			Ui::AddDivider(bottom);
+		}
 	};
 
 	const auto &resolver = args.resolver;

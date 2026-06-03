@@ -1425,8 +1425,8 @@ void Premium::setupSwipeBack() {
 		}
 	};
 
-	auto init = [=](int, Qt::LayoutDirection direction) {
-		return (direction == Qt::RightToLeft)
+	auto init = [=](Ui::Controls::SwipeHandlerInitData data) {
+		return (data.direction == Qt::RightToLeft)
 			? DefaultSwipeBackHandlerFinishData([=] {
 				_showBack.fire({});
 			})
@@ -1561,6 +1561,8 @@ base::weak_qptr<Ui::RpWidget> Premium::createPinnedToTop(
 				.clickContextOther = clickContextOther,
 				.title = std::move(title),
 				.about = std::move(about),
+				.use3dStar = true,
+				.showFinished = _showFinished.events(),
 			});
 	}();
 	_state->setPaused = [=](bool paused) {

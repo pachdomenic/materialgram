@@ -9,6 +9,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "api/api_suggest_post.h"
 #include "api/api_transcribes.h"
+#include "base/options.h"
 #include "base/qt/qt_key_modifiers.h"
 #include "base/unixtime.h"
 #include "core/click_handler_types.h" // ClickHandlerContext
@@ -62,6 +63,14 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 namespace HistoryView {
 namespace {
+
+base::options::toggle UnlimitedMessageWidth({
+	.id = kOptionUnlimitedMessageWidth,
+	.name = "Unlimited message width",
+	.description = "Allow text-only message bubbles "
+		"to expand beyond the default maximum width.",
+	.restartRequired = true,
+});
 
 constexpr auto kPlayStatusLimit = 2;
 constexpr auto kMaxWidth = (1 << 16) - 1;
@@ -196,6 +205,9 @@ struct BadgePillGeometry {
 
 } // namespace
 
+const char kOptionUnlimitedMessageWidth[]
+	= "unlimited-message-width";
+
 struct Message::CommentsButton {
 	std::unique_ptr<Ui::RippleAnimation> ripple;
 	std::vector<UserpicInRow> userpics;
@@ -304,6 +316,11 @@ Message::~Message() {
 		_fromNameStatus = nullptr;
 		checkHeavyPart();
 	}
+}
+
+void Message::setInstantViewMediaRuntime(QString pageUrl) {
+	AddComponents(InstantViewMediaRuntime::Bit());
+	Get<InstantViewMediaRuntime>()->pageUrl = std::move(pageUrl);
 }
 
 void Message::refreshSuggestedInfo(
@@ -890,6 +907,9 @@ QSize Message::performCountOptimalSize() {
 				if (via && !displayForwardedFrom()) {
 					namew += st::msgServiceFont->spacew + via->maxWidth
 						+ (_fromNameStatus ? st::msgServiceFont->spacew : 0);
+				}
+				if (const auto guestChat = item->Get<HistoryMessageGuestChat>()) {
+					namew += st::msgServiceFont->spacew + guestChat->maxWidth;
 				}
 				if (Has<RightBadge>()) {
 					namew += st::msgPadding.right() + rightBadgeWidth();
@@ -1620,53 +1640,59 @@ void Message::draw(Painter &p, const PaintContext &context) const {
 		p.translate(-selectionTranslation, 0);
 	}
 	if (selectionModeResult.progress) {
-		const auto progress = selectionModeResult.progress;
-		if (progress <= 1.) {
-			if (context.selected()) {
-				if (!_selectionRoundCheckbox) {
-					_selectionRoundCheckbox
-						= std::make_unique<Ui::RoundCheckbox>(
-							st::msgSelectionCheck,
-							[this] { repaint(); });
+		if (!context.skipSelectionCheck) {
+			const auto progress = selectionModeResult.progress;
+			if (progress <= 1.) {
+				if (context.selected()) {
+					if (!_selectionRoundCheckbox) {
+						_selectionRoundCheckbox
+							= std::make_unique<Ui::RoundCheckbox>(
+								st::msgSelectionCheck,
+								[this] { repaint(); });
+					}
 				}
+				if (_selectionRoundCheckbox) {
+					_selectionRoundCheckbox->setChecked(
+						context.selected(),
+						anim::type::normal);
+				}
+				const auto o = ScopedPainterOpacity(p, progress);
+				const auto &st = st::msgSelectionCheck;
+				const auto right = (delegate()->elementChatMode()
+					== ElementChatMode::Wide)
+					? std::min(
+						int(_bubbleWidthLimit
+							+ st::msgPhotoSkip
+							+ st::msgSelectionOffset
+							+ st::msgPadding.left()
+							+ st.size),
+						width())
+					: width();
+				const auto pos = QPoint(
+					(right
+						- (st::msgSelectionOffset * progress - st.size) / 2
+						- st::msgPadding.right() / 2
+						- st.size
+						- st::historyScroll.deltax),
+					rect::bottom(g) - st.size - st::msgSelectionBottomSkip);
+				{
+					p.setPen(QPen(st.border, st.width));
+					p.setBrush(context.st->msgServiceBg());
+					auto hq = PainterHighQualityEnabler(p);
+					p.drawEllipse(QRect(pos, Size(st.size)));
+				}
+				if (_selectionRoundCheckbox) {
+					_selectionRoundCheckbox->paint(
+						p,
+						pos.x(),
+						pos.y(),
+						width());
+				}
+			} else {
+				_selectionRoundCheckbox = nullptr;
 			}
-			if (_selectionRoundCheckbox) {
-				_selectionRoundCheckbox->setChecked(
-					context.selected(),
-					anim::type::normal);
-			}
-			const auto o = ScopedPainterOpacity(p, progress);
-			const auto &st = st::msgSelectionCheck;
-			const auto right = (delegate()->elementChatMode()
-				== ElementChatMode::Wide)
-				? std::min(
-					int(_bubbleWidthLimit
-						+ st::msgPhotoSkip
-						+ st::msgSelectionOffset
-						+ st::msgPadding.left()
-						+ st.size),
-					width())
-				: width();
-			const auto pos = QPoint(
-				(right
-					- (st::msgSelectionOffset * progress - st.size) / 2
-					- st::msgPadding.right() / 2
-					- st.size
-					- st::historyScroll.deltax),
-				rect::bottom(g) - st.size - st::msgSelectionBottomSkip);
-			{
-				p.setPen(QPen(st.border, st.width));
-				p.setBrush(context.st->msgServiceBg());
-				auto hq = PainterHighQualityEnabler(p);
-				p.drawEllipse(QRect(pos, Size(st.size)));
-			}
-			if (_selectionRoundCheckbox) {
-				_selectionRoundCheckbox->paint(p, pos.x(), pos.y(), width());
-			}
-		} else {
-			_selectionRoundCheckbox = nullptr;
 		}
-	} else {
+	} else if (!context.skipSelectionCheck) {
 		_selectionRoundCheckbox = nullptr;
 	}
 }
@@ -1829,9 +1855,12 @@ void Message::paintFromName(
 	const auto statusWidth = _fromNameStatus
 		? st::dialogsPremiumIcon.icon.width()
 		: 0;
+	const auto nameAvailableWidth = (statusWidth && availableWidth > statusWidth)
+		? (availableWidth - statusWidth)
+		: availableWidth;
 	if (statusWidth && availableWidth > statusWidth) {
 		const auto x = availableLeft
-			+ std::min(availableWidth - statusWidth, nameText->maxWidth());
+			+ std::min(nameAvailableWidth, nameText->maxWidth());
 		const auto y = trect.top();
 		auto color = nameFg;
 		color.setAlpha(115);
@@ -1865,14 +1894,13 @@ void Message::paintFromName(
 		} else {
 			st::dialogsPremiumIcon.icon.paint(p, x, y, width(), color);
 		}
-		availableWidth -= statusWidth;
 	}
 	p.setFont(st::msgNameFont);
 	p.setPen(nameFg);
 	const auto nameLinkHandler = fromLink();
 	const auto nameWidth = std::min(
 		nameText->maxWidth(),
-		availableWidth);
+		nameAvailableWidth);
 	paintLinkRipple(
 		p,
 		nameLinkHandler,
@@ -1880,7 +1908,7 @@ void Message::paintFromName(
 		trect.topLeft());
 	nameText->draw(p, {
 		.position = { availableLeft, trect.top() },
-		.availableWidth = availableWidth,
+		.availableWidth = nameAvailableWidth,
 		.elisionLines = 1,
 	});
 	const auto skipWidth = nameText->maxWidth()
@@ -1904,6 +1932,20 @@ void Message::paintFromName(
 		auto skipWidth = via->width + st::msgServiceFont->spacew;
 		availableLeft += skipWidth;
 		availableWidth -= skipWidth;
+	}
+	if (const auto guestChat = item->Get<HistoryMessageGuestChat>()) {
+		if (availableWidth > 0) {
+			p.setPen(stm->msgServiceFg);
+			paintLinkRipple(
+				p,
+				guestChat->link,
+				QRect(availableLeft, trect.top(), guestChat->width, st::msgServiceFont->height),
+				trect.topLeft());
+			p.drawText(availableLeft, trect.top() + st::msgServiceFont->ascent, guestChat->text);
+			auto skipWidth = guestChat->width + st::msgServiceFont->spacew;
+			availableLeft += skipWidth;
+			availableWidth -= skipWidth;
+		}
 	}
 	if (badgeWidth) {
 		p.setPen(stm->msgDateFg);
@@ -2522,6 +2564,10 @@ void Message::clickHandlerPressedChanged(
 		&& (handler == via->link)
 		&& !displayForwardedFrom()) {
 		startLinkRipple();
+	} else if (const auto guestChat = data()->Get<HistoryMessageGuestChat>()
+		; guestChat
+		&& (handler == guestChat->link)) {
+		startLinkRipple();
 	} else if (const auto forwarded = data()->Get<HistoryMessageForwarded>()
 		; forwarded
 		&& displayForwardedFrom()
@@ -2906,6 +2952,9 @@ bool Message::hasFromPhoto() const {
 				return !hasOutLayout();
 			}
 		}
+		if (item->isGuestChatBotMessage()) {
+			return true;
+		}
 		return !item->out() && !item->history()->peer->isUser();
 	} break;
 	case Context::ContactPreview:
@@ -3275,7 +3324,6 @@ bool Message::getStateFromName(
 				outResult->link = _fromNameStatus->link;
 				return true;
 			}
-			availableWidth -= statusWidth;
 		}
 		if (point.x() >= availableLeft
 			&& point.x() < availableLeft + availableWidth
@@ -3285,15 +3333,38 @@ bool Message::getStateFromName(
 			_fromLinkRipplePointSet = 1;
 			return true;
 		}
+
+		const auto skipWidth = nameText->maxWidth()
+			+ (_fromNameStatus
+				? (st::dialogsPremiumIcon.icon.width()
+					+ st::msgServiceFont->spacew)
+				: 0)
+			+ st::msgServiceFont->spacew;
+		availableLeft += skipWidth;
+		availableWidth -= skipWidth;
+
 		auto via = item->Get<HistoryMessageVia>();
 		if (via
 			&& !displayForwardedFrom()
-			&& point.x() >= availableLeft + nameText->maxWidth() + st::msgServiceFont->spacew
+			&& point.x() >= availableLeft
 			&& point.x() < availableLeft + availableWidth
-			&& point.x() < availableLeft + nameText->maxWidth() + st::msgServiceFont->spacew + via->width) {
+			&& point.x() < availableLeft + via->width) {
 			outResult->link = via->link;
 			recordLinkRipplePoint(point, trect.topLeft());
 			return true;
+		}
+		if (const auto guestChat = item->Get<HistoryMessageGuestChat>()) {
+			auto guestChatLeft = availableLeft;
+			if (via && !displayForwardedFrom()) {
+				guestChatLeft += via->width + st::msgServiceFont->spacew;
+			}
+			if (point.x() >= guestChatLeft
+				&& point.x() < availableLeft + availableWidth
+				&& point.x() < guestChatLeft + guestChat->width) {
+				outResult->link = guestChat->link;
+				recordLinkRipplePoint(point, trect.topLeft());
+				return true;
+			}
 		}
 		if (badgeWidth) {
 			const auto badge = Get<RightBadge>();
@@ -4150,8 +4221,14 @@ void Message::refreshDataIdHook() {
 }
 
 int Message::monospaceMaxWidth() const {
+	const auto fromText = hasVisibleText()
+		? text().countMaxMonospaceWidth()
+		: 0;
+	const auto fromMedia = this->media()
+		? this->media()->contributedMaxMonospaceWidth()
+		: 0;
 	return st::msgPadding.left()
-		+ (hasVisibleText() ? text().countMaxMonospaceWidth() : 0)
+		+ std::max(fromText, fromMedia)
 		+ st::msgPadding.right();
 }
 
@@ -4308,7 +4385,7 @@ bool Message::hasFromName() const {
 				}
 			}
 			return false;
-		} else if (!peer->isUser()) {
+		} else if (!peer->isUser() || item->isGuestChatBotMessage()) {
 			if (const auto media = this->media()) {
 				return !media->hideFromName();
 			}
@@ -4386,6 +4463,9 @@ bool Message::hasOutLayout() const {
 			}
 		}
 	}
+	if (item->isGuestChatBotMessage()) {
+		return false;
+	}
 	return item->out() && !item->isPost();
 }
 
@@ -4426,6 +4506,9 @@ bool Message::unwrapped() const {
 }
 
 int Message::minWidthForMedia() const {
+	if (Get<InstantViewMediaRuntime>()) {
+		return 0;
+	}
 	auto result = infoWidth() + 2 * (st::msgDateImgDelta + st::msgDateImgPadding.x());
 	const auto views = data()->Get<HistoryMessageViews>();
 	if (data()->repliesAreComments() && !views->replies.text.isEmpty()) {
@@ -4761,7 +4844,11 @@ ClickHandlerPtr Message::prepareRightActionLink() const {
 			}
 		}
 	});
-	result->setProperty(kFastShareProperty, QVariant::fromValue(true));
+	const auto navigates = data()->externalReply()
+		|| (savedFromPeer && savedFromMsgId);
+	if (!navigates) {
+		result->setProperty(kFastShareProperty, QVariant::fromValue(true));
+	}
 	return result;
 }
 
@@ -4887,6 +4974,33 @@ void Message::fromNameUpdated(int width) const {
 					: 0)
 				- st::msgServiceFont->spacew);
 		}
+	}
+	if (const auto guestChat = item->Get<HistoryMessageGuestChat>()) {
+		const auto nameText = [&]() -> const Ui::Text::String * {
+			if (from) {
+				return &_fromName;
+			} else if (const auto info = item->originalHiddenSenderInfo()) {
+				return &info->nameText();
+			} else {
+				Unexpected("Corrupted forwarded information in message.");
+			}
+		}();
+		auto viaWidth = 0;
+		if (const auto via = item->Get<HistoryMessageVia>()) {
+			if (!displayForwardedFrom()) {
+				viaWidth = st::msgServiceFont->spacew + via->width;
+			}
+		}
+		guestChat->resize(width
+			- st::msgPadding.left()
+			- st::msgPadding.right()
+			- nameText->maxWidth()
+			- (_fromNameStatus
+				? (st::dialogsPremiumIcon.icon.width()
+					+ st::msgServiceFont->spacew)
+				: 0)
+			- st::msgServiceFont->spacew
+			- viaWidth);
 	}
 }
 
@@ -5115,7 +5229,9 @@ int Message::resizeContentGetHeight(int newWidth) {
 		}
 	}
 	accumulate_min(contentWidth, maxWidth());
-	_bubbleWidthLimit = std::max(st::msgMaxWidth, monospaceMaxWidth());
+	_bubbleWidthLimit = (UnlimitedMessageWidth.value() && !mediaDisplayed)
+		? 0x3FFFFFF
+		: std::max(st::msgMaxWidth, monospaceMaxWidth());
 	accumulate_min(contentWidth, int(_bubbleWidthLimit));
 	const auto textualWidth = bubbleTextualWidth();
 	if (mediaDisplayed) {
@@ -5191,6 +5307,7 @@ int Message::resizeContentGetHeight(int newWidth) {
 		}
 		if (contentWidth == maxWidth() && !appearing) {
 			if (mediaDisplayed) {
+				newHeight += media->height() - media->minHeight();
 				if (check) {
 					newHeight += check->resizeGetHeight(contentWidth) + st::mediaInBubbleSkip;
 				}

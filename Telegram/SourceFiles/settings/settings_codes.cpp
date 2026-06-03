@@ -265,6 +265,10 @@ auto GenerateCodes() {
 		Main::Session::debugActions = true;
 		Ui::Toast::Show("Done!");
 		});
+	codes.emplace(u"ss"_q, [](SessionController *window) {
+		Main::Session::screenshotAction = true;
+		Ui::Toast::Show(":)");
+	});
 
 #ifdef Q_OS_MAC
 	codes.emplace(u"customicon"_q, [](SessionController *window) {
