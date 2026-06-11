@@ -66,6 +66,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "main/main_session.h"
 #include "main/main_session_settings.h"
 #include "menu/menu_timecode_action.h"
+#include "data/components/ephemeral_messages.h"
 #include "data/components/recent_inline_bots.h"
 #include "data/components/scheduled_messages.h"
 #include "data/data_histories.h"
@@ -1220,6 +1221,11 @@ bool ChatWidget::confirmSendingFiles(
 		return true;
 	} else if (showSendingFilesError(list)) {
 		return false;
+	} else if (ShowEphemeralReplyTextOnlyError(
+			controller()->uiShow(),
+			&session(),
+			_composeControls->replyingToMessage().messageId)) {
+		return false;
 	}
 
 	auto box = Box<SendFilesBox>(
@@ -1408,6 +1414,12 @@ void ChatWidget::send() {
 }
 
 void ChatWidget::sendVoice(const ComposeControls::VoiceToSend &data) {
+	if (ShowEphemeralReplyTextOnlyError(
+			controller()->uiShow(),
+			&session(),
+			replyTo().messageId)) {
+		return;
+	}
 	const auto withPaymentApproved = [=](int approved) {
 		auto copy = data;
 		copy.options.starsApproved = approved;
@@ -1573,6 +1585,11 @@ void ChatWidget::sendTextWithTags(
 	message.textWithTags = textWithTags;
 	if (useCurrentWebPageDraft) {
 		message.webPage = _composeControls->webPageDraft();
+	}
+	if (options.scheduled
+		&& session().ephemeralMessages().wouldSend(message)) {
+		controller()->showToast(tr::lng_ephemeral_cant_schedule(tr::now));
+		return;
 	}
 
 	auto request = SendingErrorRequest{
@@ -1881,6 +1898,11 @@ bool ChatWidget::sendExistingDocument(
 	} else if (showSlowmodeError()
 		|| ShowSendPremiumError(controller(), document)) {
 		return false;
+	} else if (ShowEphemeralReplyTextOnlyError(
+			controller()->uiShow(),
+			&session(),
+			messageToSend.action.replyTo.messageId)) {
+		return false;
 	}
 	const auto withPaymentApproved = [=](int approved) {
 		auto copy = messageToSend;
@@ -1919,6 +1941,11 @@ bool ChatWidget::sendExistingPhoto(
 		Data::ShowSendErrorToast(controller(), _peer, error);
 		return false;
 	} else if (showSlowmodeError()) {
+		return false;
+	} else if (ShowEphemeralReplyTextOnlyError(
+			controller()->uiShow(),
+			&session(),
+			replyTo().messageId)) {
 		return false;
 	}
 
@@ -1965,6 +1992,12 @@ void ChatWidget::sendInlineResult(
 		not_null<UserData*> bot,
 		Api::SendOptions options,
 		std::optional<MsgId> localMessageId) {
+	if (ShowEphemeralReplyTextOnlyError(
+			controller()->uiShow(),
+			&session(),
+			replyTo().messageId)) {
+		return;
+	}
 	const auto withPaymentApproved = [=](int approved) {
 		auto copy = options;
 		copy.starsApproved = approved;

@@ -71,6 +71,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/call_delayed.h"
 #include "data/business/data_shortcut_messages.h"
 #include "data/components/credits.h"
+#include "data/components/ephemeral_messages.h"
 #include "data/components/recent_inline_bots.h"
 #include "data/components/scheduled_messages.h"
 #include "data/components/sponsored_messages.h"
@@ -5428,6 +5429,11 @@ Api::SendAction HistoryWidget::prepareSendAction(
 void HistoryWidget::sendVoice(const VoiceToSend &data) {
 	if (!canWriteMessage() || data.bytes.isEmpty() || !_history) {
 		return;
+	} else if (ShowEphemeralReplyTextOnlyError(
+			controller()->uiShow(),
+			&session(),
+			replyTo().messageId)) {
+		return;
 	}
 
 	const auto withPaymentApproved = [=](int approved) {
@@ -5600,6 +5606,11 @@ void HistoryWidget::sendTextWithTags(
 	message.textWithTags = textWithTags;
 	if (useWebPageDraft && _preview) {
 		message.webPage = _preview->draft();
+	}
+	if (options.scheduled
+		&& session().ephemeralMessages().wouldSend(message)) {
+		controller()->showToast(tr::lng_ephemeral_cant_schedule(tr::now));
+		return;
 	}
 
 	const auto ignoreSlowmodeCountdown = (options.scheduled != 0);
@@ -7440,6 +7451,13 @@ bool HistoryWidget::confirmSendingFiles(
 bool HistoryWidget::confirmSendingFiles(
 		Ui::PreparedList &&list,
 		const QString &insertTextOnCancel) {
+	if (!_editMsgId
+		&& ShowEphemeralReplyTextOnlyError(
+			controller()->uiShow(),
+			&session(),
+			replyTo().messageId)) {
+		return false;
+	}
 	if (_editMsgId) {
 		if (_canReplaceMedia || _canAddMedia) {
 			EditCaptionBox::StartMediaReplace(
@@ -8871,6 +8889,11 @@ void HistoryWidget::sendInlineResult(InlineBots::ResultSelected result) {
 	} else if (const auto error = result.result->getErrorOnSend(_history)) {
 		Data::ShowSendErrorToast(controller(), _peer, error);
 		return;
+	} else if (ShowEphemeralReplyTextOnlyError(
+			controller()->uiShow(),
+			&session(),
+			replyTo().messageId)) {
+		return;
 	}
 
 	const auto withPaymentApproved = [=](int approved) {
@@ -9521,6 +9544,12 @@ bool HistoryWidget::sendExistingDocument(
 	const auto error = _peer
 		? Data::RestrictionError(_peer, ChatRestriction::SendStickers)
 		: Data::SendError();
+	if (ShowEphemeralReplyTextOnlyError(
+			controller()->uiShow(),
+			&session(),
+			messageToSend.action.replyTo.messageId)) {
+		return false;
+	}
 	if (error) {
 		Data::ShowSendErrorToast(controller(), _peer, error);
 		return false;
@@ -9568,6 +9597,12 @@ bool HistoryWidget::sendExistingPhoto(
 	const auto error = _peer
 		? Data::RestrictionError(_peer, ChatRestriction::SendPhotos)
 		: Data::SendError();
+	if (ShowEphemeralReplyTextOnlyError(
+			controller()->uiShow(),
+			&session(),
+			replyTo().messageId)) {
+		return false;
+	}
 	if (error) {
 		Data::ShowSendErrorToast(controller(), _peer, error);
 		return false;
@@ -9853,7 +9888,8 @@ void HistoryWidget::processReply() {
 		}
 		return processCancel();
 #endif
-	} else if (!_processingReplyItem->isRegular()) {
+	} else if (!_processingReplyItem->isRegular()
+		&& !_processingReplyItem->isEphemeral()) {
 		return processCancel();
 	} else if (const auto forum = _peer->forum()
 		; forum && _processingReplyItem->history() == _history) {
