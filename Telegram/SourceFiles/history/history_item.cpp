@@ -7290,6 +7290,38 @@ void HistoryItem::setServiceMessageByAction(const MTPmessageAction &action) {
 		return result;
 	};
 
+	auto prepareChangeCommunity = [this](const MTPDmessageActionChangeCommunity &action) {
+		auto result = PreparedServiceText();
+		result.links.push_back(fromLink());
+		const auto communityId = action.vcommunity_id().value_or_empty();
+		const auto community = communityId
+			? _history->owner().channelLoaded(ChannelId(communityId))
+			: nullptr;
+		if (community && !community->name().isEmpty()) {
+			result.links.push_back(community->createOpenLink());
+			result.text = tr::lng_action_community_added(
+				tr::now,
+				lt_from,
+				fromLinkText(),
+				lt_community,
+				tr::link(community->name(), 2),
+				tr::marked);
+		} else if (communityId) {
+			result.text = tr::lng_action_community_added_unknown(
+				tr::now,
+				lt_from,
+				fromLinkText(),
+				tr::marked);
+		} else {
+			result.text = tr::lng_action_community_removed(
+				tr::now,
+				lt_from,
+				fromLinkText(),
+				tr::marked);
+		}
+		return result;
+	};
+
 	setServiceText(action.match(
 		prepareChatAddUserText,
 		prepareChatJoinedByLink,
@@ -7358,7 +7390,7 @@ void HistoryItem::setServiceMessageByAction(const MTPmessageAction &action) {
 		PrepareEmptyText<MTPDmessageActionPollAppendAnswer>,
 		preparePollDeleteAnswer,
 		PrepareEmptyText<MTPDmessageActionRequestedPeerSentMe>,
-		PrepareEmptyText<MTPDmessageActionChangeCommunity>,
+		prepareChangeCommunity,
 		PrepareErrorText<MTPDmessageActionEmpty>));
 
 	processAction(action);
