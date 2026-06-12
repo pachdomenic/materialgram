@@ -107,6 +107,7 @@ class Thread;
 struct AdminRightsSetOptions {
 	bool isGroup : 1 = false;
 	bool isForum : 1 = false;
+	bool isCommunity : 1 = false;
 	bool anyoneCanAddMembers : 1 = false;
 	bool canProcessJoinRequests : 1 = false;
 };

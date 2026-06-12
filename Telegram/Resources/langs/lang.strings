@@ -2228,6 +2228,12 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_community_manage_only_admins_about" = "Chats suggested by community members require admin approval.";
 "lng_community_delete" = "Delete Community";
 "lng_community_delete_sure" = "Are you sure you want to delete this community? This will detach all its chats.";
+"lng_rights_community_info" = "Edit Community Name";
+"lng_rights_community_linked" = "Edit Group List";
+"lng_rights_community_ban" = "Ban Members";
+"lng_community_admin_promote_title" = "Make Community Admin";
+"lng_community_admin_promote_sure" = "{user} will be able to edit community info and use other admin tools.";
+"lng_community_admin_promote" = "Promote";
 
 "lng_manage_monoforum" = "Direct Messages";
 "lng_manage_monoforum_off" = "Off";
