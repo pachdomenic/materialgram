@@ -581,7 +581,8 @@ void TopBarWidget::paintTopBar(Painter &p) {
 			&& (peer->sharedMediaInfo() || peer->isVerifyCodes())
 			&& _activeChat.section != Section::SavedSublist)
 		|| (_activeChat.section == Section::Scheduled)
-		|| (_activeChat.section == Section::Pinned)) {
+		|| (_activeChat.section == Section::Pinned)
+		|| communityChatsListBar()) {
 		auto text = (_activeChat.section == Section::Scheduled)
 			? ((peer && peer->isSelf())
 				? tr::lng_reminder_messages(tr::now)
@@ -998,6 +999,15 @@ bool TopBarWidget::rootChatsListBar() const {
 	const auto active = _activeChat.key;
 	return (separateForum && separateForum->history() == active.history())
 		|| (separateFolder && separateFolder == active.folder());
+}
+
+bool TopBarWidget::communityChatsListBar() const {
+	if (_activeChat.section != Section::ChatsList) {
+		return false;
+	}
+	const auto history = _activeChat.key.history();
+	const auto channel = history ? history->peer->asChannel() : nullptr;
+	return channel && channel->isCommunity();
 }
 
 void TopBarWidget::refreshInfoButton() {
