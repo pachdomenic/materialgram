@@ -920,6 +920,26 @@ void Widget::chosenRow(const ChosenRow &row) {
 	const auto sublistJump = history
 		? history->peer->monoforumSublistFor(row.sublistJumpPeerId)
 		: nullptr;
+	const auto userpicCommunity = [&]() -> ChannelData* {
+		if (!history
+			|| !row.userpicClick
+			|| (row.message.fullId.msg != ShowAtUnreadMsgId)) {
+			return nullptr;
+		}
+		const auto channel = history->peer->asChannel();
+		if (!channel) {
+			return nullptr;
+		}
+		const auto communityId = channel->linkedCommunityId();
+		if (!communityId) {
+			return nullptr;
+		}
+		const auto community = session().data().channel(communityId);
+		const auto info = community->communityInfo();
+		return (info && controller()->openedCommunity().current() != info)
+			? community.get()
+			: nullptr;
+	}();
 
 	if (topicJump) {
 		if (controller()->shownForum().current() == topicJump->forum()) {
@@ -967,6 +987,9 @@ void Widget::chosenRow(const ChosenRow &row) {
 		&& history->peer->hasActiveStories()
 		&& !history->peer->isSelf()) {
 		controller()->openPeerStories(history->peer->id);
+		return;
+	} else if (userpicCommunity) {
+		controller()->showPeerInfo(userpicCommunity);
 		return;
 	} else if (history
 		&& !row.message.fullId
