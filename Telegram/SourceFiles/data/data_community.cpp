@@ -22,7 +22,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 namespace Data {
 namespace {
 
-constexpr auto kShowChatNamesCount = 8;
+constexpr auto kShowChatNamesCount = 20;
 
 [[nodiscard]] TextWithEntities ComposeCommunityListEntryText(
 		not_null<CommunityInfo*> info) {
@@ -31,17 +31,14 @@ constexpr auto kShowChatNamesCount = 8;
 		return {};
 	}
 
-	const auto count = std::max(
-		int(list.size()),
-		int(info->histories().size()));
-
-	const auto throwAwayLastName = (list.size() > 1)
-		&& (count == list.size() + 1);
-	auto &&peers = ranges::views::all(
-		list
-	) | ranges::views::take(
-		list.size() - (throwAwayLastName ? 1 : 0)
-	);
+	auto notInCount = 0;
+	for (const auto &linked : info->linkedPeers()) {
+		const auto channel = linked.peer->asChannel();
+		if (!channel || !channel->amIn()) {
+			++notInCount;
+		}
+	}
+	auto &&peers = ranges::views::all(list);
 	const auto wrapName = [](not_null<History*> history) {
 		const auto name = history->peer->name();
 		return st::wrap_rtl(TextWithEntities{
@@ -81,11 +78,11 @@ constexpr auto kShowChatNamesCount = 8;
 		}
 		return result;
 	}();
-	return (shown < count)
+	return notInCount
 		? tr::lng_archived_last(
 			tr::now,
 			lt_count,
-			(count - shown),
+			notInCount,
 			lt_chats,
 			accumulated,
 			tr::marked)
@@ -155,6 +152,8 @@ void CommunityInfo::applyLinkedPeers(const QVector<MTPCommunityPeer> &list) {
 			}
 		}
 	}
+	++_chatListViewVersion;
+	repaintRow();
 	_linkedPeersChanges.fire({});
 }
 
