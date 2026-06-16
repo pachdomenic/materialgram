@@ -271,6 +271,11 @@ void ChannelData::setFlags(ChannelDataFlags which) {
 			| Flag::Left))) {
 		if (const auto info = communityInfo()) {
 			info->collapsedChanged();
+			if (const auto history = owner().historyLoaded(this)) {
+				if (history->inChatList() && !wasFullUpdated()) {
+					session().api().requestFullPeer(this);
+				}
+			}
 		}
 	}
 	if (const auto raw = takenForum.get()) {

@@ -2090,6 +2090,11 @@ void SessionController::openCommunity(not_null<Data::CommunityInfo*> info) {
 	closeFolder();
 	_openedCommunity = info.get();
 
+	const auto community = info->channel();
+	if (!community->wasFullUpdated()) {
+		community->session().api().requestFullPeer(community);
+	}
+
 	_openedCommunityLifetime.destroy();
 	using FlagChange = Data::Flags<ChannelDataFlags>::Change;
 	info->channel()->flagsValue(
