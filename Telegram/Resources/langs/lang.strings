@@ -2268,6 +2268,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_community_request_added_toast#other" = "{count} chats were added to the community.";
 "lng_community_request_declined_toast#one" = "Request to add chat was declined.";
 "lng_community_request_declined_toast#other" = "{count} requests to add chats were declined.";
+"lng_community_request_added_toast_undo" = "You approved the request to add {chat} to the community.";
+"lng_community_request_declined_toast_undo" = "You declined the request to add {chat} to the community.";
 "lng_community_ban_toggle" = "Ban from the Community";
 "lng_community_ban_about#one" = "User will be removed from {count} chat.";
 "lng_community_ban_about#other" = "User will be removed from {count} chats.";

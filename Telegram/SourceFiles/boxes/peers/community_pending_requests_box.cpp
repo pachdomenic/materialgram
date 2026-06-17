@@ -9,6 +9,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "api/api_communities.h"
 #include "apiwrap.h"
+#include "base/timer.h"
+#include "base/weak_ptr.h"
 #include "boxes/peer_list_box.h"
 #include "boxes/peers/manage_community_box.h"
 #include "data/data_channel.h"
@@ -18,23 +20,168 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "info/profile/info_profile_values.h"
 #include "lang/lang_keys.h"
 #include "main/main_session.h"
+#include "ui/arc_angles.h"
 #include "ui/boxes/confirm_box.h"
+#include "ui/dynamic_image.h"
+#include "ui/dynamic_thumbnails.h"
+#include "ui/effects/animations.h"
+#include "ui/effects/numbers_animation.h"
 #include "ui/effects/ripple_animation.h"
 #include "ui/painter.h"
 #include "ui/round_rect.h"
+#include "ui/rp_widget.h"
 #include "ui/text/text_utilities.h"
+#include "ui/toast/toast.h"
 #include "ui/vertical_list.h"
+#include "ui/widgets/buttons.h"
 #include "ui/widgets/labels.h"
 #include "ui/wrap/vertical_layout.h"
 #include "window/window_session_controller.h"
 #include "styles/style_boxes.h"
+#include "styles/style_chat.h"
 #include "styles/style_layers.h"
+#include "styles/style_premium.h"
 
 namespace {
 
 constexpr auto kPerPage = 100;
 constexpr auto kAcceptButton = 1;
 constexpr auto kRejectButton = 2;
+constexpr auto kUndoToastDuration = crl::time(3000);
+
+struct PendingAction {
+	enum class Stage {
+		Pending,
+		Performed,
+		Undone,
+	};
+	not_null<PeerData*> peer;
+	bool reject = false;
+	Stage stage = Stage::Pending;
+};
+
+[[nodiscard]] object_ptr<Ui::RpWidget> MakeUserpicToastIcon(
+		not_null<PeerData*> peer,
+		int size) {
+	auto result = object_ptr<Ui::RpWidget>((QWidget*)nullptr);
+	const auto raw = result.data();
+	raw->resize(size, size);
+	raw->setAttribute(Qt::WA_TransparentForMouseEvents);
+
+	struct State {
+		std::shared_ptr<Ui::DynamicImage> image;
+	};
+	const auto state = raw->lifetime().make_state<State>();
+	state->image = Ui::MakeUserpicThumbnail(peer);
+	state->image->subscribeToUpdates([=] { raw->update(); });
+
+	raw->paintRequest() | rpl::on_next([=] {
+		auto p = QPainter(raw);
+		p.drawImage(QRect(0, 0, size, size), state->image->image(size));
+	}, raw->lifetime());
+
+	return result;
+}
+
+[[nodiscard]] not_null<Ui::AbstractButton*> MakeUndoButton(
+		not_null<QWidget*> parent,
+		int width,
+		const QString &text,
+		rpl::producer<crl::time> finish,
+		crl::time total,
+		Fn<void()> click,
+		Fn<void()> timeout) {
+	const auto result = Ui::CreateChild<Ui::AbstractButton>(parent);
+	result->setClickedCallback(std::move(click));
+
+	struct State {
+		explicit State(not_null<QWidget*> button)
+		: countdown(
+			st::toastUndoFont,
+			[=] { button->update(); }) {
+		}
+
+		Ui::NumbersAnimation countdown;
+		crl::time finish = 0;
+		int secondsLeft = 0;
+		Ui::Animations::Basic animation;
+		Fn<void()> update;
+		base::Timer timer;
+	};
+	const auto state = result->lifetime().make_state<State>(result);
+	const auto updateLeft = [=] {
+		const auto now = crl::now();
+		const auto left = state->finish - now;
+		if (left > 0) {
+			const auto seconds = int((left + 999) / 1000);
+			if (state->secondsLeft != seconds) {
+				state->secondsLeft = seconds;
+				state->countdown.setText(QString::number(seconds), seconds);
+			}
+			state->timer.callOnce((left % 1000) + 1);
+		} else {
+			state->animation.stop();
+			state->timer.cancel();
+			timeout();
+		}
+	};
+	state->update = [=] {
+		if (anim::Disabled()) {
+			state->animation.stop();
+		} else {
+			if (!state->animation.animating()) {
+				state->animation.start();
+			}
+			state->timer.cancel();
+		}
+		updateLeft();
+		result->update();
+	};
+
+	result->paintRequest() | rpl::on_next([=] {
+		auto p = QPainter(result);
+
+		const auto font = st::historyPremiumViewSet.style.font;
+		const auto top = (result->height() - font->height) / 2;
+		auto pen = st::historyPremiumViewSet.textFg->p;
+		p.setPen(pen);
+		p.setFont(font);
+		p.drawText(0, top + font->ascent, text);
+
+		const auto inner = QRect(
+			width - st::toastUndoSkip - st::toastUndoDiameter,
+			(result->height() - st::toastUndoDiameter) / 2,
+			st::toastUndoDiameter,
+			st::toastUndoDiameter);
+		state->countdown.paint(
+			p,
+			inner.x() + (inner.width() - state->countdown.countWidth()) / 2,
+			inner.y() + (inner.height() - st::toastUndoFont->height) / 2,
+			width);
+
+		const auto progress = (state->finish - crl::now()) / float64(total);
+		const auto len = int(base::SafeRound(arc::kFullLength * progress));
+		if (len > 0) {
+			const auto from = arc::kFullLength / 4;
+			auto hq = PainterHighQualityEnabler(p);
+			pen.setWidthF(st::toastUndoStroke);
+			p.setPen(pen);
+			p.drawArc(inner, from, len);
+		}
+	}, result->lifetime());
+	result->resize(width, st::historyPremiumViewSet.height);
+
+	std::move(finish) | rpl::on_next([=](crl::time value) {
+		state->finish = value;
+		state->update();
+	}, result->lifetime());
+	state->animation.init(state->update);
+	state->timer.setCallback(state->update);
+	state->update();
+
+	result->show();
+	return result;
+}
 
 class RowDelegate {
 public:
@@ -216,9 +363,10 @@ public:
 		not_null<PeerListRow*> row,
 		int element) override;
 
-	void setCloseBox(Fn<void()> closeBox) {
-		_closeBox = std::move(closeBox);
+	void setToastParent(not_null<QWidget*> parent) {
+		_toastParent = parent;
 	}
+	void flushPendingOnClose();
 
 	QSize rowAcceptButtonSize() override;
 	QSize rowRejectButtonSize() override;
@@ -247,11 +395,15 @@ private:
 		int textWidth,
 		int outerWidth,
 		bool over);
-	void process(not_null<PeerListRow*> row, bool reject);
+	void startUndoable(not_null<PeerListRow*> row, bool reject);
+	void performNow(const std::shared_ptr<PendingAction> &action);
+	void hideCurrentToast();
 
 	const not_null<Window::SessionNavigation*> _navigation;
 	const not_null<ChannelData*> _community;
-	Fn<void()> _closeBox;
+	QPointer<QWidget> _toastParent;
+	base::weak_ptr<Ui::Toast::Instance> _toast;
+	std::shared_ptr<PendingAction> _pending;
 
 	QString _offset;
 	bool _allLoaded = false;
@@ -329,15 +481,118 @@ void Controller::rowElementClicked(
 		not_null<PeerListRow*> row,
 		int element) {
 	if (element == kAcceptButton) {
-		process(row, false);
+		startUndoable(row, false);
 	} else if (element == kRejectButton) {
-		process(row, true);
+		startUndoable(row, true);
 	}
 }
 
-void Controller::process(not_null<PeerListRow*> row, bool reject) {
+void Controller::startUndoable(not_null<PeerListRow*> row, bool reject) {
+	hideCurrentToast();
+
 	const auto peer = row->peer();
 	const auto id = peer->id.value;
+	delegate()->peerListSetRowHidden(row, true);
+	delegate()->peerListRefreshRows();
+
+	const auto action = std::make_shared<PendingAction>(PendingAction{
+		.peer = peer,
+		.reject = reject,
+	});
+	_pending = action;
+
+	if (!_toastParent) {
+		performNow(action);
+		return;
+	}
+
+	auto text = (reject
+		? tr::lng_community_request_declined_toast_undo
+		: tr::lng_community_request_added_toast_undo)(
+			tr::now,
+			lt_chat,
+			tr::bold(peer->name()),
+			tr::rich);
+
+	const auto &st = st::historyPremiumToast;
+	const auto size = st.style.font->height * 2;
+	const auto undoText = tr::lng_paid_react_undo(tr::now);
+	const auto undoFont = st::historyPremiumViewSet.style.font;
+	const auto rightSkip = undoFont->width(undoText)
+		+ st::toastUndoSpace
+		+ st::toastUndoDiameter
+		+ st::toastUndoSkip
+		- st.padding.right();
+	const auto total = kUndoToastDuration;
+	const auto finish = crl::now() + total;
+
+	_toast = Ui::Toast::Show(_toastParent.data(), Ui::Toast::Config{
+		.text = std::move(text),
+		.iconContent = MakeUserpicToastIcon(peer, size),
+		.padding = rpl::single(QMargins(0, 0, rightSkip, 0)),
+		.st = &st,
+		.attach = RectPart::Bottom,
+		.acceptinput = true,
+		.infinite = true,
+	});
+	const auto strong = _toast.get();
+	if (!strong) {
+		performNow(action);
+		return;
+	}
+	const auto widget = strong->widget();
+	widget->lifetime().add(crl::guard(this, [=] {
+		performNow(action);
+	}));
+
+	const auto hideToast = [weak = _toast] {
+		if (const auto strong = weak.get()) {
+			strong->hideAnimated();
+		}
+	};
+	const auto undo = [=] {
+		action->stage = PendingAction::Stage::Undone;
+		if (const auto restore = delegate()->peerListFindRow(id)) {
+			delegate()->peerListSetRowHidden(restore, false);
+			delegate()->peerListRefreshRows();
+		}
+		if (const auto strong = _toast.get()) {
+			strong->hideAnimated();
+		}
+		if (_pending == action) {
+			_pending = nullptr;
+		}
+	};
+	const auto button = MakeUndoButton(
+		widget.get(),
+		rightSkip + st.padding.right(),
+		undoText,
+		rpl::single(finish),
+		total,
+		undo,
+		hideToast);
+	rpl::combine(
+		widget->sizeValue(),
+		button->sizeValue()
+	) | rpl::on_next([=](QSize outer, QSize inner) {
+		button->moveToRight(
+			0,
+			(outer.height() - inner.height()) / 2,
+			outer.width());
+	}, widget->lifetime());
+}
+
+void Controller::performNow(const std::shared_ptr<PendingAction> &action) {
+	if (action->stage != PendingAction::Stage::Pending) {
+		return;
+	}
+	action->stage = PendingAction::Stage::Performed;
+	if (_pending == action) {
+		_pending = nullptr;
+	}
+	const auto peer = action->peer;
+	const auto id = peer->id.value;
+	const auto reject = action->reject;
 	session().api().communities().togglePeerLinkRequestApproval(
 		_community,
 		peer,
@@ -347,28 +602,25 @@ void Controller::process(not_null<PeerListRow*> row, bool reject) {
 				delegate()->peerListRemoveRow(row);
 				delegate()->peerListRefreshRows();
 			}
-			const auto show = _navigation->uiShow();
-			const auto closeBox = (_allLoaded
-				&& !delegate()->peerListFullRowsCount())
-				? _closeBox
-				: nullptr;
-			if (closeBox) {
-				// Destroys the box and this controller.
-				closeBox();
-			}
-			show->showToast(reject
-				? tr::lng_community_request_declined_toast(
-					tr::now,
-					lt_count,
-					1)
-				: tr::lng_community_request_added_toast(
-					tr::now,
-					lt_count,
-					1));
 		}),
 		crl::guard(this, [=](const QString &error) {
 			delegate()->peerListUiShow()->showToast(error);
 		}));
+}
+
+void Controller::hideCurrentToast() {
+	if (const auto strong = base::take(_toast).get()) {
+		strong->hideAnimated();
+	}
+}
+
+void Controller::flushPendingOnClose() {
+	if (const auto action = base::take(_pending)) {
+		performNow(action);
+	}
+	if (const auto strong = base::take(_toast).get()) {
+		strong->hideAnimated();
+	}
 }
 
 QSize Controller::rowAcceptButtonSize() {
@@ -463,13 +715,17 @@ void ShowCommunityPendingRequestsBox(
 	auto controller = std::make_unique<Controller>(navigation, community);
 	const auto raw = controller.get();
 	const auto init = [=](not_null<PeerListBox*> box) {
-		raw->setCloseBox(crl::guard(box, [=] { box->closeBox(); }));
+		raw->setToastParent(box);
+		box->boxClosing() | rpl::on_next([=] {
+			raw->flushPendingOnClose();
+		}, box->lifetime());
 		const auto processAll = [=](bool reject) {
 			const auto count = std::max(
 				community->pendingRequestsCount(),
 				1);
 			const auto sure = [=](Fn<void()> &&close) {
 				close();
+				raw->flushPendingOnClose();
 				community->session().api().communities(
 				).toggleAllPeerLinkRequestApproval(
 					community,
