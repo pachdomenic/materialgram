@@ -18,7 +18,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "dialogs/dialogs_main_list.h"
 #include "dialogs/dialogs_row.h"
 #include "history/history.h"
-#include "history/history_item.h"
 #include "main/main_session.h"
 #include "ui/painter.h"
 #include "window/window_session_controller.h"
@@ -57,21 +56,14 @@ CommunityChatsList::CommunityChatsList(
 		}
 	}, lifetime());
 
-	const auto session = &_controller->session();
-	session->changes().messageUpdates(
-		Data::MessageUpdate::Flag::DialogRowRefresh
-	) | rpl::filter([=](const Data::MessageUpdate &update) {
-		return _view.contains(update.item->history());
-	}) | rpl::on_next([=] {
-		update();
-	}, lifetime());
-
-	session->changes().entryUpdates(
+	_controller->session().changes().entryUpdates(
 		Data::EntryUpdate::Flag::Repaint
 		| Data::EntryUpdate::Flag::Height
 	) | rpl::filter([=](const Data::EntryUpdate &update) {
 		const auto history = update.entry->asHistory();
-		return history && _view.contains(history);
+		return history
+			&& (_view.contains(history)
+				|| (history->peer == _community->channel()));
 	}) | rpl::on_next([=](const Data::EntryUpdate &entryUpdate) {
 		if (entryUpdate.flags & Data::EntryUpdate::Flag::Height) {
 			_view.recountHeights(0.);
