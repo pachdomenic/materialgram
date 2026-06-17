@@ -20,6 +20,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/wrap/slide_wrap.h"
 #include "ui/widgets/fields/input_field.h"
 #include "api/api_chat_participants.h"
+#include "api/api_communities.h"
 #include "api/api_global_privacy.h"
 #include "lang/lang_keys.h"
 #include "lottie/lottie_icon.h"
@@ -301,6 +302,7 @@ private:
 	void addInfo();
 	void addStoryArchive();
 	void addNewWindow(bool addSeparator = true);
+	void addUngroup();
 	void addToggleFolder();
 	void addToggleUnreadMark();
 	void addToggleArchive();
@@ -767,6 +769,29 @@ void Filler::addNewWindow(bool addSeparator) {
 	if (addSeparator) {
 		AddSeparatorAndShiftUp(_addAction);
 	}
+}
+
+void Filler::addUngroup() {
+	const auto channel = _peer ? _peer->asChannel() : nullptr;
+	if (!channel
+		|| !channel->isCommunity()
+		|| !(channel->flags() & ChannelDataFlag::CommunityCollapsed)) {
+		return;
+	}
+	const auto controller = _controller;
+	_addAction(tr::lng_community_ungroup(tr::now), [=] {
+		controller->show(Ui::MakeConfirmBox({
+			.text = tr::lng_community_ungroup_text(),
+			.confirmed = [=](Fn<void()> close) {
+				channel->session().api().communities()
+					.toggleCollapsedInDialogs(channel, false);
+				close();
+			},
+			.confirmText = tr::lng_community_ungroup(),
+			.confirmStyle = &st::attentionBoxButton,
+			.title = tr::lng_community_ungroup_title(),
+		}));
+	}, &st::menuIconCollapse);
 }
 
 void Filler::addToggleArchive() {
@@ -1771,6 +1796,7 @@ void Filler::addVideoChat() {
 
 void Filler::fillContextMenuActions() {
 	addNewWindow();
+	addUngroup();
 	addHidePromotion();
 	addToggleArchive();
 	addTogglePin();

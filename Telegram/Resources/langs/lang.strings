@@ -2237,6 +2237,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_community_admin_promote" = "Promote";
 "lng_community_show_as_one" = "Show as One Chat";
 "lng_community_show_as_one_about" = "Group all community chats into one item in the chat list.";
+"lng_community_ungroup_title" = "Ungroup Chats";
+"lng_community_ungroup_text" = "Chats from this community will appear separately in your chat list.";
+"lng_community_ungroup" = "Ungroup";
 "lng_community_chats_joined" = "Chats you are in";
 "lng_community_chats_viewable" = "Chats you can view";
 "lng_community_chats_requestable" = "Chats you can request to join";
