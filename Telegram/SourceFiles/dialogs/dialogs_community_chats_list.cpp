@@ -90,9 +90,6 @@ void CommunityChatsList::rebuild() {
 	setPressed(-1);
 	const auto owner = &_controller->session().data();
 	const auto add = [&](not_null<History*> history) {
-		if (const auto forum = history->peer->forum()) {
-			forum->preloadTopics();
-		}
 		_view.add(history, 0.);
 	};
 	if (_kind == CommunityChatsKind::Joined) {
@@ -150,6 +147,10 @@ void CommunityChatsList::paintEvent(QPaintEvent *e) {
 			? (_pressed == index)
 			: (_selected == index);
 		context.st = &Row::ComputeSt(row->entry(), FilterId());
+		const auto history = row->history();
+		if (const auto forum = history ? history->peer->forum() : nullptr) {
+			forum->preloadTopics();
+		}
 		p.translate(0, top);
 		Ui::RowPainter::Paint(p, row.get(), nullptr, context);
 		p.translate(0, -top);
