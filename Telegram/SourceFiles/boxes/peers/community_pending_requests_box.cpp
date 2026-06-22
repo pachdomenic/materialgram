@@ -13,6 +13,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/weak_ptr.h"
 #include "boxes/peer_list_box.h"
 #include "boxes/peers/manage_community_box.h"
+#include "boxes/peers/prepare_short_info_box.h"
 #include "data/data_channel.h"
 #include "data/data_peer.h"
 #include "data/data_session.h"
@@ -30,6 +31,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/painter.h"
 #include "ui/round_rect.h"
 #include "ui/rp_widget.h"
+#include "ui/text/text_options.h"
 #include "ui/text/text_utilities.h"
 #include "ui/toast/toast.h"
 #include "ui/vertical_list.h"
@@ -47,6 +49,7 @@ namespace {
 constexpr auto kPerPage = 100;
 constexpr auto kAcceptButton = 1;
 constexpr auto kRejectButton = 2;
+constexpr auto kUserLink = 3;
 constexpr auto kUndoToastDuration = crl::time(3000);
 constexpr auto kPendingRowOpacity = 0.4;
 
@@ -205,7 +208,20 @@ public:
 	}
 	void setPending(bool pending);
 
+	[[nodiscard]] UserData *requestedBy() const {
+		return _requestedBy;
+	}
+
 	float64 opacity() override;
+
+	void paintStatusText(
+		Painter &p,
+		const style::PeerListItem &st,
+		int x,
+		int y,
+		int availableWidth,
+		int outerWidth,
+		bool selected) override;
 
 	int elementsCount() const override;
 	QRect elementGeometry(int element, int outerWidth) const override;
@@ -224,6 +240,10 @@ public:
 
 private:
 	const not_null<RowDelegate*> _delegate;
+	UserData *_requestedBy = nullptr;
+	Ui::Text::String _suggest;
+	Ui::Text::String _members;
+	int _userWidth = 0;
 	std::unique_ptr<Ui::RippleAnimation> _acceptRipple;
 	std::unique_ptr<Ui::RippleAnimation> _rejectRipple;
 	bool _pending = false;
@@ -234,24 +254,75 @@ Row::Row(
 	not_null<RowDelegate*> delegate,
 	const Api::CommunityPeerRequest &request)
 : PeerListRow(request.peer)
-, _delegate(delegate) {
-	const auto suggestedBy = request.requestedBy
+, _delegate(delegate)
+, _requestedBy(request.requestedBy) {
+	const auto user = request.requestedBy
 		? request.requestedBy->shortName()
 		: QString();
-	auto status = request.peer->isBroadcast()
+	_userWidth = st::requestSuggestStyle.font->width(user);
+	auto suggest = request.peer->isBroadcast()
 		? tr::lng_community_request_suggested_channel(
 			tr::now,
 			lt_user,
-			suggestedBy)
+			tr::link(user),
+			tr::marked)
 		: tr::lng_community_request_suggested_group(
 			tr::now,
 			lt_user,
-			suggestedBy);
+			tr::link(user),
+			tr::marked);
 	if (!request.visible) {
-		status += QString::fromUtf8(" \xE2\x80\xA2 ")
-			+ tr::lng_community_request_only_members(tr::now);
+		suggest.append(QString::fromUtf8(" \xE2\x80\xA2 "));
+		suggest.append(
+			tr::lng_community_request_only_members(tr::now));
 	}
-	setCustomStatus(status);
+	_suggest.setMarkedText(
+		st::requestSuggestStyle,
+		suggest,
+		Ui::NameTextOptions());
+
+	const auto channel = request.peer->asChannel();
+	if (channel && channel->membersCountKnown()) {
+		const auto count = channel->membersCount();
+		const auto countText = channel->isBroadcast()
+			? tr::lng_chat_status_subscribers(tr::now, lt_count, count)
+			: tr::lng_chat_status_members(tr::now, lt_count, count);
+		auto members = Ui::Text::IconEmoji(&st::requestMembersIcon)
+			.append(countText);
+		_members.setMarkedText(
+			st::requestMembersStyle,
+			members,
+			Ui::NameTextOptions());
+	}
+}
+
+void Row::paintStatusText(
+		Painter &p,
+		const style::PeerListItem &st,
+		int x,
+		int y,
+		int availableWidth,
+		int outerWidth,
+		bool selected) {
+	const auto now = crl::now();
+	const auto grey = selected ? st.statusFgOver : st.statusFg;
+	p.setPen(grey);
+	_suggest.draw(p, {
+		.position = st::requestSuggestPosition,
+		.availableWidth = availableWidth,
+		.palette = &st::defaultTextPalette,
+		.now = now,
+		.elisionLines = 1,
+	});
+	if (!_members.isEmpty()) {
+		_members.draw(p, {
+			.position = st::requestMembersPosition,
+			.availableWidth = availableWidth,
+			.palette = &st::defaultTextPalette,
+			.now = now,
+			.elisionLines = 1,
+		});
+	}
 }
 
 void Row::setPending(bool pending) {
@@ -270,7 +341,7 @@ float64 Row::opacity() {
 }
 
 int Row::elementsCount() const {
-	return 2;
+	return _requestedBy ? 3 : 2;
 }
 
 QRect Row::elementGeometry(int element, int outerWidth) const {
@@ -287,12 +358,20 @@ QRect Row::elementGeometry(int element, int outerWidth) const {
 				+ QPoint(accept.width() + st::requestButtonsSkip, 0)),
 			size);
 	} break;
+	case kUserLink: {
+		const auto pos = st::requestSuggestPosition;
+		return QRect(
+			pos.x(),
+			pos.y(),
+			_userWidth,
+			st::requestSuggestStyle.font->height);
+	} break;
 	}
 	return QRect();
 }
 
 bool Row::elementDisabled(int element) const {
-	return _pending;
+	return (element != kUserLink) && _pending;
 }
 
 bool Row::elementOnlySelect(int element) const {
@@ -524,6 +603,12 @@ void Controller::rowElementClicked(
 		startUndoable(row, false);
 	} else if (element == kRejectButton) {
 		startUndoable(row, true);
+	} else if (element == kUserLink) {
+		const auto raw = static_cast<Row*>(row.get());
+		if (const auto user = raw->requestedBy()) {
+			_navigation->uiShow()->showBox(
+				PrepareShortInfoBox(user, _navigation));
+		}
 	}
 }
 
