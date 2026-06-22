@@ -1963,8 +1963,11 @@ void ApiWrap::requestNotifySettings(const MTPInputNotifyPeer &peer) {
 			return true;
 		}
 		return false;
-	}, [&](const MTPDinputNotifyCommunity &) {
-		AssertIsDebug();
+	}, [&](const MTPDinputNotifyCommunity &data) {
+		if (data.vcommunity().type() == mtpc_inputChannelEmpty) {
+			LOG(("Api Error: Requesting settings for empty community."));
+			return true;
+		}
 		return false;
 	});
 	if (bad) {
@@ -2001,9 +2004,15 @@ void ApiWrap::requestNotifySettings(const MTPInputNotifyPeer &peer) {
 			peerFromInput(data.vpeer()),
 			data.vtop_msg_id().v,
 		};
-	}, [&](const MTPDinputNotifyCommunity &) {
-		AssertIsDebug();
-		return NotifySettingsKey{ peerFromChannel(0) };
+	}, [&](const MTPDinputNotifyCommunity &data) {
+		return NotifySettingsKey{ peerFromChannel(data.vcommunity().match(
+			[](const MTPDinputChannel &d) {
+				return d.vchannel_id().v;
+			}, [](const MTPDinputChannelFromMessage &d) {
+				return d.vchannel_id().v;
+			}, [](const MTPDinputChannelEmpty &) {
+				return uint64(0);
+			})) };
 	});
 	if (_notifySettingRequests.contains(key)) {
 		return;

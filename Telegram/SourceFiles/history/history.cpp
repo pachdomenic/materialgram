@@ -2365,6 +2365,11 @@ void History::setMuted(bool muted) {
 	if (const auto forum = peer->forum()) {
 		owner().notifySettings().forumParentMuteUpdated(forum);
 	}
+	if (const auto channel = peer->asChannel()) {
+		if (channel->isCommunity()) {
+			owner().notifySettings().communityParentMuteUpdated(channel);
+		}
+	}
 }
 
 void History::getNextFirstUnreadMessage() {
