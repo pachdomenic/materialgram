@@ -19,6 +19,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_session.h"
 #include "data/data_user.h"
 #include "dialogs/dialogs_community_chats_list.h"
+#include "dialogs/ui/dialogs_top_bar_suggestion_content.h"
 #include "history/history.h"
 #include "info/profile/info_profile_values.h"
 #include "lang/lang_hardcoded.h"
@@ -31,11 +32,13 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/text/text_utilities.h"
 #include "ui/vertical_list.h"
 #include "ui/widgets/buttons.h"
+#include "ui/widgets/elastic_scroll.h"
 #include "ui/widgets/labels.h"
 #include "ui/wrap/slide_wrap.h"
 #include "ui/wrap/vertical_layout.h"
 #include "window/window_session_controller.h"
 #include "styles/style_boxes.h"
+#include "styles/style_dialogs.h"
 #include "styles/style_info.h"
 #include "styles/style_layers.h"
 #include "styles/style_menu_icons.h"
@@ -54,6 +57,56 @@ namespace {
 			channel->membersCount()));
 	}
 	return row;
+}
+
+class CommunityChatsScroll final : public Ui::RpWidget {
+public:
+	explicit CommunityChatsScroll(QWidget *parent);
+
+	[[nodiscard]] not_null<Ui::ElasticScroll*> scroll() const;
+	[[nodiscard]] not_null<Ui::VerticalLayout*> inner() const;
+
+protected:
+	int resizeGetHeight(int newWidth) override;
+
+private:
+	const not_null<Ui::ElasticScroll*> _scroll;
+	Ui::VerticalLayout *_inner = nullptr;
+	int _innerHeight = 0;
+
+};
+
+CommunityChatsScroll::CommunityChatsScroll(QWidget *parent)
+: Ui::RpWidget(parent)
+, _scroll(Ui::CreateChild<Ui::ElasticScroll>(this)) {
+	_inner = _scroll->setOwnedWidget(
+		object_ptr<Ui::VerticalLayout>(_scroll));
+
+	widthValue() | rpl::on_next([=](int width) {
+		_inner->resizeToWidth(width);
+	}, lifetime());
+
+	_inner->heightValue() | rpl::on_next([=](int height) {
+		if (_innerHeight != height) {
+			_innerHeight = height;
+			resizeToWidth(width());
+		}
+	}, lifetime());
+}
+
+not_null<Ui::ElasticScroll*> CommunityChatsScroll::scroll() const {
+	return _scroll;
+}
+
+not_null<Ui::VerticalLayout*> CommunityChatsScroll::inner() const {
+	return _inner;
+}
+
+int CommunityChatsScroll::resizeGetHeight(int newWidth) {
+	const auto max = st::communityChatsScrollMax;
+	const auto height = std::min(_innerHeight, max);
+	_scroll->setGeometry(0, 0, newWidth, height);
+	return height;
 }
 
 class ChatsController final : public PeerListController {
@@ -146,39 +199,23 @@ void SetupCommunityContent(
 	Ui::AddSkip(container);
 	Ui::AddDividerText(container, tr::lng_community_show_as_one_about());
 
-	if (community->canManageLinkedPeers()) {
-		const auto wrap = container->add(
-			object_ptr<Ui::SlideWrap<Ui::VerticalLayout>>(
-				container,
-				object_ptr<Ui::VerticalLayout>(container)));
-		const auto inner = wrap->entity();
-		Ui::AddSkip(inner);
-		auto count = Info::Profile::PendingRequestsCountValue(
-			community
-		) | rpl::start_spawning(wrap->lifetime());
-		Settings::AddButtonWithIcon(
-			inner,
-			tr::lng_community_requests_button(
-				lt_count,
-				rpl::duplicate(count) | tr::to_count()),
-			st::settingsButton,
-			{ &st::menuIconPendingRequests }
-		)->addClickHandler([=] {
-			ShowCommunityPendingRequestsBox(controller, community);
-		});
-		wrap->toggleOn(
-			std::move(count) | rpl::map(rpl::mappers::_1 > 0),
-			anim::type::instant);
-		wrap->finishAnimating();
-	}
+	struct State {
+		base::unique_qptr<Ui::SlideWrap<Ui::RpWidget>> bubble;
+		base::unique_qptr<Ui::RpWidget> placeholder;
+	};
+	const auto state = container->lifetime().make_state<State>();
+
+	const auto host = container->add(
+		object_ptr<CommunityChatsScroll>(container));
+	const auto sections = host->inner();
 
 	const auto addDialogsSection = [&](
 			rpl::producer<QString> title,
 			Dialogs::CommunityChatsKind kind) {
-		const auto wrap = container->add(
+		const auto wrap = sections->add(
 			object_ptr<Ui::SlideWrap<Ui::VerticalLayout>>(
-				container,
-				object_ptr<Ui::VerticalLayout>(container)));
+				sections,
+				object_ptr<Ui::VerticalLayout>(sections)));
 		const auto inner = wrap->entity();
 		Ui::AddSkip(inner);
 		Ui::AddSubsectionTitle(inner, std::move(title));
@@ -225,10 +262,10 @@ void SetupCommunityContent(
 	const auto addPeerListSection = [&](
 			rpl::producer<QString> title,
 			rpl::producer<std::vector<not_null<PeerData*>>> list) {
-		const auto wrap = container->add(
+		const auto wrap = sections->add(
 			object_ptr<Ui::SlideWrap<Ui::VerticalLayout>>(
-				container,
-				object_ptr<Ui::VerticalLayout>(container)));
+				sections,
+				object_ptr<Ui::VerticalLayout>(sections)));
 		const auto inner = wrap->entity();
 		Ui::AddSkip(inner);
 		Ui::AddSubsectionTitle(inner, std::move(title));
@@ -274,13 +311,50 @@ void SetupCommunityContent(
 		rpl::duplicate(requestable));
 
 	Settings::AddButtonWithIcon(
-		container,
+		sections,
 		tr::lng_community_add_chat(),
 		st::settingsButton,
 		{ &st::menuIconGroups }
 	)->addClickHandler([=] {
 		ShowChooseChatToAddBox(controller, community);
 	});
+
+	if (community->canManageLinkedPeers()) {
+		auto count = Info::Profile::PendingRequestsCountValue(
+			community
+		) | rpl::start_spawning(container->lifetime());
+
+		const auto content = Ui::CreateChild<Dialogs::TopBarSuggestionContent>(
+			container);
+		content->setLeadingWidget(Dialogs::CreateRequestsBubbleIcon(content));
+		content->setContent(
+			tr::lng_community_requests_title(tr::now, tr::marked),
+			TextWithEntities());
+		content->setRightButton(
+			rpl::duplicate(count) | rpl::map([](int c) {
+				return TextWithEntities{ QString::number(c) };
+			}),
+			[=] { ShowCommunityPendingRequestsBox(controller, community); });
+		content->setClickedCallback([=] {
+			ShowCommunityPendingRequestsBox(controller, community);
+		});
+
+		state->bubble.reset(Ui::CreateChild<Ui::SlideWrap<Ui::RpWidget>>(
+			container,
+			object_ptr<Ui::RpWidget>::fromRaw(content)));
+		state->bubble->toggle(false, anim::type::instant);
+
+		Dialogs::MountTopBarSuggestion({
+			.scroll = host->scroll(),
+			.innerList = host->inner(),
+			.wrap = state->bubble.get(),
+			.placeholder = &state->placeholder,
+		});
+
+		std::move(count) | rpl::on_next([=](int c) {
+			state->bubble->toggle(c > 0, anim::type::instant);
+		}, state->bubble->lifetime());
+	}
 
 	if (!community->wasFullUpdated()) {
 		community->session().api().requestFullPeer(community);
