@@ -8783,6 +8783,20 @@ void HistoryWidget::handlePeerMigration() {
 	}
 }
 
+HistoryItem *HistoryWidget::lookupReplyNavItem(FullMsgId itemId) const {
+	if (!_history) {
+		return nullptr;
+	} else if (const auto regular = session().data().message(itemId)) {
+		return regular;
+	}
+	for (const auto &item : _history->clientSideMessages()) {
+		if (item->fullId() == itemId) {
+			return item;
+		}
+	}
+	return nullptr;
+}
+
 bool HistoryWidget::replyToPreviousMessage() {
 	if (!_history
 		|| _editMsgId
@@ -8797,12 +8811,14 @@ bool HistoryWidget::replyToPreviousMessage() {
 			: _highlighter.latestSingleHighlightedMsgId()));
 	const auto skipLocal = [](HistoryView::Element *from) {
 		auto view = from;
-		while (view && view->data()->isLocal()) {
+		while (view
+			&& view->data()->isLocal()
+			&& (!view->data()->isEphemeral() || view->data()->out())) {
 			view = view->previousDisplayedInBlocks();
 		}
 		return view;
 	};
-	if (const auto item = session().data().message(fullId)) {
+	if (const auto item = lookupReplyNavItem(fullId)) {
 		if (const auto view = item->mainView()) {
 			if (const auto target = skipLocal(
 					view->previousDisplayedInBlocks())) {
@@ -8838,10 +8854,12 @@ bool HistoryWidget::replyToNextMessage() {
 		(_field->isVisible()
 			? _replyTo.messageId.msg
 			: _highlighter.latestSingleHighlightedMsgId()));
-	if (const auto item = session().data().message(fullId)) {
+	if (const auto item = lookupReplyNavItem(fullId)) {
 		if (const auto view = item->mainView()) {
 			auto next = view->nextDisplayedInBlocks();
-			while (next && next->data()->isLocal()) {
+			while (next
+				&& next->data()->isLocal()
+				&& (!next->data()->isEphemeral() || next->data()->out())) {
 				next = next->nextDisplayedInBlocks();
 			}
 			if (next) {

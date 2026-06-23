@@ -5026,7 +5026,9 @@ void ListWidget::replyNextMessage(FullMsgId fullId, bool next) {
 	const auto reply = [&](Element *view) {
 		if (view) {
 			const auto newFullId = view->data()->fullId();
-			if (!view->data()->isRegular()) {
+			if (!view->data()->isRegular()
+				&& (!view->data()->isEphemeral()
+					|| view->data()->out())) {
 				return replyNextMessage(newFullId, next);
 			}
 			replyToMessageRequestNotify({ newFullId });
