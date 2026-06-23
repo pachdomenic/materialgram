@@ -1117,6 +1117,9 @@ requestMembersIcon: IconEmoji {
 	padding: margins(0px, 3px, 4px, 0px);
 	useIconColor: false;
 }
+requestSuggestBadgeSize: 18px;
+requestSuggestBadgeBorder: 1px;
+requestSuggestBadgeSkip: point(0px, 0px);
 
 ringtonesBoxButton: SettingsButton(defaultSettingsButton) {
 	textFg: lightButtonFg;

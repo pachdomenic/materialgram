@@ -223,6 +223,9 @@ public:
 		int outerWidth,
 		bool selected) override;
 
+	PaintRoundImageCallback generatePaintUserpicCallback(
+		bool forceRound) override;
+
 	int elementsCount() const override;
 	QRect elementGeometry(int element, int outerWidth) const override;
 	bool elementDisabled(int element) const override;
@@ -247,6 +250,10 @@ private:
 	std::unique_ptr<Ui::RippleAnimation> _acceptRipple;
 	std::unique_ptr<Ui::RippleAnimation> _rejectRipple;
 	bool _pending = false;
+	std::shared_ptr<Ui::DynamicImage> _chatUserpic;
+	std::shared_ptr<Ui::DynamicImage> _suggestUserpic;
+	QImage _composedCache;
+	int _composedCacheSize = 0;
 
 };
 
@@ -294,6 +301,57 @@ Row::Row(
 			members,
 			Ui::NameTextOptions());
 	}
+
+	_chatUserpic = Ui::MakeUserpicThumbnail(request.peer);
+	if (request.requestedBy) {
+		_suggestUserpic = Ui::MakeUserpicThumbnail(request.requestedBy);
+	}
+	const auto invalidate = [this] {
+		_composedCache = QImage();
+		_delegate->rowUpdateRow(this);
+	};
+	_chatUserpic->subscribeToUpdates(invalidate);
+	if (_suggestUserpic) {
+		_suggestUserpic->subscribeToUpdates(invalidate);
+	}
+}
+
+PaintRoundImageCallback Row::generatePaintUserpicCallback(bool forceRound) {
+	return [=](Painter &p, int x, int y, int outerWidth, int size) {
+		if (_composedCache.isNull() || _composedCacheSize != size) {
+			_composedCacheSize = size;
+			_composedCache = _chatUserpic->image(size);
+			if (_suggestUserpic && !_composedCache.isNull()) {
+				_composedCache = _composedCache.copy();
+				auto q = QPainter(&_composedCache);
+				auto hq = PainterHighQualityEnabler(q);
+
+				const auto badge = st::requestSuggestBadgeSize;
+				const auto border = st::requestSuggestBadgeBorder;
+				const auto &skip = st::requestSuggestBadgeSkip;
+				const auto bx = size - skip.x() - badge;
+				const auto by = skip.y();
+				const auto cut = QRectF(
+					bx - border,
+					by - border,
+					badge + 2 * border,
+					badge + 2 * border);
+
+				q.setCompositionMode(QPainter::CompositionMode_Source);
+				auto pen = QPen(Qt::transparent);
+				pen.setWidthF(border);
+				q.setPen(pen);
+				q.setBrush(Qt::transparent);
+				q.drawEllipse(cut);
+
+				q.setCompositionMode(QPainter::CompositionMode_SourceOver);
+				q.drawImage(
+					QRectF(bx, by, badge, badge),
+					_suggestUserpic->image(badge));
+			}
+		}
+		p.drawImage(QRect(x, y, size, size), _composedCache);
+	};
 }
 
 void Row::paintStatusText(
