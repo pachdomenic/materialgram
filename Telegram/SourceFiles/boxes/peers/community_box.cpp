@@ -295,6 +295,7 @@ public:
 		not_null<Main::Session*> session,
 		not_null<ChannelData*> community,
 		Fn<void(not_null<ChannelData*>)> callback);
+	~ChooseChatController();
 
 	Main::Session &session() const override;
 	void prepare() override;
@@ -304,6 +305,7 @@ private:
 	const not_null<Main::Session*> _session;
 	const not_null<ChannelData*> _community;
 	Fn<void(not_null<ChannelData*>)> _callback;
+	mtpRequestId _requestId = 0;
 
 };
 
@@ -314,6 +316,12 @@ ChooseChatController::ChooseChatController(
 : _session(session)
 , _community(community)
 , _callback(std::move(callback)) {
+}
+
+ChooseChatController::~ChooseChatController() {
+	if (_requestId) {
+		_session->api().request(_requestId).cancel();
+	}
 }
 
 Main::Session &ChooseChatController::session() const {
@@ -347,6 +355,30 @@ void ChooseChatController::prepare() {
 		delegate()->peerListAppendRow(MakeCommunityChatRow(channel));
 	}
 	delegate()->peerListRefreshRows();
+
+	using Flag = MTPchannels_GetAdminedPublicChannels::Flag;
+	_requestId = _session->api().request(
+		MTPchannels_GetAdminedPublicChannels(
+			MTP_flags(Flag::f_for_community_peer))
+	).done([=](const MTPmessages_Chats &result) {
+		_requestId = 0;
+
+		_session->data().processChats(result.match([](const auto &data)
+			-> const MTPVector<MTPChat> & {
+			return data.vchats();
+		}));
+		const auto &chats = result.match([](const auto &data) {
+			return data.vchats().v;
+		});
+		for (const auto &chat : chats) {
+			const auto peer = _session->data().processChat(chat);
+			const auto channel = peer->asChannel();
+			if (channel && !delegate()->peerListFindRow(channel->id.value)) {
+				delegate()->peerListAppendRow(MakeCommunityChatRow(channel));
+			}
+		}
+		delegate()->peerListRefreshRows();
+	}).send();
 }
 
 void ChooseChatController::rowClicked(not_null<PeerListRow*> row) {
