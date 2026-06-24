@@ -145,7 +145,7 @@ void Row::elementAddRipple(
 			(element == kAcceptButton
 				? _delegate->rowAcceptButtonSize()
 				: _delegate->rowRejectButtonSize()),
-			st::buttonRadius);
+			st::requestsAcceptButton.height / 2);
 		ripple = std::make_unique<Ui::RippleAnimation>(
 			(element == kAcceptButton
 				? st::requestsAcceptButton.ripple
@@ -236,10 +236,18 @@ private:
 };
 
 RequestsBoxController::RowHelper::RowHelper(bool isGroup)
-: _acceptRect(st::buttonRadius, st::requestsAcceptButton.textBg)
-, _acceptRectOver(st::buttonRadius, st::requestsAcceptButton.textBgOver)
-, _rejectRect(st::buttonRadius, st::requestsRejectButton.textBg)
-, _rejectRectOver(st::buttonRadius, st::requestsRejectButton.textBgOver)
+: _acceptRect(
+	st::requestsAcceptButton.height / 2,
+	st::requestsAcceptButton.textBg)
+, _acceptRectOver(
+	st::requestsAcceptButton.height / 2,
+	st::requestsAcceptButton.textBgOver)
+, _rejectRect(
+	st::requestsAcceptButton.height / 2,
+	st::requestsRejectButton.textBg)
+, _rejectRectOver(
+	st::requestsAcceptButton.height / 2,
+	st::requestsRejectButton.textBgOver)
 , _acceptText(isGroup
 	? tr::lng_group_requests_add(tr::now)
 	: tr::lng_group_requests_add_channel(tr::now))

@@ -468,7 +468,7 @@ void Row::elementAddRipple(
 			(element == kAcceptButton
 				? _delegate->rowAcceptButtonSize()
 				: _delegate->rowRejectButtonSize()),
-			st::buttonRadius);
+			st::requestsAcceptButton.height / 2);
 		ripple = std::make_unique<Ui::RippleAnimation>(
 			(element == kAcceptButton
 				? st::requestsAcceptButton.ripple
@@ -609,10 +609,18 @@ Controller::Controller(
 	not_null<ChannelData*> community)
 : _navigation(navigation)
 , _community(community)
-, _acceptRect(st::buttonRadius, st::requestsAcceptButton.textBg)
-, _acceptRectOver(st::buttonRadius, st::requestsAcceptButton.textBgOver)
-, _rejectRect(st::buttonRadius, st::requestsRejectButton.textBg)
-, _rejectRectOver(st::buttonRadius, st::requestsRejectButton.textBgOver)
+, _acceptRect(
+	st::requestsAcceptButton.height / 2,
+	st::requestsAcceptButton.textBg)
+, _acceptRectOver(
+	st::requestsAcceptButton.height / 2,
+	st::requestsAcceptButton.textBgOver)
+, _rejectRect(
+	st::requestsAcceptButton.height / 2,
+	st::requestsRejectButton.textBg)
+, _rejectRectOver(
+	st::requestsAcceptButton.height / 2,
+	st::requestsRejectButton.textBgOver)
 , _acceptText(tr::lng_community_request_add(tr::now))
 , _rejectText(tr::lng_community_request_decline(tr::now))
 , _acceptTextWidth(st::requestsAcceptButton.style.font->width(_acceptText))
