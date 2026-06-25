@@ -1059,20 +1059,6 @@ requestPeerRestriction: FlatLabel(defaultFlatLabel) {
 	}
 }
 
-requestsBoxItem: PeerListItem(peerListBoxItem) {
-	height: 99px;
-	button: OutlineButton(defaultPeerListButton) {
-		textBg: contactsBg;
-		textBgOver: contactsBg;
-		ripple: RippleAnimation(defaultRippleAnimation) {
-			color: contactsBgOver;
-		}
-	}
-}
-requestsBoxList: PeerList(peerListBox) {
-	padding: margins(0px, 12px, 0px, 12px);
-	item: requestsBoxItem;
-}
 contactsWithStories: PeerList(peerListBox) {
 	padding: margins(0px, 0px, 0px, 0px);
 	item: PeerListItem(peerListBoxItem) {
@@ -1102,7 +1088,6 @@ requestsRejectButton: RoundButton(defaultBoxButton) {
 	textTop: 4px;
 	style: semiboldTextStyle;
 }
-requestAcceptPosition: point(71px, 58px);
 requestButtonsSkip: 9px;
 communityRequestsBoxItem: PeerListItem(peerListBoxItem) {
 	height: 112px;
