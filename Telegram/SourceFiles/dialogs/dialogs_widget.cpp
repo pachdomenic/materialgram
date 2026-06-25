@@ -40,6 +40,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/wrap/slide_wrap.h"
 #include "ui/wrap/vertical_layout.h"
 #include "ui/effects/radial_animation.h"
+#include "ui/effects/ripple_animation.h"
 #include "ui/chat/requests_bar.h"
 #include "ui/chat/group_call_bar.h"
 #include "ui/chat/more_chats_bar.h"
@@ -191,6 +192,37 @@ public:
 		p.fillPath(path, Qt::black);
 	}
 	return result;
+}
+
+class CommunityAddChatNarrowButton final : public Ui::RippleButton {
+public:
+	explicit CommunityAddChatNarrowButton(not_null<QWidget*> parent);
+
+protected:
+	void paintEvent(QPaintEvent *e) override;
+
+	QImage prepareRippleMask() const override;
+
+};
+
+CommunityAddChatNarrowButton::CommunityAddChatNarrowButton(
+	not_null<QWidget*> parent)
+: Ui::RippleButton(parent, st::defaultRippleAnimation) {
+	setCursor(style::cur_pointer);
+}
+
+void CommunityAddChatNarrowButton::paintEvent(QPaintEvent *e) {
+	auto p = QPainter(this);
+	auto hq = PainterHighQualityEnabler(p);
+	p.setPen(Qt::NoPen);
+	p.setBrush(st::activeButtonBg);
+	p.drawEllipse(rect());
+	paintRipple(p, 0, 0);
+	st::communityAddChatButton.icon.paintInCenter(p, rect());
+}
+
+QImage CommunityAddChatNarrowButton::prepareRippleMask() const {
+	return Ui::RippleAnimation::EllipseMask(size());
 }
 
 } // namespace
@@ -1309,6 +1341,7 @@ void Widget::updateCommunityAddChatButton() {
 	_communityAddChatLifetime.destroy();
 	_communityAddChatPlaceholder = nullptr;
 	_communityAddChat = nullptr;
+	_communityAddChatNarrow = nullptr;
 
 	const auto channel = _openedCommunity
 		? _openedCommunity->channel().get()
@@ -1351,11 +1384,40 @@ void Widget::updateCommunityAddChatButton() {
 	raw->setParent(_scroll);
 	raw->raise();
 
+	const auto narrowButton = Ui::CreateChild<CommunityAddChatNarrowButton>(
+		_scroll.data());
+	_communityAddChatNarrow.reset(narrowButton);
+	narrowButton->setClickedCallback([=] {
+		ShowChooseChatToAddBox(controller(), channel);
+	});
+	narrowButton->resize(
+		st::defaultDialogRow.photoSize,
+		st::defaultDialogRow.photoSize);
+	narrowButton->raise();
+	narrowButton->hide();
+
 	const auto pinToBottom = [=] {
-		const auto height = raw->height();
+		const auto narrow
+			= (_scroll->width() < st::columnMinimalWidthLeft / 2);
+		const auto side = st::defaultDialogRow.photoSize;
+		const auto stripHeight = side
+			+ st::defaultDialogRow.padding.top()
+			+ st::defaultDialogRow.padding.bottom();
+		const auto height = narrow ? stripHeight : raw->height();
 		placeholder->resize(placeholder->width(), height);
-		raw->resizeToWidth(_scroll->width());
-		raw->moveToLeft(0, std::max(0, _scroll->height() - height));
+		const auto bottom = std::max(0, _scroll->height() - height);
+		if (narrow) {
+			raw->toggle(false, anim::type::instant);
+			narrowButton->moveToLeft(
+				(_scroll->width() - side) / 2,
+				bottom + st::defaultDialogRow.padding.top());
+			narrowButton->show();
+		} else {
+			narrowButton->hide();
+			raw->toggle(true, anim::type::instant);
+			raw->resizeToWidth(_scroll->width());
+			raw->moveToLeft(0, bottom);
+		}
 	};
 	_scroll->sizeValue(
 	) | rpl::to_empty | rpl::on_next(pinToBottom, _communityAddChatLifetime);

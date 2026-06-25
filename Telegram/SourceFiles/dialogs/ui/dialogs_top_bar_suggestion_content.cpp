@@ -41,6 +41,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_layers.h"
 #include "styles/style_premium.h"
 #include "styles/style_settings.h"
+#include "styles/style_window.h"
 
 namespace Dialogs {
 namespace {
@@ -77,6 +78,10 @@ namespace {
 		list.size(),
 		lt_country,
 		commonLocation);
+}
+
+[[nodiscard]] bool TopBarSuggestionNarrow(int width) {
+	return (width < st::columnMinimalWidthLeft / 2);
 }
 
 } // namespace
@@ -405,6 +410,32 @@ void TopBarSuggestionContent::setRightBadge(rpl::producer<int> count) {
 
 void TopBarSuggestionContent::draw(QPainter &p) {
 	const auto outer = Ui::RpWidget::rect();
+	if (TopBarSuggestionNarrow(width())) {
+		if (_leadingWidget) {
+			_leadingWidget->hide();
+		}
+		const auto side = st::defaultDialogRow.photoSize;
+		const auto tileLeft = (outer.width() - side) / 2;
+		const auto tileTop = (outer.height() - side) / 2;
+		const auto accentSide = st::dialogsRequestsBubbleIconSize;
+		const auto accentLeft = tileLeft + (side - accentSide) / 2;
+		const auto accentTop = tileTop + (side - accentSide) / 2;
+		const auto accent = QRect(
+			accentLeft,
+			accentTop,
+			accentSide,
+			accentSide);
+		auto hq = PainterHighQualityEnabler(p);
+		auto background = Ui::RoundRect(
+			st::dialogsRequestsBubbleIconRadius,
+			st::dialogsRequestsBubbleIconBg);
+		background.paint(p, accent);
+		st::dialogsRequestsBubbleIcon.paintInCenter(p, accent);
+		return;
+	}
+	if (_leadingWidget) {
+		_leadingWidget->show();
+	}
 	const auto &margins = st::dialogsTopBarSuggestionMargins;
 	const auto pill = outer - margins;
 
@@ -567,6 +598,11 @@ int TopBarSuggestionContent::resizeGetHeight(int newWidth) {
 			/ _collapseSnapshot.devicePixelRatio());
 		return int(base::SafeRound(
 			fullHeight * (1. - _collapseProgress)));
+	}
+	if (TopBarSuggestionNarrow(newWidth)) {
+		const auto side = st::defaultDialogRow.photoSize;
+		const auto &cardMargins = st::dialogsTopBarSuggestionMargins;
+		return side + cardMargins.top() + cardMargins.bottom();
 	}
 	const auto &margins = st::dialogsTopBarSuggestionMargins;
 	if (_geometry.centerSingleLineTitle && _geometry.cardInnerHeight) {

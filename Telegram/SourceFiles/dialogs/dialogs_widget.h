@@ -351,6 +351,7 @@ private:
 	base::unique_qptr<Ui::SlideWrap<Ui::VerticalLayout>> _communityAddChat;
 	base::unique_qptr<Ui::RpWidget> _communityAddChatPlaceholder;
 	rpl::lifetime _communityAddChatLifetime;
+	base::unique_qptr<Ui::RpWidget> _communityAddChatNarrow;
 	rpl::event_stream<bool> _searchStateForTopBarSuggestion;
 	rpl::event_stream<> _prepareTopBarSnapshot;
 	rpl::event_stream<bool> _openedFolderOrForumChanges;
