@@ -2257,6 +2257,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_community_request_only_members" = "Only visible to its members";
 "lng_community_request_add" = "Add";
 "lng_community_request_decline" = "Decline";
+"lng_community_request_invite_only" = "This group is invite-only. Only its members can view it.";
+"lng_community_request_message_owner" = "Message Group Owner";
 "lng_community_requests_add_all" = "Add All";
 "lng_community_requests_decline_all" = "Decline All";
 "lng_community_requests_add_all_title" = "Add All Chats";

@@ -25,12 +25,14 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "main/main_session.h"
 #include "ui/arc_angles.h"
 #include "ui/boxes/confirm_box.h"
+#include "ui/controls/userpic_button.h"
 #include "ui/click_handler.h"
 #include "ui/dynamic_image.h"
 #include "ui/dynamic_thumbnails.h"
 #include "ui/effects/animations.h"
 #include "ui/effects/numbers_animation.h"
 #include "ui/effects/ripple_animation.h"
+#include "ui/layers/generic_box.h"
 #include "ui/painter.h"
 #include "ui/round_rect.h"
 #include "ui/rp_widget.h"
@@ -203,6 +205,91 @@ public:
 		bool over) = 0;
 };
 
+void MessageGroupOwnerBox(
+		not_null<Ui::GenericBox*> box,
+		not_null<PeerData*> chat,
+		UserData *owner,
+		not_null<Window::SessionNavigation*> navigation) {
+	box->setStyle(st::boostBox);
+	box->setWidth(st::boxWideWidth);
+
+	const auto content = box->verticalLayout();
+
+	auto userpic = object_ptr<Ui::UserpicButton>(
+		box,
+		chat,
+		st::defaultUserpicButton);
+	userpic->setAttribute(Qt::WA_TransparentForMouseEvents);
+	box->addRow(
+		std::move(userpic),
+		st::boxRowPadding + st::createBotUserpicPadding,
+		style::al_top);
+
+	box->addRow(
+		object_ptr<Ui::FlatLabel>(
+			box,
+			chat->name(),
+			st::boostCenteredTitle),
+		st::boxRowPadding,
+		style::al_top);
+
+	Ui::AddSkip(content, st::boostTextSkip);
+	const auto channel = chat->asChannel();
+	const auto count = (channel && channel->membersCountKnown())
+		? channel->membersCount()
+		: 0;
+	box->addRow(
+		object_ptr<Ui::FlatLabel>(
+			box,
+			tr::lng_chat_status_members(tr::now, lt_count, count),
+			st::showOrLabel),
+		st::boxRowPadding,
+		style::al_top);
+
+	Ui::AddSkip(content, st::boostTextSkip);
+	auto info = Ui::Text::IconEmoji(&st::requestHiddenIcon)
+		.append(' ')
+		.append(tr::lng_community_request_invite_only(tr::now));
+	box->addRow(
+		object_ptr<Ui::FlatLabel>(
+			box,
+			rpl::single(std::move(info)),
+			st::boostText),
+		st::boxRowPadding,
+		style::al_top
+	)->setTryMakeSimilarLines(true);
+
+	Ui::AddSkip(content);
+	const auto message = content->add(
+		object_ptr<Ui::RoundButton>(
+			content,
+			tr::lng_community_request_message_owner(),
+			st::defaultActiveButton),
+		st::boxRowPadding,
+		style::al_justify);
+	message->setClickedCallback([=] {
+		box->closeBox();
+		if (owner) {
+			navigation->showPeerHistory(
+				owner,
+				Window::SectionShow::Way::ClearStack,
+				ShowAtUnreadMsgId);
+		}
+	});
+	Ui::AddSkip(content);
+	const auto cancel = content->add(
+		object_ptr<Ui::RoundButton>(
+			content,
+			tr::lng_cancel(),
+			st::defaultLightButton),
+		st::boxRowPadding,
+		style::al_justify);
+	cancel->setClickedCallback([=] {
+		box->closeBox();
+	});
+	Ui::AddSkip(content);
+}
+
 class Row final : public PeerListRow {
 public:
 	Row(
@@ -216,6 +303,9 @@ public:
 
 	[[nodiscard]] UserData *requestedBy() const {
 		return _requestedBy;
+	}
+	[[nodiscard]] bool hiddenChat() const {
+		return _hiddenChat;
 	}
 
 	float64 opacity() override;
@@ -266,6 +356,7 @@ private:
 	Ui::Text::String _suggest;
 	Ui::Text::String _members;
 	Ui::Text::String _hidden;
+	bool _hiddenChat = false;
 	int _userWidth = 0;
 	std::unique_ptr<Ui::RippleAnimation> _acceptRipple;
 	std::unique_ptr<Ui::RippleAnimation> _rejectRipple;
@@ -314,6 +405,7 @@ Row::Row(
 			Ui::NameTextOptions());
 	}
 
+	_hiddenChat = !request.visible;
 	if (!request.visible) {
 		_hidden.setMarkedText(
 			st::requestMembersStyle,
@@ -804,7 +896,16 @@ void Controller::rowUpdateRow(not_null<Row*> row) {
 }
 
 void Controller::rowClicked(not_null<PeerListRow*> row) {
-	if (static_cast<Row*>(row.get())->pending()) {
+	const auto raw = static_cast<Row*>(row.get());
+	if (raw->pending()) {
+		return;
+	}
+	if (raw->hiddenChat()) {
+		_navigation->uiShow()->showBox(Box(
+			MessageGroupOwnerBox,
+			raw->peer(),
+			raw->requestedBy(),
+			_navigation));
 		return;
 	}
 	const auto peer = row->peer();
