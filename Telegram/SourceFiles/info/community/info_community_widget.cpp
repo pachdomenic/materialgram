@@ -215,11 +215,16 @@ std::unique_ptr<Ui::RpWidget> Widget::setupAddChatButton() {
 
 	const auto fade = Ui::CreateChild<Ui::RpWidget>(this);
 	fade->setAttribute(Qt::WA_TransparentForMouseEvents);
-	const auto fadeHeight = st::communityAddChatButtonMargin.top()
-		+ st::communityAddChatButton.height / 2;
+	const auto fadeHeight = st::communityAddChatButton.height
+		+ st::communityAddChatButtonMargin.bottom();
 	fade->paintOn([=](QPainter &p) {
 		Dialogs::PaintBottomFade(p, fade->width(), fadeHeight, st::boxBg);
 	});
+
+	desiredBottomShadowVisibility(
+	) | rpl::on_next([=](bool shown) {
+		fade->setVisible(shown);
+	}, fade->lifetime());
 
 	const auto row = wrap->add(
 		object_ptr<Ui::RpWidget>(wrap),
