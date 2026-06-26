@@ -100,6 +100,16 @@ defaultDialogRow: DialogRow {
 	textLeft: 68px;
 	textTop: 34px;
 }
+communityRequestableListItem: PeerListItem(defaultPeerListItem) {
+	height: dialogsRowHeight;            // == st::defaultDialogRow.height (62px)
+	photoSize: 46px;                     // == st::defaultDialogRow.photoSize
+	photoPosition: point(10px, 8px);     // == st::defaultDialogRow.padding left/top (10,8)
+	namePosition: point(68px, 10px);     // == st::defaultDialogRow.nameLeft / nameTop
+	statusPosition: point(68px, 34px);   // == st::defaultDialogRow.textLeft / textTop
+}
+communityRequestableList: PeerList(defaultPeerList) {
+	item: communityRequestableListItem;
+}
 taggedDialogRow: DialogRow(defaultDialogRow) {
 	height: 72px;
 	textTop: 30px;

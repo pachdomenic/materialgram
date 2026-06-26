@@ -16,6 +16,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/qt_object_factory.h"
 #include "window/window_session_controller.h"
 
+#include "styles/style_dialogs.h"
+
 namespace Dialogs {
 namespace {
 
@@ -62,6 +64,7 @@ ChatsController::ChatsController(
 : _session(session)
 , _chats(std::move(chats))
 , _callback(std::move(callback)) {
+	setStyleOverrides(&st::communityRequestableList);
 }
 
 Main::Session &ChatsController::session() const {
