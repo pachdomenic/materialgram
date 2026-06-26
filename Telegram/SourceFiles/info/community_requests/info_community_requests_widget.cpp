@@ -1390,12 +1390,21 @@ std::unique_ptr<Ui::RpWidget> Widget::setupBottomBar() {
 	rpl::combine(
 		wrap->heightValue(),
 		heightValue()
-	) | rpl::on_next([=](int height, int fullHeight) {
-		setScrollBottomSkip(height - st::boxRadius);
-		wrap->move(0, fullHeight - height + st::boxRadius);
+	) | rpl::on_next([=] {
+		updateBottomBarGeometry();
 	}, wrap->lifetime());
 
 	return result;
+}
+
+void Widget::updateBottomBarGeometry() {
+	if (!_bottom) {
+		return;
+	}
+	const auto height = _bottom->height();
+	const auto fullHeight = this->height();
+	setScrollBottomSkip(height - st::boxRadius);
+	_bottom->move(0, fullHeight - height + st::boxRadius);
 }
 
 void Widget::processAll(bool reject) {
@@ -1460,6 +1469,11 @@ void Widget::processAll(bool reject) {
 
 rpl::producer<QString> Widget::title() {
 	return tr::lng_community_requests_title();
+}
+
+void Widget::showFinished() {
+	ContentWidget::showFinished();
+	updateBottomBarGeometry();
 }
 
 not_null<PeerData*> Widget::peer() const {

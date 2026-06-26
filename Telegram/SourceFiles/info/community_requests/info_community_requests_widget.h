@@ -54,6 +54,8 @@ public:
 
 	rpl::producer<QString> title() override;
 
+	void showFinished() override;
+
 private:
 	void saveState(not_null<Memento*> memento);
 	void restoreState(not_null<Memento*> memento);
@@ -61,6 +63,7 @@ private:
 	std::shared_ptr<ContentMemento> doCreateMemento() override;
 
 	std::unique_ptr<Ui::RpWidget> setupBottomBar();
+	void updateBottomBarGeometry();
 	void processAll(bool reject);
 
 	std::unique_ptr<PeerListController> _listController;
