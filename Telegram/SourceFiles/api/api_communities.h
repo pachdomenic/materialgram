@@ -57,6 +57,7 @@ public:
 		const QString &title,
 		const QString &about,
 		not_null<PeerData*> peer,
+		bool hidden,
 		Fn<void(not_null<ChannelData*>)> done,
 		Fn<void(const QString &)> fail);
 

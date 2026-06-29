@@ -2211,6 +2211,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_community_create_title" = "New Community";
 "lng_community_create_name" = "Community Name";
 "lng_community_created" = "Community created.";
+"lng_community_create_hidden" = "Hidden group";
 "lng_community_visibility_title" = "Chat visibility";
 "lng_community_visibility_visible" = "Visible";
 "lng_community_visibility_visible_about" = "Anyone in the community will be able to see this chat.";

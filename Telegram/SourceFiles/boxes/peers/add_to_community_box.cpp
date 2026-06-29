@@ -134,6 +134,12 @@ void CreateCommunityBox(
 		tr::lng_community_create_name()));
 	box->setFocusCallback([=] { field->setFocusFast(); });
 
+	const auto hidden = box->addRow(object_ptr<Ui::Checkbox>(
+		box,
+		tr::lng_community_create_hidden(tr::now),
+		false,
+		st::defaultBoxCheckbox));
+
 	const auto creating = box->lifetime().make_state<bool>(false);
 	const auto submit = [=] {
 		const auto title = field->getLastText().trimmed();
@@ -149,6 +155,7 @@ void CreateCommunityBox(
 			title,
 			QString(),
 			group,
+			hidden->checked(),
 			crl::guard(box, [=](not_null<ChannelData*> community) {
 				show->hideLayer();
 				show->showToast(tr::lng_community_created(tr::now));

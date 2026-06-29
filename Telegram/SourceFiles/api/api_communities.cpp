@@ -63,11 +63,14 @@ void Communities::create(
 		const QString &title,
 		const QString &about,
 		not_null<PeerData*> peer,
+		bool hidden,
 		Fn<void(not_null<ChannelData*>)> done,
 		Fn<void(const QString &)> fail) {
 	using Flag = MTPcommunities_Create::Flag;
+	const auto flags = (about.isEmpty() ? Flag() : Flag::f_about)
+		| (hidden ? Flag::f_hidden : Flag());
 	_api.request(MTPcommunities_Create(
-		MTP_flags(about.isEmpty() ? Flag() : Flag::f_about),
+		MTP_flags(flags),
 		MTP_string(title),
 		MTP_string(about),
 		peer->input()
