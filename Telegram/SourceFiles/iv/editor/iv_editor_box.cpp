@@ -14,6 +14,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/flat_map.h"
 #include "base/unique_qptr.h"
 #include "base/weak_qptr.h"
+#include "boxes/create_ai_box.h"
 #include "boxes/premium_preview_box.h"
 #include "chat_helpers/compose/compose_show.h"
 #include "data/data_file_origin.h"
@@ -1552,12 +1553,10 @@ void WindowHost::Impl::setupWindow(ShowWindowDescriptor &&descriptor) {
 					u"rich_message"_q);
 				return;
 			}
-			_show->show(Box([](not_null<Ui::GenericBox*> box) {
-				box->setTitle(tr::lng_ai_compose_title());
-				box->addButton(tr::lng_close(), [=] {
-					box->closeBox();
-				});
-			}));
+			ShowCreateAiBox(_show, {
+				.session = session,
+				.applyToPage = [](std::shared_ptr<const RichPage>) {},
+			});
 		});
 		addBottomAiStar(button, session);
 	}

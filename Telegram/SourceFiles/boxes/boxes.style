@@ -1589,6 +1589,19 @@ aiComposeBoxInfoButton: IconButton(boxTitleClose) {
 	ripple: defaultRippleAnimation;
 }
 aiComposeShadowOpacity: 0.3;
+
+createAiPromptField: InputField(aiTonePromptField) {
+	heightMin: 54px;
+	heightMax: 240px;
+}
+createAiSelectorArrowsIcon: icon{{ "arrows_select", windowSubTextFg }};
+createAiReloadIcon: icon{{ "chat/refresh-18x18", windowFgActive }};
+createAiReloadButton: RoundButton(defaultActiveButton) {
+	width: 40px;
+	height: 40px;
+	radius: 20px;
+}
+
 communityBoxManage: IconButton(boxTitleClose) {
 	icon: icon {{ "menu/manage", boxTitleCloseFg }};
 	iconOver: icon {{ "menu/manage", boxTitleCloseFgOver }};

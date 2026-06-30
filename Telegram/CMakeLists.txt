@@ -391,6 +391,8 @@ PRIVATE
     boxes/transfer_gift_box.h
     boxes/compose_ai_box.cpp
     boxes/compose_ai_box.h
+    boxes/create_ai_box.cpp
+    boxes/create_ai_box.h
     boxes/create_ai_tone_box.cpp
     boxes/create_ai_tone_box.h
     boxes/preview_ai_tone_box.cpp

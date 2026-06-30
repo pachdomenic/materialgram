@@ -1,0 +1,464 @@
+/*
+This file is part of Telegram Desktop,
+the official desktop application for the Telegram messaging service.
+
+For license and copyright information please follow this link:
+https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+*/
+#include "boxes/create_ai_box.h"
+
+#include "apiwrap.h"
+#include "base/object_ptr.h"
+#include "chat_helpers/compose/compose_show.h"
+#include "data/data_file_origin.h"
+#include "data/data_msg_id.h"
+#include "iv/iv_cached_media.h"
+#include "iv/iv_rich_page.h"
+#include "iv/markdown/iv_markdown_common.h"
+#include "iv/markdown/iv_markdown_prepare.h"
+#include "iv/markdown/iv_markdown_view.h"
+#include "lang/lang_keys.h"
+#include "main/main_session.h"
+#include "mtproto/mtproto_response.h"
+#include "spellcheck/spellcheck_types.h"
+#include "ui/boxes/choose_language_box.h"
+#include "ui/layers/generic_box.h"
+#include "ui/painter.h"
+#include "ui/rp_widget.h"
+#include "ui/widgets/buttons.h"
+#include "ui/widgets/checkbox.h"
+#include "ui/widgets/fields/input_field.h"
+#include "ui/widgets/labels.h"
+#include "styles/style_boxes.h"
+#include "styles/style_layers.h"
+
+namespace Iv::Editor {
+namespace {
+
+[[nodiscard]] LanguageId DefaultAiTranslateTo(LanguageId offeredFrom) {
+	const auto current = LanguageId{
+		QLocale(Lang::LanguageIdOrDefault(Lang::Id())).language()
+	};
+	if (current && (current != offeredFrom)) {
+		return current;
+	}
+	const auto english = LanguageId{ QLocale::English };
+	if (english != offeredFrom) {
+		return english;
+	}
+	return LanguageId{ QLocale::Spanish };
+}
+
+[[nodiscard]] TextWithEntities SelectorTitle(LanguageId id) {
+	return tr::lng_ai_compose_to_language(
+		tr::now,
+		lt_language,
+		tr::link(Ui::LanguageName(id)),
+		tr::marked);
+}
+
+class PromptIsland final : public Ui::RpWidget {
+public:
+	PromptIsland(QWidget *parent);
+
+	[[nodiscard]] not_null<Ui::InputField*> field() const;
+
+private:
+	void paintEvent(QPaintEvent *e) override;
+	void resizeEvent(QResizeEvent *e) override;
+
+	object_ptr<Ui::InputField> _field;
+
+};
+
+PromptIsland::PromptIsland(QWidget *parent)
+: RpWidget(parent)
+, _field(
+	this,
+	st::createAiPromptField,
+	Ui::InputField::Mode::MultiLine,
+	tr::lng_ai_compose_create_placeholder()) {
+	_field->setSubmitSettings(Ui::InputField::SubmitSettings::None);
+	_field->heightChanges() | rpl::on_next([=] {
+		if (width() > 0) {
+			resizeToWidth(width());
+		}
+	}, lifetime());
+	resizeToWidth(st::boxWideWidth);
+}
+
+not_null<Ui::InputField*> PromptIsland::field() const {
+	return _field.data();
+}
+
+void PromptIsland::paintEvent(QPaintEvent *e) {
+	auto p = Painter(this);
+	auto hq = PainterHighQualityEnabler(p);
+	p.setPen(Qt::NoPen);
+	p.setBrush(st::aiComposeCardBg);
+	p.drawRoundedRect(
+		rect(),
+		st::aiComposeCardRadius,
+		st::aiComposeCardRadius);
+}
+
+void PromptIsland::resizeEvent(QResizeEvent *e) {
+	const auto &padding = st::aiComposeCardPadding;
+	const auto inner = width() - padding.left() - padding.right();
+	_field->resizeToWidth(inner);
+	_field->moveToLeft(padding.left(), padding.top());
+	const auto height = padding.top() + _field->height() + padding.bottom();
+	if (this->height() != height) {
+		resize(width(), height);
+	}
+}
+
+class ResponseIsland final : public Ui::RpWidget {
+public:
+	ResponseIsland(
+		QWidget *parent,
+		not_null<Main::Session*> session,
+		std::shared_ptr<const RichPage> page,
+		LanguageId language,
+		bool emojify,
+		Fn<void()> chooseLanguage,
+		Fn<void(bool)> emojifyChanged);
+
+private:
+	void paintEvent(QPaintEvent *e) override;
+	void resizeEvent(QResizeEvent *e) override;
+
+	[[nodiscard]] int controlRowHeight() const;
+
+	const object_ptr<Ui::FlatLabel> _selector;
+	const object_ptr<Ui::RpWidget> _arrows;
+	const object_ptr<Ui::Checkbox> _emojify;
+	object_ptr<Ui::RpWidget> _preview = { nullptr };
+
+};
+
+ResponseIsland::ResponseIsland(
+	QWidget *parent,
+	not_null<Main::Session*> session,
+	std::shared_ptr<const RichPage> page,
+	LanguageId language,
+	bool emojify,
+	Fn<void()> chooseLanguage,
+	Fn<void(bool)> emojifyChanged)
+: RpWidget(parent)
+, _selector(this, st::aiComposeCardTitle)
+, _arrows(this)
+, _emojify(
+	this,
+	tr::lng_ai_compose_emojify(tr::now),
+	st::aiComposeEmojifyCheckbox,
+	std::make_unique<Ui::RoundCheckView>(st::defaultCheck, emojify)) {
+	_selector->setMarkedText(SelectorTitle(language));
+	_selector->setClickHandlerFilter([=](const auto &...) {
+		if (chooseLanguage) {
+			chooseLanguage();
+		}
+		return false;
+	});
+
+	const auto &icon = st::createAiSelectorArrowsIcon;
+	_arrows->setAttribute(Qt::WA_TransparentForMouseEvents);
+	_arrows->resize(icon.size());
+	_arrows->paintRequest() | rpl::on_next([=] {
+		auto p = QPainter(_arrows.data());
+		st::createAiSelectorArrowsIcon.paint(p, 0, 0, _arrows->width());
+	}, _arrows->lifetime());
+
+	_emojify->checkedChanges() | rpl::on_next([=](bool checked) {
+		if (emojifyChanged) {
+			emojifyChanged(checked);
+		}
+	}, _emojify->lifetime());
+
+	auto runtime = Iv::CreateMessageMediaRuntime(
+		session,
+		FullMsgId(),
+		[](QString) {},
+		[](QString) {},
+		::Data::FileOrigin());
+	auto prepared = Iv::Markdown::TryPrepareNativeInstantView({
+		.richPage = page,
+		.mediaRuntime = runtime,
+	});
+	if (prepared.supported()) {
+		_preview = object_ptr<Ui::RpWidget>::fromRaw(
+			Iv::Markdown::CreateMarkdownPreviewWidget(
+				this,
+				std::move(prepared.content),
+				nullptr,
+				[](Iv::Markdown::Event) {},
+				Iv::Markdown::OpenOptions{
+					.viewerKind = Iv::Markdown::ViewerKind::InstantView,
+				}).release());
+		_preview->heightValue() | rpl::on_next([=] {
+			if (width() > 0) {
+				resizeToWidth(width());
+			}
+		}, _preview->lifetime());
+	}
+}
+
+int ResponseIsland::controlRowHeight() const {
+	return std::max(_selector->height(), _emojify->height());
+}
+
+void ResponseIsland::paintEvent(QPaintEvent *e) {
+	auto p = Painter(this);
+	auto hq = PainterHighQualityEnabler(p);
+	p.setPen(Qt::NoPen);
+	p.setBrush(st::aiComposeCardBg);
+	p.drawRoundedRect(
+		rect(),
+		st::aiComposeCardRadius,
+		st::aiComposeCardRadius);
+}
+
+void ResponseIsland::resizeEvent(QResizeEvent *e) {
+	const auto &padding = st::aiComposeCardPadding;
+	const auto inner = width() - padding.left() - padding.right();
+	const auto rowHeight = controlRowHeight();
+
+	_emojify->resizeToNaturalWidth(inner);
+	_emojify->moveToRight(
+		padding.right(),
+		padding.top() + (rowHeight - _emojify->height()) / 2,
+		width());
+
+	const auto arrowsSkip = st::aiComposeCardControlSkip;
+	const auto selectorWidth = std::max(
+		inner
+			- _emojify->width()
+			- st::aiComposeCardControlSkip
+			- _arrows->width()
+			- arrowsSkip,
+		0);
+	_selector->resizeToWidth(selectorWidth);
+	_selector->moveToLeft(
+		padding.left(),
+		padding.top() + (rowHeight - _selector->height()) / 2);
+	_arrows->moveToLeft(
+		padding.left() + _selector->textMaxWidth() + arrowsSkip,
+		padding.top() + (rowHeight - _arrows->height()) / 2);
+
+	auto y = padding.top() + rowHeight;
+	if (_preview) {
+		y += st::aiComposeCardSectionSkip;
+		_preview->resizeToWidth(inner);
+		_preview->moveToLeft(padding.left(), y);
+		y += _preview->height();
+	}
+	y += padding.bottom();
+	if (height() != y) {
+		resize(width(), y);
+	}
+}
+
+struct State {
+	not_null<Main::Session*> session;
+	Fn<void(std::shared_ptr<const RichPage>)> applyToPage;
+	mtpRequestId requestId = 0;
+	Ui::InputField *prompt = nullptr;
+	LanguageId language;
+	bool emojify = false;
+	enum class Phase {
+		Initial,
+		Loading,
+		HasResult,
+	};
+	Phase phase = Phase::Initial;
+	std::shared_ptr<const RichPage> page;
+	Ui::RpWidget *responseIsland = nullptr;
+	Ui::RoundButton *reloadButton = nullptr;
+	Fn<void()> generate;
+	Fn<void()> rebuildButtons;
+	Fn<void()> rebuildResponseIsland;
+};
+
+} // namespace
+
+void CreateAiBox(not_null<Ui::GenericBox*> box, CreateAiBoxArgs &&args) {
+	const auto state = box->lifetime().make_state<State>(State{
+		.session = args.session,
+		.applyToPage = std::move(args.applyToPage),
+		.language = DefaultAiTranslateTo(LanguageId()),
+	});
+
+	box->setWidth(st::boxWideWidth);
+	box->setTitle(tr::lng_ai_compose_create_title());
+	box->addTopButton(st::aiComposeBoxClose, [=] {
+		box->closeBox();
+	});
+	box->setStyle(st::aiComposeBox);
+
+	const auto island = box->addRow(
+		object_ptr<PromptIsland>(box),
+		st::boxRowPadding);
+	state->prompt = island->field();
+
+	const auto chooseLanguage = [=] {
+		box->uiShow()->showBox(Box([=](not_null<Ui::GenericBox*> chooser) {
+			Ui::ChooseLanguageBox(
+				chooser,
+				tr::lng_languages(),
+				[=](std::vector<LanguageId> ids) {
+					if (ids.empty()) {
+						return;
+					}
+					state->language = ids.front();
+					state->generate();
+				},
+				{ state->language },
+				false,
+				nullptr);
+		}));
+	};
+
+	state->rebuildResponseIsland = [=] {
+		if (state->responseIsland) {
+			delete state->responseIsland;
+			state->responseIsland = nullptr;
+		}
+		if (!state->page) {
+			return;
+		}
+		const auto content = box->verticalLayout();
+		state->responseIsland = content->insert(
+			1,
+			object_ptr<ResponseIsland>(
+				content,
+				state->session,
+				state->page,
+				state->language,
+				state->emojify,
+				chooseLanguage,
+				[=](bool checked) {
+					state->emojify = checked;
+					state->generate();
+				}),
+			style::margins(
+				st::boxRowPadding.left(),
+				st::aiComposeCardSectionSkip,
+				st::boxRowPadding.right(),
+				0));
+	};
+
+	state->rebuildButtons = [=] {
+		if (state->reloadButton) {
+			delete state->reloadButton;
+			state->reloadButton = nullptr;
+		}
+		box->clearButtons();
+		if (state->phase == State::Phase::HasResult) {
+			box->setStyle(st::aiComposeBoxWithSend);
+			const auto pill = box->addButton(
+				tr::lng_ai_compose_add_to_page(),
+				[=] {
+					if (state->applyToPage) {
+						state->applyToPage(state->page);
+					}
+				});
+			pill->setFullRadius(true);
+
+			const auto reload = Ui::CreateChild<Ui::RoundButton>(
+				pill->parentWidget(),
+				rpl::single(QString()),
+				st::createAiReloadButton);
+			reload->setFullRadius(true);
+			reload->show();
+			const auto icon = Ui::CreateChild<Ui::RpWidget>(reload);
+			icon->setAttribute(Qt::WA_TransparentForMouseEvents);
+			icon->resize(st::createAiReloadIcon.size());
+			icon->paintRequest() | rpl::on_next([=] {
+				auto p = QPainter(icon);
+				st::createAiReloadIcon.paint(p, 0, 0, icon->width());
+			}, icon->lifetime());
+			icon->move(
+				(reload->width() - icon->width()) / 2,
+				(reload->height() - icon->height()) / 2);
+			pill->geometryValue() | rpl::on_next([=](QRect geometry) {
+				const auto size = st::createAiReloadButton.height;
+				reload->moveToLeft(
+					geometry.x()
+						+ geometry.width()
+						+ st::aiComposeSendButtonSkip,
+					geometry.y() + (geometry.height() - size) / 2);
+			}, reload->lifetime());
+			reload->setClickedCallback([=] {
+				state->generate();
+			});
+			state->reloadButton = reload;
+		} else {
+			box->setStyle(st::aiComposeBox);
+			box->addButton(
+				tr::lng_ai_compose_generate(),
+				[=] { state->generate(); }
+			)->setFullRadius(true);
+		}
+	};
+
+	state->generate = [=] {
+		const auto prompt = state->prompt->getLastText();
+		if (prompt.trimmed().isEmpty()) {
+			return;
+		}
+		if (state->requestId) {
+			state->session->api().request(state->requestId).cancel();
+			state->requestId = 0;
+		}
+		state->phase = State::Phase::Loading;
+		state->rebuildButtons();
+
+		using Flag = MTPmessages_composeRichMessageWithAI::Flag;
+		auto flags = MTPmessages_composeRichMessageWithAI::Flags(0)
+			| Flag::f_tone;
+		if (state->emojify) {
+			flags |= Flag::f_emojify;
+		}
+		const auto lang = state->language
+			? state->language.twoLetterCode()
+			: QString();
+		if (!lang.isEmpty()) {
+			flags |= Flag::f_translate_to_lang;
+		}
+		state->requestId = state->session->api().request(
+			MTPmessages_ComposeRichMessageWithAI(
+				MTP_flags(flags),
+				MTPInputRichMessage(),
+				lang.isEmpty() ? MTPstring() : MTP_string(lang),
+				MTP_inputAiComposeToneSingleUse(MTP_string(prompt)))
+		).done([=](const MTPmessages_ComposedRichMessageWithAI &result) {
+			state->requestId = 0;
+			state->page = Iv::ParseRichPage(
+				state->session,
+				result.data().vresult());
+			state->phase = State::Phase::HasResult;
+			state->rebuildResponseIsland();
+			state->rebuildButtons();
+		}).fail([=](const MTP::Error &error) {
+			state->requestId = 0;
+			state->phase = state->page
+				? State::Phase::HasResult
+				: State::Phase::Initial;
+			state->rebuildButtons();
+			if (MTP::IgnoreError(error)) {
+				return;
+			}
+			box->showToast(error.type());
+		}).handleFloodErrors().send();
+	};
+
+	state->rebuildButtons();
+}
+
+void ShowCreateAiBox(
+		std::shared_ptr<ChatHelpers::Show> show,
+		CreateAiBoxArgs &&args) {
+	show->show(Box(CreateAiBox, std::move(args)));
+}
+
+} // namespace Iv::Editor
