@@ -14,9 +14,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_msg_id.h"
 #include "iv/iv_cached_media.h"
 #include "iv/iv_rich_page.h"
+#include "iv/markdown/iv_markdown_article.h"
 #include "iv/markdown/iv_markdown_common.h"
 #include "iv/markdown/iv_markdown_prepare.h"
 #include "iv/markdown/iv_markdown_view.h"
+#include "iv/markdown/iv_markdown_view_widget.h"
 #include "lang/lang_keys.h"
 #include "main/main_session.h"
 #include "mtproto/mtproto_response.h"
@@ -30,6 +32,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/widgets/fields/input_field.h"
 #include "ui/widgets/labels.h"
 #include "styles/style_boxes.h"
+#include "styles/style_iv.h"
 #include "styles/style_layers.h"
 
 namespace Iv::Editor {
@@ -133,7 +136,8 @@ private:
 	const object_ptr<Ui::FlatLabel> _selector;
 	const object_ptr<Ui::RpWidget> _arrows;
 	const object_ptr<Ui::Checkbox> _emojify;
-	object_ptr<Ui::RpWidget> _preview = { nullptr };
+	std::shared_ptr<Iv::Markdown::MarkdownArticle> _article;
+	Iv::Markdown::MarkdownDocumentWidget *_preview = nullptr;
 
 };
 
@@ -186,16 +190,13 @@ ResponseIsland::ResponseIsland(
 		.mediaRuntime = runtime,
 	});
 	if (prepared.supported()) {
-		_preview = object_ptr<Ui::RpWidget>::fromRaw(
-			Iv::Markdown::CreateMarkdownPreviewWidget(
-				this,
-				std::move(prepared.content),
-				nullptr,
-				[](Iv::Markdown::Event) {},
-				Iv::Markdown::OpenOptions{
-					.viewerKind = Iv::Markdown::ViewerKind::InstantView,
-				}).release());
-		_preview->heightValue() | rpl::on_next([=] {
+		_article = std::make_shared<Iv::Markdown::MarkdownArticle>(
+			st::defaultMarkdown);
+		_article->setContent(std::move(prepared.content));
+		_preview = Ui::CreateChild<Iv::Markdown::MarkdownDocumentWidget>(this);
+		_preview->setArticle(_article);
+		_preview->heightValue() | rpl::on_next([=](int height) {
+			_preview->setVisibleTopBottom(0, height);
 			if (width() > 0) {
 				resizeToWidth(width());
 			}
