@@ -423,6 +423,7 @@ void CreateAiBox(not_null<Ui::GenericBox*> box, CreateAiBoxArgs &&args) {
 					if (state->applyToPage) {
 						state->applyToPage(state->page);
 					}
+					box->closeBox();
 				});
 			pill->setFullRadius(true);
 

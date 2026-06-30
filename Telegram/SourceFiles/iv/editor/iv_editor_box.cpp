@@ -1553,9 +1553,15 @@ void WindowHost::Impl::setupWindow(ShowWindowDescriptor &&descriptor) {
 					u"rich_message"_q);
 				return;
 			}
+			const auto editor = _editor;
 			ShowCreateAiBox(_show, {
 				.session = session,
-				.applyToPage = [](std::shared_ptr<const RichPage>) {},
+				.applyToPage = [editor](std::shared_ptr<const RichPage> page) {
+					if (!editor || !page || page->blocks.empty()) {
+						return;
+					}
+					editor->insertPreparedBlocks(page->blocks);
+				},
 			});
 		});
 		addBottomAiStar(button, session);
