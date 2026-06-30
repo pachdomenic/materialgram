@@ -36,10 +36,12 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "lang/lang_keys.h"
 #include "menu/menu_checked_action.h"
 #include "menu/menu_send_details.h"
+#include "settings/sections/settings_premium.h"
 #include "ui/boxes/confirm_box.h"
 #include "ui/controls/send_button.h"
 #include "ui/delayed_activation.h"
 #include "ui/effects/premium_graphics.h"
+#include "ui/layers/generic_box.h"
 #include "ui/rp_widget.h"
 #include "data/data_peer_values.h"
 #include "ui/ui_utility.h"
@@ -1320,6 +1322,9 @@ public:
 private:
 	void setupWindow(ShowWindowDescriptor &&descriptor);
 	void setupEmojiColumn(const ShowWindowDescriptor &descriptor);
+	void addBottomAiStar(
+		not_null<Ui::IconButton*> button,
+		not_null<Main::Session*> session);
 	void layout();
 	void toggleEmojiColumn();
 	void showEmojiColumn();
@@ -1352,6 +1357,7 @@ private:
 	object_ptr<Toolbar> _toolbar = { nullptr };
 	object_ptr<ToolbarPill> _discard = { nullptr };
 	object_ptr<ToolbarPill> _cancel = { nullptr };
+	object_ptr<ToolbarPill> _aiPill = { nullptr };
 	object_ptr<Ui::SendButton> _send = { nullptr };
 	object_ptr<ChatHelpers::TabbedSelector> _emojiColumn = { nullptr };
 	object_ptr<Ui::PlainShadow> _emojiColumnShadow = { nullptr };
@@ -1522,6 +1528,39 @@ void WindowHost::Impl::setupWindow(ShowWindowDescriptor &&descriptor) {
 			}
 		});
 	}
+	{
+		const auto session = descriptor.session;
+		_aiPill = object_ptr<ToolbarPill>(
+			_bottom.data(),
+			st::ivEditorPillShadow);
+		const auto button = _aiPill->addButton(
+			st::ivEditorBottomAiButton,
+			&st::ivEditorBottomAiIcon,
+			&st::ivEditorBottomAiIcon,
+			ToolbarButtonState::Inactive);
+		button->setAccessibleName(tr::lng_ai_compose_title(tr::now));
+		button->setClickedCallback([=] {
+			if (!session->premium()) {
+				Settings::ShowPremiumPromoToast(
+					_show,
+					tr::lng_article_premium_required(
+						tr::now,
+						lt_link,
+						tr::link(tr::bold(
+							tr::lng_article_premium_required_link(tr::now))),
+						tr::marked),
+					u"rich_message"_q);
+				return;
+			}
+			_show->show(Box([](not_null<Ui::GenericBox*> box) {
+				box->setTitle(tr::lng_ai_compose_title());
+				box->addButton(tr::lng_close(), [=] {
+					box->closeBox();
+				});
+			}));
+		});
+		addBottomAiStar(button, session);
+	}
 	const auto save = (descriptor.submitType
 		== ShowWindowDescriptor::SubmitType::Save);
 	_send = object_ptr<Ui::SendButton>(
@@ -1620,6 +1659,39 @@ void WindowHost::Impl::setupWindow(ShowWindowDescriptor &&descriptor) {
 	_bottom->raise();
 	window->show();
 	editor->activateInitialNode();
+}
+
+void WindowHost::Impl::addBottomAiStar(
+		not_null<Ui::IconButton*> button,
+		not_null<Main::Session*> session) {
+	const auto factor = style::DevicePixelRatio();
+	const auto side = st::ivEditorToolbarPremiumStarSize;
+	const auto size = QSize(side, side);
+	auto image = QImage(
+		size * factor,
+		QImage::Format_ARGB32_Premultiplied);
+	image.setDevicePixelRatio(factor);
+	image.fill(Qt::transparent);
+	{
+		auto p = QPainter(&image);
+		auto svg = QSvgRenderer(
+			Ui::Premium::ColorizedSvg(Ui::Premium::ButtonGradientStops()));
+		svg.render(&p, QRectF(QPointF(), QSizeF(size)));
+	}
+	const auto star = Ui::CreateChild<Ui::RpWidget>(button.get());
+	star->setAttribute(Qt::WA_TransparentForMouseEvents);
+	star->resize(size);
+	star->paintRequest() | rpl::on_next([=] {
+		auto p = QPainter(star);
+		p.drawImage(0, 0, image);
+	}, star->lifetime());
+	const auto skip = st::ivEditorToolbarPremiumStarSkip;
+	star->move(
+		button->width() - star->width() - skip.x(),
+		button->height() - star->height() - skip.y());
+	star->showOn(Data::AmPremiumValue(session)
+		| rpl::map([](bool premium) { return !premium; }));
+	star->raise();
 }
 
 void WindowHost::Impl::setupEmojiColumn(const ShowWindowDescriptor &descriptor) {
@@ -1721,6 +1793,7 @@ void WindowHost::Impl::layout() {
 	const auto right = fitsArticle
 		? (column.left + column.width)
 		: editorWidth;
+	const auto left = fitsArticle ? column.left : 0;
 	const auto leftPill = _discard
 		? _discard.data()
 		: _cancel.data();
@@ -1744,6 +1817,12 @@ void WindowHost::Impl::layout() {
 			buttonsTop,
 			editorWidth);
 	}
+	if (_aiPill) {
+		_aiPill->moveToLeft(
+			left - _aiPill->shadowMargins().left(),
+			buttonsTop,
+			editorWidth);
+	}
 	auto bottomMask = QRegion();
 	const auto addMask = [&](Ui::RpWidget *widget) {
 		if (widget && !widget->isHidden()) {
@@ -1752,6 +1831,7 @@ void WindowHost::Impl::layout() {
 	};
 	addMask(_discard.data());
 	addMask(_cancel.data());
+	addMask(_aiPill.data());
 	addMask(_send.data());
 	if (bottomMask.isEmpty()) {
 		_bottom->clearMask();

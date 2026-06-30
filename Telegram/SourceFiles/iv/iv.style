@@ -148,6 +148,11 @@ ivEditorBottomCancelButton: IconButton(ivEditorToolbarButton) {
 	icon: ivEditorBottomCancelIcon;
 	iconOver: ivEditorBottomCancelIcon;
 }
+ivEditorBottomAiIcon: icon {{ "chat/ai_letters-20x20", menuIconColor }};
+ivEditorBottomAiButton: IconButton(ivEditorToolbarButton) {
+	icon: ivEditorBottomAiIcon;
+	iconOver: ivEditorBottomAiIcon;
+}
 ivEditorBottomSend: SendButton(historySend) {
 	sendIconPosition: point(8px, 8px);
 	sendIconFillPadding: 8px;
