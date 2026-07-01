@@ -34,7 +34,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/widgets/checkbox.h"
 #include "ui/widgets/fields/input_field.h"
 #include "ui/widgets/labels.h"
-#include "ui/wrap/padding_wrap.h"
 #include "window/themes/window_theme.h"
 #include "styles/style_boxes.h"
 #include "styles/style_chat.h"
@@ -352,33 +351,28 @@ void CreateAiBox(not_null<Ui::GenericBox*> box, CreateAiBoxArgs &&args) {
 	});
 	box->setStyle(st::aiComposeBox);
 
-	const auto promptWrap = box->setPinnedToTopContent(
-		object_ptr<Ui::PaddingWrap<Ui::InputField>>(
+	const auto prompt = box->addRow(
+		object_ptr<Ui::InputField>(
 			box,
-			object_ptr<Ui::InputField>(
-				box,
-				st::aiTonePromptField,
-				Ui::InputField::Mode::MultiLine,
-				rpl::producer<QString>()),
-			st::aiToneFieldsMargin));
-	const auto prompt = promptWrap->entity();
+			st::aiTonePromptField,
+			Ui::InputField::Mode::MultiLine,
+			rpl::producer<QString>()),
+		st::aiToneFieldsMargin);
 	prompt->setSubmitSettings(Ui::InputField::SubmitSettings::None);
 	prompt->setMaxLength(state->session->appConfig().get<int>(
 		u"aicompose_tone_prompt_length_max"_q,
 		1024));
 	state->prompt = prompt;
 
-	AddAiComposeFieldDecor(
+	const auto promptPlaceholder = AddAiComposeFieldDecor(
 		prompt,
 		tr::lng_ai_compose_create_placeholder());
 
-	// The prompt is pinned to the top of the box, so a text-driven auto-grow
-	// would resize the pinned content and re-enter the box layout during a
-	// text-change event (which crashes). Keep the island at a fixed tall
-	// height and let long prompts scroll inside it instead of growing.
-	const auto promptHeight = st::aiTonePromptField.heightMin;
-	prompt->setMinHeight(promptHeight);
-	prompt->setMaxHeight(promptHeight);
+	promptPlaceholder->heightValue(
+	) | rpl::on_next([=](int phHeight) {
+		const auto pad = st::aiToneFieldPadding;
+		prompt->setMinHeight(phHeight + pad.top() + pad.bottom());
+	}, prompt->lifetime());
 
 	const auto chooseLanguage = [=] {
 		box->uiShow()->showBox(Box([=](not_null<Ui::GenericBox*> chooser) {
