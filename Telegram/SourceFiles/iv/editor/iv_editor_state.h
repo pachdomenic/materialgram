@@ -332,6 +332,15 @@ public:
 	[[nodiscard]] bool insertPreparedBlocksAfterTableSelection(
 		const Markdown::PreparedEditSelection &selection,
 		std::vector<RichPage::Block> blocks);
+	enum class TableInPlaceApplyResult : uchar {
+		Applied,
+		Unchanged,
+		StructureMismatch,
+		Failed,
+	};
+	[[nodiscard]] TableInPlaceApplyResult replaceTableSelectionCellsInPlace(
+		const Markdown::PreparedEditSelection &selection,
+		const RichPage &page);
 	[[nodiscard]] bool addTableRow(
 		const Markdown::PreparedEditTableCellRange &range,
 		bool after);

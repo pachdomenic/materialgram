@@ -3685,7 +3685,23 @@ void Widget::replaceCurrentSelectionWithRichPage(
 						};
 					}
 				}
-				if (!_state->insertPreparedBlocksAfterTableSelection(
+				using InPlace = State::TableInPlaceApplyResult;
+				const auto inPlace
+					= _state->replaceTableSelectionCellsInPlace(
+						_structuralSelection,
+						*page);
+				if (inPlace == InPlace::Failed
+					|| inPlace == InPlace::Unchanged) {
+					if (inPlace == InPlace::Failed) {
+						showLastLimitToast();
+					}
+					return MutationTransactionResult{
+						.committed = committed,
+						.changed = (committed == ApplyResult::Changed),
+					};
+				}
+				if (inPlace == InPlace::StructureMismatch
+					&& !_state->insertPreparedBlocksAfterTableSelection(
 						_structuralSelection,
 						std::move(blocks))) {
 					showLastLimitToast();

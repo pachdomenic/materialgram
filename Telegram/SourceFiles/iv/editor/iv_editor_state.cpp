@@ -3038,6 +3038,135 @@ bool State::insertPreparedBlocksAfterTableSelection(
 	});
 }
 
+State::TableInPlaceApplyResult State::replaceTableSelectionCellsInPlace(
+		const Markdown::PreparedEditSelection &selection,
+		const RichPage &page) {
+	if (page.blocks.size() != 1
+		|| page.blocks.front().kind != BlockKind::Table) {
+		return TableInPlaceApplyResult::StructureMismatch;
+	}
+	const auto source = richPageForTableSelection(selection);
+	if (!source
+		|| source->blocks.size() != 1
+		|| source->blocks.front().kind != BlockKind::Table) {
+		return TableInPlaceApplyResult::StructureMismatch;
+	}
+	const auto &sourceTable = source->blocks.front();
+	const auto &resultTable = page.blocks.front();
+	if (sourceTable.tableRows.size() != resultTable.tableRows.size()) {
+		return TableInPlaceApplyResult::StructureMismatch;
+	}
+	auto texts = std::vector<RichText>();
+	auto unchanged = true;
+	for (auto row = 0, rows = int(sourceTable.tableRows.size());
+			row != rows;
+			++row) {
+		const auto &sourceCells = sourceTable.tableRows[row].cells;
+		const auto &resultCells = resultTable.tableRows[row].cells;
+		if (sourceCells.size() != resultCells.size()) {
+			return TableInPlaceApplyResult::StructureMismatch;
+		}
+		for (auto index = 0, count = int(sourceCells.size());
+				index != count;
+				++index) {
+			const auto &sourceCell = sourceCells[index];
+			const auto &resultCell = resultCells[index];
+			if (NormalizeTableSpan(sourceCell.colspan)
+					!= NormalizeTableSpan(resultCell.colspan)
+				|| NormalizeTableSpan(sourceCell.rowspan)
+					!= NormalizeTableSpan(resultCell.rowspan)) {
+				return TableInPlaceApplyResult::StructureMismatch;
+			}
+			if (sourceCell.text != resultCell.text) {
+				unchanged = false;
+			}
+			texts.push_back(resultCell.text);
+		}
+	}
+	if (unchanged) {
+		return TableInPlaceApplyResult::Unchanged;
+	}
+	auto preparedPath = Markdown::PreparedEditBlockPath();
+	auto blockPath = BlockPath();
+	auto rowFrom = 0;
+	auto rowTill = 0;
+	auto columnFrom = -1;
+	auto columnTill = -1;
+	if (selection.kind == PreparedEditSelectionKind::TableCells) {
+		const auto range = validateTableCellRange(selection.tableCells);
+		if (!range) {
+			return TableInPlaceApplyResult::StructureMismatch;
+		}
+		preparedPath = selection.tableCells.block;
+		blockPath = range->block;
+		rowFrom = range->rowFrom;
+		rowTill = range->rowTill;
+		columnFrom = range->columnFrom;
+		columnTill = range->columnTill;
+	} else if (selection.kind == PreparedEditSelectionKind::TableRows) {
+		const auto range = validateTableRowRange(selection.tableRows);
+		if (!range) {
+			return TableInPlaceApplyResult::StructureMismatch;
+		}
+		preparedPath = selection.tableRows.block;
+		blockPath = range->block;
+		rowFrom = range->from;
+		rowTill = range->till;
+	} else {
+		return TableInPlaceApplyResult::StructureMismatch;
+	}
+	const auto owner = block(blockPath);
+	if (!owner || owner->kind != BlockKind::Table) {
+		return TableInPlaceApplyResult::StructureMismatch;
+	}
+	const auto grid = BuildTableGrid(*owner, tableRenderLimits());
+	if (columnFrom < 0 || columnTill < 0) {
+		columnFrom = 0;
+		columnTill = grid.columnCount;
+	}
+	if (rowFrom < 0
+		|| rowTill <= rowFrom
+		|| columnFrom < 0
+		|| columnTill <= columnFrom) {
+		return TableInPlaceApplyResult::StructureMismatch;
+	}
+	const auto rectangle = StructuralTableCellRange{
+		.rowFrom = rowFrom,
+		.rowTill = rowTill,
+		.columnFrom = columnFrom,
+		.columnTill = columnTill,
+	};
+	const auto references = SelectedTableGridCells(grid, rectangle);
+	if (references.size() != texts.size()) {
+		return TableInPlaceApplyResult::StructureMismatch;
+	}
+	const auto applied = applyCheckedMutation(false, [&](State &candidate) {
+		const auto path = candidate.convertBlockPath(preparedPath);
+		if (!path) {
+			return CheckedMutationResult<bool>{ .result = false };
+		}
+		const auto table = candidate.block(*path);
+		if (!table || table->kind != BlockKind::Table) {
+			return CheckedMutationResult<bool>{ .result = false };
+		}
+		for (auto i = 0, count = int(references.size()); i != count; ++i) {
+			const auto cell = candidate.tableCell(
+				*path,
+				references[i].rowIndex,
+				references[i].cellIndex);
+			if (!cell) {
+				return CheckedMutationResult<bool>{ .result = false };
+			}
+			cell->text = std::move(texts[i]);
+		}
+		candidate.rebuild();
+		return CheckedMutationResult<bool>{ .apply = true, .result = true };
+	});
+	return applied
+		? TableInPlaceApplyResult::Applied
+		: TableInPlaceApplyResult::Failed;
+}
+
 bool State::addTableRow(
 		const Markdown::PreparedEditTableCellRange &range,
 		bool after) {
