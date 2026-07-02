@@ -1348,3 +1348,6 @@ messageMarkdownOutSelected: Markdown(messageMarkdown) {
 		label: messageMarkdownFailureLabelOutSelected;
 	}
 }
+aiComposeCardMarkdown: Markdown(messageMarkdown) {
+	textPadding: margins(12px, 8px, 12px, 8px);
+}

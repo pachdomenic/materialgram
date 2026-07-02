@@ -942,10 +942,11 @@ int ComposeAiPreviewCard::resizeGetHeight(int newWidth) {
 		contentWidth - controlsWidth,
 		0);
 	_resultTitle->resizeToWidth(resultTitleWidth);
-	auto right = padding.right();
 	if (_emojifyVisible) {
-		_emojify->moveToRight(right, y, newWidth);
-		right += _emojify->width() + st::aiComposeCardControlSkip;
+		_emojify->moveToRight(
+			padding.left() - _emojify->getMargins().left(),
+			y,
+			newWidth);
 	}
 	_resultTitle->setGeometryToLeft(
 		padding.left(),
@@ -960,11 +961,11 @@ int ComposeAiPreviewCard::resizeGetHeight(int newWidth) {
 			: 0));
 
 	if (_richBody) {
-		_richBody->resizeToWidth(contentWidth);
+		_richBody->resizeToWidth(newWidth);
 		_richBody->setGeometryToLeft(
-			padding.left(),
+			0,
 			y,
-			contentWidth,
+			newWidth,
 			_richBody->height(),
 			newWidth);
 		y += _richBody->height();
@@ -1043,7 +1044,7 @@ ComposeAiRichBody::ComposeAiRichBody(
 	not_null<Main::Session*> session)
 : RpWidget(parent)
 , _session(session)
-, _article(st::messageMarkdown)
+, _article(st::aiComposeCardMarkdown)
 , _theme(Window::Theme::DefaultChatThemeOn(lifetime()))
 , _style(std::make_unique<Ui::ChatStyle>(session->colorIndicesValue())) {
 	_style->apply(_theme.get());
@@ -1080,7 +1081,7 @@ void ComposeAiRichBody::setPage(std::shared_ptr<const Iv::RichPage> page) {
 		.richPage = page,
 		.mediaRuntime = _mediaRuntime,
 		.dimensionsOverride = Iv::Markdown::CaptureMarkdownPrepareDimensions(
-			st::messageMarkdown),
+			st::aiComposeCardMarkdown),
 		.tableRenderLimits
 			= Iv::Markdown::PrepareTableRenderLimitsForRichMessage(richLimits),
 	});

@@ -123,7 +123,7 @@ ResponseIsland::ResponseIsland(
 	tr::lng_ai_compose_emojify(tr::now),
 	st::aiComposeEmojifyCheckbox,
 	std::make_unique<Ui::RoundCheckView>(st::defaultCheck, emojify))
-, _article(st::messageMarkdown)
+, _article(st::aiComposeCardMarkdown)
 , _theme(Window::Theme::DefaultChatThemeOn(lifetime()))
 , _style(std::make_unique<Ui::ChatStyle>(session->colorIndicesValue())) {
 	_style->apply(_theme.get());
@@ -175,7 +175,7 @@ ResponseIsland::ResponseIsland(
 		.richPage = page,
 		.mediaRuntime = _mediaRuntime,
 		.dimensionsOverride = Iv::Markdown::CaptureMarkdownPrepareDimensions(
-			st::messageMarkdown),
+			st::aiComposeCardMarkdown),
 		.tableRenderLimits
 			= Iv::Markdown::PrepareTableRenderLimitsForRichMessage(richLimits),
 	});
@@ -204,12 +204,10 @@ void ResponseIsland::requestArticleRepaint(QRect rect) {
 }
 
 QRect ResponseIsland::articleRect() const {
-	const auto &padding = st::aiComposeCardPadding;
-	const auto inner = std::max(width() - padding.left() - padding.right(), 0);
-	const auto top = padding.top()
+	const auto top = st::aiComposeCardPadding.top()
 		+ controlRowHeight()
 		+ st::aiComposeCardSectionSkip;
-	return QRect(padding.left(), top, inner, _articleHeight);
+	return QRect(0, top, width(), _articleHeight);
 }
 
 void ResponseIsland::paintArticle(Painter &p, QRect clip) {
@@ -285,7 +283,10 @@ void ResponseIsland::resizeEvent(QResizeEvent *e) {
 	const auto rowHeight = controlRowHeight();
 
 	_emojify->resizeToNaturalWidth(inner);
-	_emojify->moveToRight(padding.right(), padding.top(), width());
+	_emojify->moveToRight(
+		padding.left() - _emojify->getMargins().left(),
+		padding.top(),
+		width());
 
 	const auto arrowsSkip = st::aiComposeCardControlSkip;
 	const auto selectorWidth = std::max(
@@ -302,9 +303,9 @@ void ResponseIsland::resizeEvent(QResizeEvent *e) {
 		padding.top() + (_selector->height() - _arrows->height()) / 2);
 
 	auto y = padding.top() + rowHeight;
-	if (_hasArticle && inner > 0) {
+	if (_hasArticle && width() > 0) {
 		y += st::aiComposeCardSectionSkip;
-		_articleHeight = _article.resizeGetHeight(inner);
+		_articleHeight = _article.resizeGetHeight(width());
 		y += _articleHeight;
 	}
 	y += padding.bottom();
