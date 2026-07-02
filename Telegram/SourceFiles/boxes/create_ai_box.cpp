@@ -18,6 +18,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "iv/iv_cached_media.h"
 #include "iv/iv_rich_page.h"
 #include "iv/markdown/iv_markdown_article.h"
+#include "iv/markdown/iv_markdown_article_scroll_forwarder.h"
 #include "iv/markdown/iv_markdown_common.h"
 #include "iv/markdown/iv_markdown_prepare.h"
 #include "lang/lang_keys.h"
@@ -84,6 +85,11 @@ public:
 private:
 	void paintEvent(QPaintEvent *e) override;
 	void resizeEvent(QResizeEvent *e) override;
+	void wheelEvent(QWheelEvent *e) override;
+	void mousePressEvent(QMouseEvent *e) override;
+	void mouseMoveEvent(QMouseEvent *e) override;
+	void mouseReleaseEvent(QMouseEvent *e) override;
+	bool eventHook(QEvent *e) override;
 
 	void paintArticle(Painter &p, QRect clip);
 	void requestArticleRepaint(QRect articleRect);
@@ -91,6 +97,7 @@ private:
 
 	[[nodiscard]] int controlRowHeight() const;
 	[[nodiscard]] QRect articleRect() const;
+	[[nodiscard]] Iv::Markdown::MarkdownArticle *scrollTarget();
 
 	const not_null<Main::Session*> _session;
 	const object_ptr<Ui::FlatLabel> _selector;
@@ -100,6 +107,7 @@ private:
 	Iv::Markdown::MarkdownArticle _article;
 	std::unique_ptr<Ui::ChatTheme> _theme;
 	std::unique_ptr<Ui::ChatStyle> _style;
+	Iv::Markdown::MarkdownArticleScrollForwarder _scrollForwarder;
 	int _articleHeight = 0;
 	int _paletteVersion = -1;
 	bool _hasArticle = false;
@@ -128,6 +136,7 @@ ResponseIsland::ResponseIsland(
 , _style(std::make_unique<Ui::ChatStyle>(session->colorIndicesValue())) {
 	_style->apply(_theme.get());
 	_paletteVersion = _style->paletteVersion();
+	setAttribute(Qt::WA_AcceptTouchEvents);
 
 	_selector->setMarkedText(SelectorTitle(language));
 	_selector->setClickHandlerFilter([=](const auto &...) {
@@ -208,6 +217,52 @@ QRect ResponseIsland::articleRect() const {
 		+ controlRowHeight()
 		+ st::aiComposeCardSectionSkip;
 	return QRect(0, top, width(), _articleHeight);
+}
+
+Iv::Markdown::MarkdownArticle *ResponseIsland::scrollTarget() {
+	return _hasArticle ? &_article : nullptr;
+}
+
+void ResponseIsland::wheelEvent(QWheelEvent *e) {
+	_scrollForwarder.handleWheel(scrollTarget(), e, articleRect().topLeft());
+}
+
+void ResponseIsland::mousePressEvent(QMouseEvent *e) {
+	if (!_scrollForwarder.handleMousePress(
+			scrollTarget(),
+			e,
+			articleRect().topLeft())) {
+		RpWidget::mousePressEvent(e);
+	}
+}
+
+void ResponseIsland::mouseMoveEvent(QMouseEvent *e) {
+	if (!_scrollForwarder.handleMouseMove(
+			scrollTarget(),
+			e,
+			articleRect().topLeft())) {
+		RpWidget::mouseMoveEvent(e);
+	}
+}
+
+void ResponseIsland::mouseReleaseEvent(QMouseEvent *e) {
+	if (!_scrollForwarder.handleMouseRelease(
+			scrollTarget(),
+			e,
+			articleRect().topLeft())) {
+		RpWidget::mouseReleaseEvent(e);
+	}
+}
+
+bool ResponseIsland::eventHook(QEvent *e) {
+	if (_scrollForwarder.handleTouchHook(
+			scrollTarget(),
+			this,
+			e,
+			articleRect().topLeft())) {
+		return true;
+	}
+	return RpWidget::eventHook(e);
 }
 
 void ResponseIsland::paintArticle(Painter &p, QRect clip) {

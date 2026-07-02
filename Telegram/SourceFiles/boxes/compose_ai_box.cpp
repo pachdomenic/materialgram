@@ -32,6 +32,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/stickers/data_custom_emoji.h"
 #include "info/channel_statistics/boosts/giveaway/boost_badge.h" // InfiniteRadialAnimationWidget.
 #include "iv/markdown/iv_markdown_article.h"
+#include "iv/markdown/iv_markdown_article_scroll_forwarder.h"
 #include "iv/markdown/iv_markdown_common.h"
 #include "iv/markdown/iv_markdown_prepare.h"
 #include "iv/iv_cached_media.h"
@@ -344,15 +345,22 @@ public:
 protected:
 	int resizeGetHeight(int newWidth) override;
 	void paintEvent(QPaintEvent *e) override;
+	void wheelEvent(QWheelEvent *e) override;
+	void mousePressEvent(QMouseEvent *e) override;
+	void mouseMoveEvent(QMouseEvent *e) override;
+	void mouseReleaseEvent(QMouseEvent *e) override;
+	bool eventHook(QEvent *e) override;
 
 private:
 	void requestRepaint(QRect rect);
+	[[nodiscard]] Iv::Markdown::MarkdownArticle *scrollTarget();
 
 	const not_null<Main::Session*> _session;
 	std::shared_ptr<Iv::Markdown::MediaRuntime> _mediaRuntime;
 	Iv::Markdown::MarkdownArticle _article;
 	std::unique_ptr<Ui::ChatTheme> _theme;
 	std::unique_ptr<Ui::ChatStyle> _style;
+	Iv::Markdown::MarkdownArticleScrollForwarder _scrollForwarder;
 	int _paletteVersion = -1;
 	bool _hasArticle = false;
 
@@ -1049,6 +1057,7 @@ ComposeAiRichBody::ComposeAiRichBody(
 , _style(std::make_unique<Ui::ChatStyle>(session->colorIndicesValue())) {
 	_style->apply(_theme.get());
 	_paletteVersion = _style->paletteVersion();
+	setAttribute(Qt::WA_AcceptTouchEvents);
 
 	const auto weak = base::make_weak(this);
 	_article.setTextRepaintCallbacks(
@@ -1076,6 +1085,7 @@ ComposeAiRichBody::~ComposeAiRichBody() {
 }
 
 void ComposeAiRichBody::setPage(std::shared_ptr<const Iv::RichPage> page) {
+	_scrollForwarder.reset(scrollTarget());
 	const auto richLimits = Iv::ResolveRichMessageLimits(_session);
 	auto prepared = Iv::Markdown::TryPrepareNativeInstantView({
 		.richPage = page,
@@ -1103,6 +1113,39 @@ void ComposeAiRichBody::requestRepaint(QRect rect) {
 			update(rect);
 		}
 	});
+}
+
+Iv::Markdown::MarkdownArticle *ComposeAiRichBody::scrollTarget() {
+	return _hasArticle ? &_article : nullptr;
+}
+
+void ComposeAiRichBody::wheelEvent(QWheelEvent *e) {
+	_scrollForwarder.handleWheel(scrollTarget(), e, QPoint());
+}
+
+void ComposeAiRichBody::mousePressEvent(QMouseEvent *e) {
+	if (!_scrollForwarder.handleMousePress(scrollTarget(), e, QPoint())) {
+		RpWidget::mousePressEvent(e);
+	}
+}
+
+void ComposeAiRichBody::mouseMoveEvent(QMouseEvent *e) {
+	if (!_scrollForwarder.handleMouseMove(scrollTarget(), e, QPoint())) {
+		RpWidget::mouseMoveEvent(e);
+	}
+}
+
+void ComposeAiRichBody::mouseReleaseEvent(QMouseEvent *e) {
+	if (!_scrollForwarder.handleMouseRelease(scrollTarget(), e, QPoint())) {
+		RpWidget::mouseReleaseEvent(e);
+	}
+}
+
+bool ComposeAiRichBody::eventHook(QEvent *e) {
+	if (_scrollForwarder.handleTouchHook(scrollTarget(), this, e, QPoint())) {
+		return true;
+	}
+	return RpWidget::eventHook(e);
 }
 
 int ComposeAiRichBody::resizeGetHeight(int newWidth) {
