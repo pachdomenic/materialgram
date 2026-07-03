@@ -481,7 +481,7 @@ void CloudThemes::parseThemes(const QVector<MTPTheme> &list) {
 	_list.clear();
 	_list.reserve(list.size());
 	for (const auto &theme : list) {
-		_list.push_back(CloudTheme::Parse(_session, theme));
+		_list.push_back(CloudTheme::Parse(_session, theme, true));
 	}
 	checkCurrentTheme();
 }

@@ -118,6 +118,7 @@ private:
 	void updateGeometry();
 
 	[[nodiscard]] bool amCreator(const Data::CloudTheme &theme) const;
+	[[nodiscard]] uint64 appliedElementId() const;
 	[[nodiscard]] int groupValueForId(uint64 id);
 
 	const not_null<Window::SessionController*> _window;
@@ -131,6 +132,7 @@ private:
 	base::flat_map<uint64, int> _groupValueById;
 	rpl::lifetime _downloadFinishedLifetime;
 	base::unique_qptr<Ui::PopupMenu> _contextMenu;
+	std::shared_ptr<int> _applyGeneration = std::make_shared<int>(0);
 
 };
 

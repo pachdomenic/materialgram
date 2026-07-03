@@ -7,8 +7,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "window/themes/window_themes_cloud_list.h"
 
+#include "base/call_delayed.h"
+#include "ui/emoji_config.h"
 #include "window/themes/window_themes_embedded.h"
 #include "window/themes/window_theme_editor_box.h"
+#include "window/themes/window_themes_chat.h"
 #include "window/themes/window_theme.h"
 #include "window/window_session_controller.h"
 #include "window/window_controller.h"
@@ -48,6 +51,18 @@ constexpr auto kShowPerRow = 4;
 	result.id = result.documentId = kFakeCloudThemeId;
 	result.slug = object.pathAbsolute;
 	return result;
+}
+
+[[nodiscard]] bool ContainsThemeWithEmoticon(
+		const std::vector<Data::CloudTheme> &list,
+		const QString &emoticon) {
+	const auto emoji = Ui::Emoji::Find(emoticon);
+	if (!emoji) {
+		return false;
+	}
+	return ranges::contains(list, emoji, [](const Data::CloudTheme &theme) {
+		return Ui::Emoji::Find(theme.emoticon);
+	});
 }
 
 [[nodiscard]] QImage ColorsBackgroundFromImage(const QImage &source) {
@@ -107,6 +122,38 @@ constexpr auto kShowPerRow = 4;
 	result.radiobuttonActive
 		= result.radiobuttonInactive
 		= st::msgServiceFg[instance.palette]->c;
+	return result;
+}
+
+[[nodiscard]] CloudListColors ColorsFromTheme(
+		const Data::CloudTheme &theme) {
+	const auto dark = IsNightMode();
+	const auto used = ChatThemeVariant(theme, dark);
+	Assert(used.has_value());
+	const auto &settings = theme.settings.find(*used)->second;
+	auto result = CloudListColors();
+	result.sent = settings.outgoingMessagesColors.empty()
+		? settings.accentColor
+		: settings.outgoingMessagesColors.front();
+	result.received = dark ? QColor(24, 24, 25) : QColor(255, 255, 255);
+	result.radiobuttonActive
+		= result.radiobuttonInactive
+		= (dark ? QColor(255, 255, 255) : settings.accentColor);
+	const auto paperColors = settings.paper
+		? settings.paper->backgroundColors()
+		: std::vector<QColor>();
+	if (paperColors.size() > 1) {
+		result.background = Images::GenerateLinearGradient(
+			QSize(80, 80) * style::DevicePixelRatio(),
+			paperColors);
+	} else {
+		result.background = QImage(
+			QSize(1, 1) * style::DevicePixelRatio(),
+			QImage::Format_ARGB32_Premultiplied);
+		result.background.fill(paperColors.empty()
+			? settings.accentColor
+			: paperColors.front());
+	}
 	return result;
 }
 
@@ -334,9 +381,15 @@ rpl::producer<bool> CloudList::allShown() const {
 
 void CloudList::setup() {
 	_group->setChangedCallback([=](int selected) {
-		const auto &object = Background()->themeObject();
-		_group->setValue(groupValueForId(
-			object.cloud.id ? object.cloud.id : kFakeCloudThemeId));
+		const auto i = ranges::find_if(_elements, [&](const Element &e) {
+			return (groupValueForId(e.theme.id) == selected)
+				&& !e.theme.emoticon.isEmpty()
+				&& !e.theme.settings.empty();
+		});
+		if (i != end(_elements)) {
+			return;
+		}
+		_group->setValue(groupValueForId(appliedElementId()));
 	});
 
 	auto cloudListChanges = rpl::single(rpl::empty) | rpl::then(
@@ -377,7 +430,8 @@ std::vector<Data::CloudTheme> CloudList::collectAll() const {
 			result,
 			object.cloud.id,
 			&Data::CloudTheme::id);
-		if (i == end(result)) {
+		if (i == end(result)
+			&& !ContainsThemeWithEmoticon(result, object.cloud.emoticon)) {
 			if (object.cloud.id) {
 				result.push_back(object.cloud);
 			} else {
@@ -407,37 +461,16 @@ bool CloudList::applyChangesFrom(std::vector<Data::CloudTheme> &&list) {
 	}
 	auto changed = false;
 	const auto limit = _showAll.current() ? list.size() : kShowPerRow;
-	const auto &object = Background()->themeObject();
-	const auto id = object.cloud.id ? object.cloud.id : kFakeCloudThemeId;
-	ranges::stable_sort(list, std::less<>(), [&](const Data::CloudTheme &t) {
-		if (t.id == id) {
-			return 0;
-		} else if (t.documentId) {
-			return 1;
-		} else {
-			return 2;
-		}
+	ranges::stable_sort(list, std::less<>(), [](const Data::CloudTheme &t) {
+		return t.documentId ? 0 : 1;
 	});
-	if (list.front().id == id) {
-		const auto j = ranges::find(_elements, id, &Element::id);
-		if (j == end(_elements)) {
-			insert(0, list.front());
-			changed = true;
-		} else if (j - begin(_elements) >= limit) {
-			std::rotate(
-				begin(_elements) + limit - 1,
-				j,
-				j + 1);
-			changed = true;
-		}
-	}
 	if (removeStaleUsing(list)) {
 		changed = true;
 	}
 	if (insertTillLimit(list, limit)) {
 		changed = true;
 	}
-	_group->setValue(groupValueForId(id));
+	_group->setValue(groupValueForId(appliedElementId()));
 	return changed;
 }
 
@@ -526,8 +559,18 @@ void CloudList::insert(int index, const Data::CloudTheme &theme) {
 		if (button == Qt::RightButton) {
 			showMenu(*i);
 		} else if (cloud.documentId) {
+			++*_applyGeneration;
 			_window->session().data().cloudThemes().applyFromDocument(cloud);
+		} else if (!cloud.emoticon.isEmpty() && !cloud.settings.empty()) {
+			const auto generation = ++*_applyGeneration;
+			const auto check = _applyGeneration;
+			base::call_delayed(st::defaultRadio.duration, _window, [=] {
+				if (*check == generation) {
+					ApplyChatTheme(_window, cloud, IsNightMode());
+				}
+			});
 		} else {
+			++*_applyGeneration;
 			_window->session().data().cloudThemes().showPreview(
 				&_window->window(),
 				cloud);
@@ -577,6 +620,9 @@ void CloudList::refreshColors(Element &element) {
 			setWaiting(element, true);
 			subscribeToDownloadFinished();
 		}
+	} else if (!theme.settings.empty()) {
+		element.check->setColors(ColorsFromTheme(theme));
+		setWaiting(element, false);
 	} else {
 		element.check->setColors(CloudListColors());
 	}
@@ -638,12 +684,30 @@ void CloudList::showMenu(Element &element) {
 
 void CloudList::setWaiting(Element &element, bool waiting) {
 	element.waiting = waiting;
-	element.button->setPointerCursor(
-		!waiting && (element.theme.documentId || amCreator(element.theme)));
+	element.button->setPointerCursor(!waiting
+		&& (element.theme.documentId
+			|| amCreator(element.theme)
+			|| !element.theme.settings.empty()));
 }
 
 bool CloudList::amCreator(const Data::CloudTheme &theme) const {
 	return (_window->session().userId() == theme.createdBy);
+}
+
+uint64 CloudList::appliedElementId() const {
+	const auto &cloud = Background()->themeObject().cloud;
+	const auto id = cloud.id ? cloud.id : kFakeCloudThemeId;
+	if (ranges::contains(_elements, id, &Element::id)) {
+		return id;
+	}
+	const auto emoji = Ui::Emoji::Find(cloud.emoticon);
+	if (!emoji) {
+		return id;
+	}
+	const auto i = ranges::find(_elements, emoji, [](const Element &element) {
+		return Ui::Emoji::Find(element.theme.emoticon);
+	});
+	return (i != end(_elements)) ? i->id() : id;
 }
 
 void CloudList::refreshColorsFromDocument(Element &element) {
