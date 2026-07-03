@@ -19,9 +19,15 @@ class SessionController;
 
 namespace Window::Theme {
 
+struct Preview;
+
 [[nodiscard]] Ui::ChatThemeBubblesData PrepareBubblesData(
 	const Data::CloudTheme &theme,
 	Data::CloudThemeType type);
+
+[[nodiscard]] std::unique_ptr<Preview> PreviewFromChatTheme(
+	const Data::CloudTheme &theme,
+	bool dark);
 
 void ApplyChatTheme(
 	not_null<SessionController*> controller,

@@ -35,6 +35,22 @@ namespace {
 	return result;
 }
 
+[[nodiscard]] std::optional<Data::CloudThemeType> SettingsTypeFor(
+		const Data::CloudTheme &theme,
+		bool dark) {
+	const auto type = dark
+		? Data::CloudThemeType::Dark
+		: Data::CloudThemeType::Light;
+	const auto fallback = dark
+		? Data::CloudThemeType::Light
+		: Data::CloudThemeType::Dark;
+	return theme.settings.contains(type)
+		? std::make_optional(type)
+		: theme.settings.contains(fallback)
+		? std::make_optional(fallback)
+		: std::nullopt;
+}
+
 } // namespace
 
 Ui::ChatThemeBubblesData PrepareBubblesData(
@@ -51,53 +67,59 @@ Ui::ChatThemeBubblesData PrepareBubblesData(
 	};
 }
 
-void ApplyChatTheme(
-		not_null<SessionController*> controller,
+std::unique_ptr<Preview> PreviewFromChatTheme(
 		const Data::CloudTheme &theme,
 		bool dark) {
-	const auto type = dark
-		? Data::CloudThemeType::Dark
-		: Data::CloudThemeType::Light;
-	const auto fallback = dark
-		? Data::CloudThemeType::Light
-		: Data::CloudThemeType::Dark;
-	const auto i = theme.settings.contains(type)
-		? theme.settings.find(type)
-		: theme.settings.find(fallback);
-	if (i == end(theme.settings)) {
-		return;
+	const auto used = SettingsTypeFor(theme, dark);
+	if (!used) {
+		return nullptr;
 	}
-	const auto &settings = i->second;
+	const auto &settings = theme.settings.find(*used)->second;
 	auto descriptor = Ui::ChatThemeDescriptor{
 		.key = { theme.id, dark },
 		.preparePalette = PreparePaletteCallback(
 			dark,
 			settings.accentColor),
-		.bubblesData = PrepareBubblesData(theme, i->first),
+		.bubblesData = PrepareBubblesData(theme, *used),
 		.basedOnDark = dark,
 	};
-	const auto paper = settings.paper;
+	auto result = std::make_unique<Preview>();
+	result->object.cloud = theme;
+	result->object.pathRelative
+		= result->object.pathAbsolute
+		= CachedThemePath(theme.id);
+	{
+		const auto built = std::make_unique<Ui::ChatTheme>(
+			std::move(descriptor));
+		result->instance.palette.finalize();
+		result->instance.palette = *built->palette();
+		result->object.content = GeneratePaletteContent(
+			*built->palette());
+	}
+	auto &cache = result->instance.cached;
+	cache.colors = result->instance.palette.save();
+	cache.paletteChecksum = style::palette::Checksum();
+	cache.contentChecksum = base::crc32(
+		result->object.content.constData(),
+		result->object.content.size());
+	return result;
+}
+
+void ApplyChatTheme(
+		not_null<SessionController*> controller,
+		const Data::CloudTheme &theme,
+		bool dark) {
+	const auto used = SettingsTypeFor(theme, dark);
+	if (!used) {
+		return;
+	}
+	const auto paper = theme.settings.find(*used)->second.paper;
 	const auto weak = base::make_weak(controller);
-	crl::async([=, descriptor = std::move(descriptor)]() mutable {
-		auto result = std::make_unique<Preview>();
-		result->object.cloud = theme;
-		result->object.pathRelative
-			= result->object.pathAbsolute
-			= CachedThemePath(theme.id);
-		{
-			const auto built = std::make_unique<Ui::ChatTheme>(
-				std::move(descriptor));
-			result->instance.palette.finalize();
-			result->instance.palette = *built->palette();
-			result->object.content = GeneratePaletteContent(
-				*built->palette());
+	crl::async([=] {
+		auto result = PreviewFromChatTheme(theme, dark);
+		if (!result) {
+			return;
 		}
-		auto &cache = result->instance.cached;
-		cache.colors = result->instance.palette.save();
-		cache.paletteChecksum = style::palette::Checksum();
-		cache.contentChecksum = base::crc32(
-			result->object.content.constData(),
-			result->object.content.size());
 		crl::on_main(weak, [=, result = std::move(result)]() mutable {
 			Apply(std::move(result));
 			KeepApplied();
