@@ -308,7 +308,7 @@ void SetupCommunityContent(
 		const auto chatsController = inner->lifetime().make_state<
 			ChatsController
 		>(&community->session(), std::move(list), openChat);
-		chatsController->setStyleOverrides(&st::communityRequestableList);
+		chatsController->setStyleOverrides(&st::communityInfoRequestableList);
 		const auto content = inner->add(object_ptr<PeerListContent>(
 			inner,
 			chatsController));
