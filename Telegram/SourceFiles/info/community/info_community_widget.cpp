@@ -241,6 +241,10 @@ std::unique_ptr<Ui::RpWidget> Widget::setupAddChatButton() {
 		Dialogs::PaintBottomFade(p, wrap->width(), fadeHeight, st::boxBg);
 	});
 
+	scroll()->setVerticalBarBottomSkip(st::communityAddChatButtonMargin.top()
+		+ st::communityAddChatButton.height
+		+ st::communityAddChatButtonMargin.bottom());
+
 	widthValue() | rpl::on_next([=](int width) {
 		wrap->resizeToWidth(width);
 	}, wrap->lifetime());
