@@ -572,6 +572,7 @@ struct VideoPreviewDocument {
 		case PremiumFeature::Gifts: return "gifts";
 		case PremiumFeature::NoForwards: return "no_forwards";
 		case PremiumFeature::AiCompose: return "ai_compose";
+		case PremiumFeature::RichFormatting: return "rich_formatting";
 
 		case PremiumFeature::BusinessLocation: return "business_location";
 		case PremiumFeature::BusinessHours: return "business_hours";
