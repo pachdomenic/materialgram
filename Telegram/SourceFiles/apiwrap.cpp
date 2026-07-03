@@ -4334,6 +4334,8 @@ void ApiWrap::sendRichMessage(
 		SendAction action) {
 	Expects(page != nullptr);
 
+	StripEphemeralReply(_session, action.replyTo);
+
 	const auto history = action.history;
 	const auto peer = history->peer;
 	const auto newId = FullMsgId(
@@ -4382,6 +4384,8 @@ void ApiWrap::sendRichMessage(
 		const MTPInputRichMessage &richMessage,
 		SendAction action) {
 	Expects(item->history() == action.history);
+
+	StripEphemeralReply(_session, action.replyTo);
 
 	const auto history = item->history();
 	const auto peer = history->peer;
