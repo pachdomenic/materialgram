@@ -22,6 +22,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_session.h"
 #include "ui/chat/chat_theme.h"
 #include "ui/image/image_prepare.h"
+#include "ui/rect.h"
 #include "ui/widgets/popup_menu.h"
 #include "ui/toast/toast.h"
 #include "ui/style/style_palette_colorizer.h"
@@ -138,7 +139,7 @@ constexpr auto kShowPerRow = 4;
 	result.received = dark ? QColor(24, 24, 25) : QColor(255, 255, 255);
 	result.radiobuttonActive
 		= result.radiobuttonInactive
-		= (dark ? QColor(255, 255, 255) : settings.accentColor);
+		= settings.accentColor;
 	const auto paperColors = settings.paper
 		? settings.paper->backgroundColors()
 		: std::vector<QColor>();
@@ -165,7 +166,7 @@ constexpr auto kShowPerRow = 4;
 	result.received = st::msgInBg->c;
 	result.radiobuttonActive
 		= result.radiobuttonInactive
-		= st::msgServiceFg->c;
+		= st::activeButtonBg->c;
 	return result;
 }
 
@@ -175,8 +176,9 @@ CloudListColors ColorsFromScheme(const EmbeddedScheme &scheme) {
 	auto result = CloudListColors();
 	result.sent = scheme.sent;
 	result.received = scheme.received;
-	result.radiobuttonActive = scheme.radiobuttonActive;
-	result.radiobuttonInactive = scheme.radiobuttonInactive;
+	result.radiobuttonActive
+		= result.radiobuttonInactive
+		= scheme.accentColor;
 	result.background = QImage(
 		QSize(1, 1) * style::DevicePixelRatio(),
 		QImage::Format_ARGB32_Premultiplied);
@@ -192,6 +194,9 @@ CloudListColors ColorsFromScheme(
 	}
 	auto copy = scheme;
 	Colorize(copy, colorizer);
+	if (const auto accent = style::colorize(copy.accentColor, colorizer)) {
+		copy.accentColor = *accent;
+	}
 	return ColorsFromScheme(copy);
 }
 
@@ -201,8 +206,7 @@ CloudListCheck::CloudListCheck(const Colors &colors, bool checked)
 }
 
 CloudListCheck::CloudListCheck(bool checked)
-: AbstractCheckView(st::defaultRadio.duration, checked, nullptr)
-, _radio(st::defaultRadio, checked, [=] { update(); }) {
+: AbstractCheckView(st::defaultRadio.duration, checked, nullptr) {
 }
 
 void CloudListCheck::setColors(const Colors &colors) {
@@ -218,33 +222,8 @@ void CloudListCheck::setColors(const Colors &colors) {
 				Qt::SmoothTransformation);
 		_backgroundCacheWidth = -1;
 
-		ensureContrast();
-		_radio.setToggledOverride(_colors->radiobuttonActive);
-		_radio.setUntoggledOverride(_colors->radiobuttonInactive);
 	}
 	update();
-}
-
-void CloudListCheck::ensureContrast() {
-	const auto radio = _radio.getSize();
-	const auto x = (getSize().width() - radio.width()) / 2;
-	const auto y = getSize().height()
-		- radio.height()
-		- st::settingsThemeRadioBottom;
-	const auto under = QRect(
-		QPoint(x, y) * style::DevicePixelRatio(),
-		radio * style::DevicePixelRatio());
-	const auto image = _backgroundFull.copy(under).convertToFormat(
-		QImage::Format_ARGB32_Premultiplied);
-	const auto active = style::internal::EnsureContrast(
-		_colors->radiobuttonActive,
-		Ui::CountAverageColor(image));
-	_colors->radiobuttonInactive = _colors->radiobuttonActive = QColor(
-		active.red(),
-		active.green(),
-		active.blue(),
-		255);
-	_colors->radiobuttonInactive.setAlpha(192);
 }
 
 QSize CloudListCheck::getSize() const {
@@ -256,14 +235,15 @@ void CloudListCheck::validateBackgroundCache(int width) {
 		return;
 	}
 	_backgroundCacheWidth = width;
+	const auto skip = st::settingsThemeOutlineSkip;
 	const auto imageWidth = width * style::DevicePixelRatio();
-	_backgroundCache = (width == st::settingsThemePreviewSize.width())
-		? _backgroundFull
-		: _backgroundFull.copy(
-			(_backgroundFull.width() - imageWidth) / 2,
-			0,
-			imageWidth,
-			_backgroundFull.height());
+	const auto imageHeight = (st::settingsThemePreviewSize.height()
+		- 2 * skip) * style::DevicePixelRatio();
+	_backgroundCache = _backgroundFull.copy(
+		(_backgroundFull.width() - imageWidth) / 2,
+		(_backgroundFull.height() - imageHeight) / 2,
+		imageWidth,
+		imageHeight);
 	_backgroundCache = Images::Round(
 		std::move(_backgroundCache),
 		ImageRoundRadius::Large);
@@ -289,11 +269,13 @@ void CloudListCheck::paintNotSupported(
 	p.setPen(Qt::NoPen);
 	p.setBrush(st::settingsThemeNotSupportedBg);
 
+	const auto skip = st::settingsThemeOutlineSkip;
 	const auto height = st::settingsThemePreviewSize.height();
-	const auto rect = QRect(0, 0, outerWidth, height);
+	const auto rect = QRect(0, 0, outerWidth, height) - Margins(skip);
 	const auto radius = st::roundRadiusLarge;
 	p.drawRoundedRect(rect, radius, radius);
 	st::settingsThemeNotSupportedIcon.paintInCenter(p, rect);
+	paintOutline(p, outerWidth);
 }
 
 void CloudListCheck::paintWithColors(
@@ -303,35 +285,63 @@ void CloudListCheck::paintWithColors(
 		int outerWidth) {
 	Expects(_colors.has_value());
 
-	validateBackgroundCache(outerWidth);
-	p.drawImage(
-		QRect(0, 0, outerWidth, st::settingsThemePreviewSize.height()),
-		_backgroundCache);
+	auto hq = PainterHighQualityEnabler(p);
+
+	const auto skip = st::settingsThemeOutlineSkip;
+	const auto card = QRect(
+		0,
+		0,
+		outerWidth,
+		st::settingsThemePreviewSize.height()
+	) - Margins(skip);
+	validateBackgroundCache(card.width());
+	p.drawImage(card, _backgroundCache);
 
 	const auto received = QRect(
-		st::settingsThemeBubblePosition,
+		card.topLeft() + st::settingsThemeBubblePosition,
 		st::settingsThemeBubbleSize);
 	const auto sent = QRect(
-		outerWidth - received.width() - st::settingsThemeBubblePosition.x(),
+		card.x() + card.width()
+			- received.width()
+			- st::settingsThemeBubblePosition.x(),
 		received.y() + received.height() + st::settingsThemeBubbleSkip,
 		received.width(),
 		received.height());
 	const auto radius = st::settingsThemeBubbleRadius;
 
-	PainterHighQualityEnabler hq(p);
 	p.setPen(Qt::NoPen);
-
 	p.setBrush(_colors->received);
 	p.drawRoundedRect(style::rtlrect(received, outerWidth), radius, radius);
 	p.setBrush(_colors->sent);
 	p.drawRoundedRect(style::rtlrect(sent, outerWidth), radius, radius);
 
-	const auto radio = _radio.getSize();
-	_radio.paint(
-		p,
-		(outerWidth - radio.width()) / 2,
-		getSize().height() - radio.height() - st::settingsThemeRadioBottom,
-		outerWidth);
+	paintOutline(p, outerWidth);
+}
+
+void CloudListCheck::paintOutline(QPainter &p, int outerWidth) {
+	const auto toggled = currentAnimationValue();
+	if (toggled <= 0.) {
+		return;
+	}
+	const auto width = float64(st::settingsThemeOutlineWidth);
+	const auto inset = width / 2.
+		+ st::settingsThemeOutlineSkip * (1. - toggled);
+	const auto radius = st::settingsThemeOutlineRadius
+		- (inset - width / 2.);
+	auto pen = QPen(_colors->radiobuttonActive);
+	pen.setWidthF(width);
+	p.setPen(pen);
+	p.setBrush(Qt::NoBrush);
+	p.setOpacity(toggled);
+	p.drawRoundedRect(
+		QRectF(0, 0, outerWidth, getSize().height()).adjusted(
+			inset,
+			inset,
+			-inset,
+			-inset),
+		radius,
+		radius);
+	p.setOpacity(1.);
 }
 
 QImage CloudListCheck::prepareRippleMask() const {
@@ -340,10 +350,6 @@ QImage CloudListCheck::prepareRippleMask() const {
 
 bool CloudListCheck::checkRippleStartPosition(QPoint position) const {
 	return false;
-}
-
-void CloudListCheck::checkedChangedHook(anim::type animated) {
-	_radio.setChecked(checked(), animated);
 }
 
 CloudList::CloudList(

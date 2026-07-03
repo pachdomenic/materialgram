@@ -63,12 +63,10 @@ public:
 private:
 	void paintNotSupported(QPainter &p, int left, int top, int outerWidth);
 	void paintWithColors(QPainter &p, int left, int top, int outerWidth);
-	void checkedChangedHook(anim::type animated) override;
+	void paintOutline(QPainter &p, int outerWidth);
 	void validateBackgroundCache(int width);
-	void ensureContrast();
 
 	std::optional<Colors> _colors;
-	Ui::RadioView _radio;
 	QImage _backgroundFull;
 	QImage _backgroundCache;
 	int _backgroundCacheWidth = -1;

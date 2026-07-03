@@ -289,6 +289,9 @@ settingsThemeBubbleRadius: 2px;
 settingsThemeBubblePosition: point(6px, 8px);
 settingsThemeBubbleSkip: 6px;
 settingsThemeRadioBottom: 12px;
+settingsThemeOutlineWidth: 2px;
+settingsThemeOutlineSkip: 4px;
+settingsThemeOutlineRadius: 8px;
 settingsThemeMinSkip: 4px;
 
 settingsThemeNotSupportedBg: windowBgOver;
