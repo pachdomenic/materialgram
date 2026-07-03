@@ -8,6 +8,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "window/themes/window_themes_cloud_list.h"
 
 #include "base/call_delayed.h"
+#include "ui/chat/choose_theme_controller.h"
 #include "ui/emoji_config.h"
 #include "window/themes/window_themes_embedded.h"
 #include "window/themes/window_theme_editor_box.h"
@@ -126,38 +127,6 @@ constexpr auto kShowPerRow = 4;
 	return result;
 }
 
-[[nodiscard]] CloudListColors ColorsFromTheme(
-		const Data::CloudTheme &theme) {
-	const auto dark = IsNightMode();
-	const auto used = ChatThemeVariant(theme, dark);
-	Assert(used.has_value());
-	const auto &settings = theme.settings.find(*used)->second;
-	auto result = CloudListColors();
-	result.sent = settings.outgoingMessagesColors.empty()
-		? settings.accentColor
-		: settings.outgoingMessagesColors.front();
-	result.received = dark ? QColor(24, 24, 25) : QColor(255, 255, 255);
-	result.radiobuttonActive
-		= result.radiobuttonInactive
-		= settings.accentColor;
-	const auto paperColors = settings.paper
-		? settings.paper->backgroundColors()
-		: std::vector<QColor>();
-	if (paperColors.size() > 1) {
-		result.background = Images::GenerateLinearGradient(
-			QSize(80, 80) * style::DevicePixelRatio(),
-			paperColors);
-	} else {
-		result.background = QImage(
-			QSize(1, 1) * style::DevicePixelRatio(),
-			QImage::Format_ARGB32_Premultiplied);
-		result.background.fill(paperColors.empty()
-			? settings.accentColor
-			: paperColors.front());
-	}
-	return result;
-}
-
 [[nodiscard]] CloudListColors ColorsFromCurrentTheme() {
 	auto result = CloudListColors();
 	auto background = Background()->createCurrentImage();
@@ -209,6 +178,12 @@ CloudListCheck::CloudListCheck(bool checked)
 : AbstractCheckView(st::defaultRadio.duration, checked, nullptr) {
 }
 
+void CloudListCheck::setPreview(QImage preview, const QColor &outline) {
+	_preview = std::move(preview);
+	_outline = outline;
+	update();
+}
+
 void CloudListCheck::setColors(const Colors &colors) {
 	_colors = colors;
 	if (!_colors->background.isNull()) {
@@ -251,6 +226,26 @@ void CloudListCheck::validateBackgroundCache(int width) {
 }
 
 void CloudListCheck::paint(QPainter &p, int left, int top, int outerWidth) {
+	if (!_preview.isNull()) {
+		const auto skip = st::settingsThemeOutlineSkip;
+		const auto card = QRect(
+			0,
+			0,
+			outerWidth,
+			st::settingsThemePreviewSize.height()
+		) - Margins(skip);
+		p.drawImage(card, _preview);
+		if (_colors) {
+			_colors->radiobuttonActive = _outline;
+		} else {
+			auto colors = Colors();
+			colors.radiobuttonActive = _outline;
+			_colors = std::move(colors);
+		}
+		auto hq = PainterHighQualityEnabler(p);
+		paintOutline(p, outerWidth);
+		return;
+	}
 	if (!_colors) {
 		return;
 	} else if (_colors->background.isNull()) {
@@ -546,7 +541,7 @@ void CloudList::insert(int index, const Data::CloudTheme &theme) {
 		_outer,
 		_group,
 		value,
-		theme.title,
+		theme.emoticon.isEmpty() ? theme.title : QString(),
 		st::settingsTheme,
 		std::move(check));
 	button->setCheckAlignment(style::al_top);
@@ -596,7 +591,7 @@ void CloudList::refreshElementUsing(
 			&& (element.theme.slug != data.slug));
 	const auto titleChanged = (element.theme.title != data.title);
 	element.theme = data;
-	if (colorsChanged) {
+	if (colorsChanged || !data.emoticon.isEmpty()) {
 		setWaiting(element, false);
 		refreshColors(element);
 	}
@@ -611,6 +606,11 @@ void CloudList::refreshColors(Element &element) {
 	const auto document = theme.documentId
 		? _window->session().data().document(theme.documentId).get()
 		: nullptr;
+	if (!theme.emoticon.isEmpty() && !theme.settings.empty()) {
+		requestPreview(element);
+		setWaiting(element, false);
+		return;
+	}
 	if (element.id() == kFakeCloudThemeId
 		|| ((element.id() == currentId)
 			&& (!document || !document->isTheme()))) {
@@ -626,12 +626,70 @@ void CloudList::refreshColors(Element &element) {
 			setWaiting(element, true);
 			subscribeToDownloadFinished();
 		}
-	} else if (!theme.settings.empty()) {
-		element.check->setColors(ColorsFromTheme(theme));
-		setWaiting(element, false);
 	} else {
 		element.check->setColors(CloudListColors());
 	}
+}
+
+void CloudList::requestPreview(Element &element) {
+	const auto dark = Window::Theme::IsNightMode();
+	const auto variant = ChatThemeVariant(element.theme, dark);
+	if (!variant) {
+		element.check->setColors(CloudListColors());
+		return;
+	}
+	const auto id = element.id();
+	const auto theme = element.theme;
+	const auto accent = theme.settings.find(*variant)->second.accentColor;
+	const auto key = Ui::ChatThemeKey{
+		theme.id,
+		(*variant == Data::CloudThemeType::Dark),
+	};
+	const auto size = st::settingsThemePreviewSize
+		- QSize(st::settingsThemeOutlineSkip, st::settingsThemeOutlineSkip)
+			* 2;
+	element.previewLifetime.destroy();
+	_window->cachedChatThemeValue(
+		theme,
+		Data::WallPaper(0),
+		*variant
+	) | rpl::filter([=](const std::shared_ptr<Ui::ChatTheme> &data) {
+		return data && (data->key() == key);
+	}) | rpl::take(1) | rpl::on_next([=](
+			std::shared_ptr<Ui::ChatTheme> &&data) {
+		const auto i = ranges::find(_elements, id, &Element::id);
+		if (i == end(_elements)) {
+			return;
+		}
+		const auto raw = data.get();
+		i->chatTheme = std::move(data);
+		i->check->setPreview(
+			Ui::GenerateChatThemePreview(
+				raw,
+				Ui::Emoji::Find(theme.emoticon),
+				size),
+			accent);
+		if (!raw->background().isPattern
+			|| !raw->background().prepared.isNull()) {
+			return;
+		}
+		raw->repaintBackgroundRequests(
+		) | rpl::filter([=] {
+			const auto i = ranges::find(_elements, id, &Element::id);
+			return (i == end(_elements))
+				|| !i->chatTheme->background().prepared.isNull();
+		}) | rpl::take(1) | rpl::on_next([=] {
+			const auto i = ranges::find(_elements, id, &Element::id);
+			if (i != end(_elements)) {
+				i->check->setPreview(
+					Ui::GenerateChatThemePreview(
+						i->chatTheme.get(),
+						Ui::Emoji::Find(theme.emoticon),
+						size),
+					accent);
+			}
+		}, i->previewLifetime);
+	}, element.previewLifetime);
 }
 
 void CloudList::showMenu(Element &element) {
