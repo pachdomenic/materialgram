@@ -12,6 +12,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/algorithm.h"
 #include "base/event_filter.h"
 #include "base/flat_map.h"
+#include "base/options.h"
 #include "base/unique_qptr.h"
 #include "base/weak_qptr.h"
 #include "boxes/create_ai_box.h"
@@ -41,6 +42,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "menu/menu_send_details.h"
 #include "styles/style_settings.h"
 #include "ui/boxes/confirm_box.h"
+#include "ui/controls/compose_ai_button_factory.h"
 #include "ui/controls/send_button.h"
 #include "ui/delayed_activation.h"
 #include "ui/effects/premium_graphics.h"
@@ -1527,7 +1529,7 @@ void WindowHost::Impl::setupWindow(ShowWindowDescriptor &&descriptor) {
 			}
 		});
 	}
-	{
+	if (!base::options::value<bool>(Ui::kOptionHideAiButton)) {
 		const auto session = descriptor.session;
 		_aiPill = object_ptr<ToolbarPill>(
 			_bottom.data(),
