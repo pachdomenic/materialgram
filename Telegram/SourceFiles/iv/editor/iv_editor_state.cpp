@@ -1336,6 +1336,7 @@ void InsertTableCellBeforeVisualColumn(
 	case BlockKind::Video:
 	case BlockKind::Audio:
 	case BlockKind::Map:
+	case BlockKind::GroupedMedia:
 		return true;
 	default:
 		return false;
@@ -5837,6 +5838,7 @@ std::optional<int> State::submitActiveSingleLineFieldUnchecked() {
 		case BlockKind::Video:
 		case BlockKind::Audio:
 		case BlockKind::Map:
+		case BlockKind::GroupedMedia:
 			return paragraphAfterBlock();
 		default:
 			return std::nullopt;
@@ -8490,6 +8492,7 @@ void State::rebuildTextNodes(
 		case BlockKind::Video:
 		case BlockKind::Audio:
 		case BlockKind::Map:
+		case BlockKind::GroupedMedia:
 			appendBlockTextNode(path, LeafKind::BlockCaption);
 			break;
 		case BlockKind::Math:
@@ -8840,6 +8843,7 @@ void State::collectBoundarySteps(
 		case BlockKind::Video:
 		case BlockKind::Audio:
 		case BlockKind::Map:
+		case BlockKind::GroupedMedia:
 			appendBoundaryTextStep({
 				.kind = LeafKind::BlockCaption,
 				.block = path,
