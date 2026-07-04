@@ -160,7 +160,7 @@ std::shared_ptr<MediaBlock> IvHistoryViewMediaBlockFactory::create(
 		return nullptr;
 	}
 	const auto controller = _controller.get();
-	return controller ? factory(controller, prepared) : nullptr;
+	return factory(controller, prepared);
 }
 
 [[nodiscard]] std::shared_ptr<MediaBlock> CreateIvHistoryViewMediaBlock(

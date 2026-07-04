@@ -550,7 +550,8 @@ public:
 		not_null<Main::Session*> session,
 		not_null<PeerData*> peer,
 		Api::SendAction action,
-		Fn<SendMenu::Details()> sendMenuDetails) {
+		Fn<SendMenu::Details()> sendMenuDetails,
+		base::weak_ptr<Window::SessionController> controller) {
 		const auto history = action.history;
 		const auto topicRootId = action.replyTo.topicRootId;
 		const auto monoforumPeerId = action.replyTo.monoforumPeerId;
@@ -600,13 +601,15 @@ public:
 			std::move(action),
 			std::move(sendMenuDetails),
 			std::nullopt,
-			composeKey));
+			composeKey,
+			std::move(controller)));
 		articleSession->showWindow();
 	}
 
 	static void ShowEdit(
 		not_null<HistoryItem*> item,
-		std::shared_ptr<const RichPage> richPage) {
+		std::shared_ptr<const RichPage> richPage,
+		base::weak_ptr<Window::SessionController> controller) {
 		if (!richPage || !CanEditRichPage(richPage)) {
 			if (const auto window = item->history()->session().tryResolveWindow(
 					item->history()->peer)) {
@@ -628,14 +631,16 @@ public:
 				.summary = item->originalText(),
 				.fullPage = item->fullRichPage(),
 			},
-			std::nullopt));
+			std::nullopt,
+			std::move(controller)));
 		articleSession->showWindow();
 	}
 
 	static void ShowEditFromField(
 			not_null<HistoryItem*> item,
 			Api::SendAction action,
-			Fn<SendMenu::Details()> sendMenuDetails) {
+			Fn<SendMenu::Details()> sendMenuDetails,
+			base::weak_ptr<Window::SessionController> controller) {
 		const auto session = &item->history()->session();
 		const auto topicRootId = action.replyTo.topicRootId;
 		const auto monoforumPeerId = action.replyTo.monoforumPeerId;
@@ -674,7 +679,8 @@ public:
 				.summary = item->originalText(),
 				.fullPage = item->fullRichPage(),
 			},
-			std::nullopt));
+			std::nullopt,
+			std::move(controller)));
 		articleSession->showWindow();
 	}
 
@@ -770,9 +776,11 @@ private:
 		std::optional<Api::SendAction> action,
 		Fn<SendMenu::Details()> sendMenuDetails,
 		std::optional<EditedItemSnapshot> edited,
-		std::optional<ComposeThreadKey> composeThreadKey)
+		std::optional<ComposeThreadKey> composeThreadKey,
+		base::weak_ptr<Window::SessionController> controller = {})
 	: _session(session)
 	, _peer(peer)
+	, _controller(std::move(controller))
 	, _mode(mode)
 	, _submitType((mode == Mode::Compose)
 		? ShowWindowDescriptor::SubmitType::Send
@@ -790,7 +798,8 @@ private:
 		},
 		[](QString) {
 		},
-		composeDraftOrigin()))
+		composeDraftOrigin(),
+		_controller))
 	, _limits(ResolveRichMessageLimits(_session))
 	, _state(std::make_shared<State>(_page, _runtime, _limits))
 	, _submitOptions(_composeAction ? _composeAction->options : Api::SendOptions())
@@ -3541,6 +3550,7 @@ private:
 
 	const not_null<Main::Session*> _session;
 	const not_null<PeerData*> _peer;
+	const base::weak_ptr<Window::SessionController> _controller;
 	const Mode _mode;
 	const ShowWindowDescriptor::SubmitType _submitType;
 	const FullMsgId _articleId;
@@ -4152,7 +4162,8 @@ void ShowComposeBox(
 		&controller->session(),
 		peer,
 		std::move(action),
-		std::move(sendMenuDetails));
+		std::move(sendMenuDetails),
+		base::make_weak(controller));
 }
 
 void ShowEditBox(
@@ -4182,7 +4193,8 @@ void ShowEditBox(
 		}
 		ArticleSession::ShowEdit(
 			not_null{ current },
-			std::move(page));
+			std::move(page),
+			base::make_weak(strong));
 	});
 }
 
@@ -4194,7 +4206,8 @@ void ShowEditFromFieldBox(
 	ArticleSession::ShowEditFromField(
 		item,
 		std::move(action),
-		std::move(sendMenuDetails));
+		std::move(sendMenuDetails),
+		base::make_weak(controller));
 }
 
 bool IsComposeBoxOpen(

@@ -983,7 +983,8 @@ public:
 		FullMsgId itemId,
 		Fn<void(QString)> openChannel,
 		Fn<void(QString)> joinChannel,
-		::Data::FileOrigin draftOrigin = {});
+		::Data::FileOrigin draftOrigin = {},
+		base::weak_ptr<Window::SessionController> controller = {});
 	CachedPageMediaRuntime(
 		not_null<Main::Session*> session,
 		not_null<HistoryView::Element*> view,
@@ -1037,6 +1038,7 @@ private:
 
 	[[nodiscard]] HistoryItem *directHostItem() const;
 	[[nodiscard]] HistoryItem *openContextItem() const;
+	[[nodiscard]] Window::SessionController *resolveController() const;
 	void queuePendingInstantViewItem(
 		PendingInstantViewMediaItem::Kind kind,
 		uint64 id,
@@ -1046,6 +1048,7 @@ private:
 	[[nodiscard]] ::Data::FileOrigin fileOrigin() const;
 
 	const not_null<Main::Session*> _session;
+	const base::weak_ptr<Window::SessionController> _controller;
 	const ::Data::FileOrigin _origin;
 	const FullMsgId _itemId;
 	const ::Data::FileOrigin _draftOrigin;
@@ -1079,8 +1082,10 @@ CachedPageMediaRuntime::CachedPageMediaRuntime(
 	FullMsgId itemId,
 	Fn<void(QString)> openChannel,
 	Fn<void(QString)> joinChannel,
-	::Data::FileOrigin draftOrigin)
+	::Data::FileOrigin draftOrigin,
+	base::weak_ptr<Window::SessionController> controller)
 : _session(session)
+, _controller(std::move(controller))
 , _origin(itemId)
 , _itemId(itemId)
 , _draftOrigin(std::move(draftOrigin))
@@ -1284,7 +1289,7 @@ auto CachedPageMediaRuntime::hostedMediaHost(
 
 auto CachedPageMediaRuntime::hostedMediaBlockFactory() const
 -> std::shared_ptr<Markdown::HostedMediaBlockFactory> {
-	const auto controller = CurrentSessionController(_session);
+	const auto controller = resolveController();
 	if (!controller) {
 		return nullptr;
 	}
@@ -1297,8 +1302,7 @@ auto CachedPageMediaRuntime::hostedMediaBlockFactory() const
 		[session = _session, host, origin = fileOrigin()](
 				Window::SessionController *controller,
 				const Markdown::PreparedPhotoBlockData &prepared) {
-			if (!controller
-				|| !prepared.viewerOpen
+			if (!prepared.viewerOpen
 				|| !prepared.urlOverride.isEmpty()) {
 				return std::shared_ptr<Markdown::MediaBlock>();
 			}
@@ -1334,9 +1338,8 @@ auto CachedPageMediaRuntime::hostedMediaBlockFactory() const
 		[session = _session, host, origin = fileOrigin()](
 				Window::SessionController *controller,
 				const Markdown::PreparedVideoBlockData &prepared) {
-			if (!controller
-				|| prepared.media.kind
-					!= Markdown::PreparedMediaItemKind::Document) {
+			if (prepared.media.kind
+				!= Markdown::PreparedMediaItemKind::Document) {
 				return std::shared_ptr<Markdown::MediaBlock>();
 			}
 			const auto document = session->data().document(
@@ -1381,9 +1384,6 @@ auto CachedPageMediaRuntime::hostedMediaBlockFactory() const
 		[session = _session, host, origin = fileOrigin()](
 				Window::SessionController *controller,
 				const Markdown::PreparedAudioBlockData &prepared) {
-			if (!controller) {
-				return std::shared_ptr<Markdown::MediaBlock>();
-			}
 			const auto document = session->data().document(
 				DocumentId(prepared.documentId));
 			if (document->isNull()
@@ -1419,9 +1419,6 @@ auto CachedPageMediaRuntime::hostedMediaBlockFactory() const
 		[session = _session, host](
 				Window::SessionController *controller,
 				const Markdown::PreparedMapBlockData &prepared) {
-			if (!controller) {
-				return std::shared_ptr<Markdown::MediaBlock>();
-			}
 			const auto mapSize = QSize(prepared.width, prepared.height);
 			const auto point = CachedPageMapPoint(
 				prepared.latitude,
@@ -1460,8 +1457,7 @@ auto CachedPageMediaRuntime::hostedMediaBlockFactory() const
 		[session = _session, host, origin = fileOrigin()](
 				Window::SessionController *controller,
 				const Markdown::PreparedGroupedMediaBlockData &prepared) {
-			if (!controller
-				|| prepared.items.empty()
+			if (prepared.items.empty()
 				|| (int(prepared.items.size())
 					> HistoryView::GroupedMedia::kMaxSize)) {
 				return std::shared_ptr<Markdown::MediaBlock>();
@@ -1602,12 +1598,19 @@ HistoryItem *CachedPageMediaRuntime::directHostItem() const {
 	return _itemId ? _session->data().message(_itemId) : nullptr;
 }
 
+Window::SessionController *CachedPageMediaRuntime::resolveController() const {
+	if (const auto strong = _controller.get()) {
+		return strong;
+	}
+	return _session->tryResolveWindow();
+}
+
 HistoryItem *CachedPageMediaRuntime::openContextItem() const {
 	if (const auto item = directHostItem()) {
 		flushPendingInstantViewItems(not_null{ item });
 		return item;
 	}
-	if (const auto controller = CurrentSessionController(_session)) {
+	if (const auto controller = resolveController()) {
 		if (const auto host = hostedMediaHost(not_null{ controller })) {
 			const auto item = host->item().get();
 			flushPendingInstantViewItems(not_null{ item });
@@ -1696,14 +1699,16 @@ auto CreateMessageMediaRuntime(
 	FullMsgId itemId,
 	Fn<void(QString)> openChannel,
 	Fn<void(QString)> joinChannel,
-	::Data::FileOrigin draftOrigin)
+	::Data::FileOrigin draftOrigin,
+	base::weak_ptr<Window::SessionController> controller)
 -> std::shared_ptr<Markdown::MediaRuntime> {
 	return std::make_shared<CachedPageMediaRuntime>(
 		session,
 		itemId,
 		std::move(openChannel),
 		std::move(joinChannel),
-		std::move(draftOrigin));
+		std::move(draftOrigin),
+		std::move(controller));
 }
 
 auto CreateMessageMediaRuntime(
