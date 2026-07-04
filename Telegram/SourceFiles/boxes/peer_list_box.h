@@ -190,6 +190,9 @@ public:
 		int outerWidth,
 		bool selected,
 		int selectedElement);
+	[[nodiscard]] virtual bool elementsAnimating() const {
+		return false;
+	}
 
 	virtual void refreshName(const style::PeerListItem &st);
 	const Ui::Text::String &name() const {

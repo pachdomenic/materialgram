@@ -2021,6 +2021,7 @@ crl::time PeerListContent::paintRow(
 	if (_rowsScrollCache.scrolling()
 		&& !selected
 		&& !activeElement
+		&& !row->elementsAnimating()
 		&& width() > 0
 		&& row->opacity() == 1.) {
 		const auto ratio = style::DevicePixelRatio();
