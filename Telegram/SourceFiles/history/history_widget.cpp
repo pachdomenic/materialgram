@@ -7031,11 +7031,7 @@ void HistoryWidget::updateExpandButtonGeometry() {
 	if (_expand->isHidden()) {
 		return;
 	}
-	const auto aiShown = !_aiButton->isHidden();
-	const auto anchorX = aiShown
-		? (_tabbedSelectorToggle->x() + _tabbedSelectorToggle->width())
-		: (_send->x() + _send->width());
-	const auto x = anchorX - _expand->width();
+	const auto x = _send->x() + _send->width() - _expand->width();
 	_expand->move(QPoint(x, _field->y()) + st::historyAiComposeButtonPosition);
 }
 
@@ -7043,8 +7039,9 @@ void HistoryWidget::updateAiButtonGeometry() {
 	if (_aiButton->isHidden()) {
 		return;
 	}
-	const auto x = _send->x() + _send->width() - _aiButton->width();
-	_aiButton->move(QPoint(x, _field->y()) + st::historyAiComposeButtonPosition);
+	const auto x = _attachToggle->x() - st::historyAiComposeButtonPosition.x();
+	const auto y = _field->y() + st::historyAiComposeButtonPosition.y();
+	_aiButton->move(x, y);
 	if (_aiTooltipManager) {
 		_aiTooltipManager->updateGeometry();
 	}
@@ -7071,8 +7068,9 @@ void HistoryWidget::updateSendAsFileGeometry() {
 	if (_sendAsFile->isHidden()) {
 		return;
 	}
-	const auto x = _send->x() + _send->width() - _sendAsFile->width();
-	_sendAsFile->move(QPoint(x, _field->y()) + st::historyAiComposeButtonPosition);
+	const auto x = _attachToggle->x() - st::historyAiComposeButtonPosition.x();
+	const auto y = _field->y() + st::historyAiComposeButtonPosition.y();
+	_sendAsFile->move(x, y);
 	if (_sendAsFileTooltipManager) {
 		_sendAsFileTooltipManager->updateGeometry();
 	}
