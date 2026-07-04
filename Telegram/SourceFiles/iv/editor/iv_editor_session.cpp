@@ -1252,12 +1252,17 @@ private:
 			RichPage::Block &block,
 			const AttachmentRecord &attachment) const {
 		if (block.kind == RichPage::BlockKind::GroupedMedia) {
+			auto patchedAny = false;
+			auto patchedAll = true;
 			for (auto &item : block.mediaItems) {
 				if (groupedMediaItemMatchesAttachment(item, attachment)) {
-					return patchReadyGroupedMediaItem(item, attachment);
+					patchedAny = true;
+					if (!patchReadyGroupedMediaItem(item, attachment)) {
+						patchedAll = false;
+					}
 				}
 			}
-			return false;
+			return patchedAny && patchedAll;
 		}
 		return patchReadyAttachmentBlock(block, attachment);
 	}

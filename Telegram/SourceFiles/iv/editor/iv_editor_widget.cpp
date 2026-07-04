@@ -2902,13 +2902,9 @@ void Widget::applyExternalRichPageMutation(Fn<bool(RichPage&)> mutation) {
 	}
 	auto live = captureHistoryEntry();
 	for (auto &entry : _history) {
-		if (!mutation(entry.snapshot.richPage)) {
-			return;
-		}
+		mutation(entry.snapshot.richPage);
 	}
-	if (!mutation(live.snapshot.richPage)) {
-		return;
-	}
+	mutation(live.snapshot.richPage);
 	const auto wasPreservingExternalFieldRestore
 		= PreservingExternalFieldRestore;
 	PreservingExternalFieldRestore = this;
