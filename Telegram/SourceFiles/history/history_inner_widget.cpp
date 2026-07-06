@@ -45,6 +45,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/widgets/menu/menu_multiline_action.h"
 #include "ui/widgets/popup_menu.h"
 #include "ui/delayed_activation.h"
+#include "ui/power_saving.h"
 #include "ui/effects/path_shift_gradient.h"
 #include "ui/effects/message_sending_animation_controller.h"
 #include "ui/effects/reaction_fly_animation.h"
@@ -1428,6 +1429,7 @@ void HistoryInner::paintEvent(QPaintEvent *e) {
 	auto readTill = (HistoryItem*)nullptr;
 	auto readContents = base::flat_set<not_null<HistoryItem*>>();
 	auto startEffects = base::flat_set<not_null<const Element*>>();
+	auto startInteractions = base::flat_set<not_null<const Element*>>();
 	const auto markingAsViewed = _widget->markingContentsRead();
 	const auto guard = gsl::finally([&] {
 		if (_pinnedItem) {
@@ -1440,6 +1442,12 @@ void HistoryInner::paintEvent(QPaintEvent *e) {
 		if (!startEffects.empty()) {
 			for (const auto &view : startEffects) {
 				_emojiInteractions->playEffectOnRead(view);
+			}
+		}
+		if (!startInteractions.empty()) {
+			for (const auto &view : startInteractions) {
+				_animatedStickersPlayed.emplace(view->data());
+				_controller->emojiInteractions().startAutoplay(view);
 			}
 		}
 		if (readTill && _widget->markingMessagesRead()) {
@@ -1483,6 +1491,14 @@ void HistoryInner::paintEvent(QPaintEvent *e) {
 			}
 			if (markingAsViewed && item->hasUnwatchedEffect()) {
 				startEffects.emplace(view);
+			}
+			if (markingAsViewed
+				&& !item->out()
+				&& !_animatedStickersPlayed.contains(item)
+				&& item->isOnlyEmojiAndSpaces()
+				&& !PowerSaving::On(PowerSaving::kEmojiChat)
+				&& session().emojiStickersPack().hasAnimationsFor(item)) {
+				startInteractions.emplace(view);
 			}
 			if (markingAsViewed && item->hasViews()) {
 				session().api().views().scheduleIncrement(item);
