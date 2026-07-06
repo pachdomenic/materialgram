@@ -1191,7 +1191,7 @@ historyPullNextInset: 16px;
 historyPullNextPadding: 4px;
 historyPullNextArrowSize: 24px;
 historyPullNextArrowRaise: 20px;
-historyPullNextRise: 36px;
+historyPullNextRise: 35px;
 historyPullNextNameTop: 20px;
 historyPullNextNameRadius: 15px;
 historyPullNextHintSlide: 10px;

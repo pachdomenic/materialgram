@@ -8,16 +8,17 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #pragma once
 
 #include "base/unique_qptr.h"
+#include "base/timer.h"
 #include "ui/effects/animations.h"
 
 class History;
 class HistoryInner;
-class QEvent;
-class QWheelEvent;
 
 namespace Ui {
 class RpWidget;
 class ContinuousScroll;
+struct ElasticScrollPosition;
+enum class ElasticScrollMovement;
 } // namespace Ui
 
 namespace Window {
@@ -46,14 +47,11 @@ private:
 
 	[[nodiscard]] bool active() const;
 	[[nodiscard]] bool atBottom() const;
-	[[nodiscard]] bool processWheel(not_null<QWheelEvent*> e);
-	[[nodiscard]] bool applyDelta(float64 deltaX, float64 deltaY);
-	[[nodiscard]] bool release();
-	void push(float64 offset, bool ready, bool visible, History *next);
-	void render(bool ready);
+	void handleOverscroll(
+		Ui::ElasticScrollPosition position,
+		Ui::ElasticScrollMovement movement);
 	void startExpand(bool ready);
-	void applyShift(int shift);
-	void startRetract(float64 fromAccumulated, History *next);
+	void pushIndicator();
 	void clearState();
 	void reset();
 	void jumpWhenReady(not_null<History*> next, crl::time waited);
@@ -65,31 +63,20 @@ private:
 	const base::unique_qptr<Indicator> _indicator;
 	const base::unique_qptr<HintOverlay> _hint;
 
-	QPointer<HistoryInner> _inner;
 	History *_history = nullptr;
 	History *_next = nullptr;
 
-	base::unique_qptr<QObject> _filter;
-	Ui::Animations::Simple _retract;
-	Ui::Animations::Simple _expand;
-
-	float64 _pushOffset = 0.;
-	bool _pushVisible = false;
-	History *_pushNext = nullptr;
-
-	float64 _accumulated = 0.;
-	float64 _offset = 0.;
-	float64 _offsetPrev = 0.;
-	float64 _swipeX = 0.;
-	float64 _swipeY = 0.;
-	crl::time _reachedTime = 0;
-	crl::time _lastReleaseTime = 0;
-	bool _engaged = false;
+	bool _pulling = false;
+	bool _committed = false;
 	bool _reached = false;
-	bool _expanded = false;
 	bool _expandTo = false;
-	bool _gaveUp = false;
-	bool _swallowMomentum = false;
+	float64 _pull = 0.;
+	float64 _peakPull = 0.;
+	float64 _effective = 0.;
+	Ui::Animations::Simple _expand;
+	base::Timer _dwellTimer;
+
+	rpl::lifetime _lifetime;
 
 };
 

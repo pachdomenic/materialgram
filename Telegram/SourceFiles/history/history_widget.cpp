@@ -382,7 +382,8 @@ HistoryWidget::HistoryWidget(
 	}, lifetime());
 	_scroll->setOverscrollTypes(
 		Ui::ElasticScroll::OverscrollType::None,
-		Ui::ElasticScroll::OverscrollType::None);
+		Ui::ElasticScroll::OverscrollType::Real);
+	_scroll->setOverscrollBg(QColor(0, 0, 0, 0));
 	_scroll->geometryChanged(
 	) | rpl::on_next(crl::guard(_list, [=] {
 		_list->onParentGeometryChanged();
