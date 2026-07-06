@@ -270,8 +270,7 @@ HistoryWidget::HistoryWidget(
 , _topBar(this, controller)
 , _scroll(
 	this,
-	controller->chatStyle()->value(lifetime(), st::historyScroll),
-	false)
+	controller->chatStyle()->value(lifetime(), st::historyScroll))
 , _updateHistoryItems([=] { updateHistoryItemsByTimer(); })
 , _cornerButtons(
 	_scroll.data(),
@@ -373,6 +372,7 @@ HistoryWidget::HistoryWidget(
 		update();
 	}, lifetime());
 
+	_scroll->setHandleTouch(false);
 	_scroll->lockWheelDirection();
 	_scroll->setCrossAxisWheelProcess([=](QPoint delta) {
 		return _list && _list->consumeScrollAction(delta);
@@ -380,9 +380,9 @@ HistoryWidget::HistoryWidget(
 	_scroll->scrolls() | rpl::on_next([=] {
 		handleScroll();
 	}, lifetime());
-	_scroll->setOverscrollEdges(
-		[=] { return historyLoadedAtTop(); },
-		[=] { return historyLoadedAtBottom(); });
+	_scroll->setOverscrollTypes(
+		Ui::ElasticScroll::OverscrollType::None,
+		Ui::ElasticScroll::OverscrollType::None);
 	_scroll->geometryChanged(
 	) | rpl::on_next(crl::guard(_list, [=] {
 		_list->onParentGeometryChanged();
@@ -9662,7 +9662,11 @@ void HistoryWidget::showInfoTooltip(
 void HistoryWidget::showHiddenSenderTooltip(
 		QRect globalArea,
 		const TextWithEntities &text) {
-	_hiddenSenderTooltip.show(_scroll.data(), globalArea, text);
+	_hiddenSenderTooltip.show(
+		_scroll.data(),
+		_scroll->scrolls(),
+		globalArea,
+		text);
 }
 
 void HistoryWidget::showPremiumStickerTooltip(

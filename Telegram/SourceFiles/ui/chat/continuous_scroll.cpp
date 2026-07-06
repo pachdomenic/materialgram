@@ -7,60 +7,42 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "ui/chat/continuous_scroll.h"
 
-#include <QScrollBar>
 #include <QWheelEvent>
+#include <QKeyEvent>
 
 namespace Ui {
 
-void ContinuousScroll::wheelEvent(QWheelEvent *e) {
+ContinuousScroll::ContinuousScroll(
+	QWidget *parent,
+	const style::ScrollArea &st,
+	Qt::Orientation orientation)
+: ElasticScroll(parent, st, orientation) {
+	setCustomWheelProcess([=](not_null<QWheelEvent*> e) {
+		if (_tracking
+			&& !e->angleDelta().isNull()
+			&& (e->angleDelta().y() < 0)
+			&& (scrollTopMax() == scrollTop())) {
+			_addContentRequests.fire({});
+			// Carry into freshly appended content, else swallow the over-scroll.
+			return !base::take(_contentAdded);
+		}
+		return false;
+	});
+}
+
+void ContinuousScroll::keyPressEvent(QKeyEvent *e) {
+	const auto key = e->key();
 	if (_tracking
-		&& !e->angleDelta().isNull()
-		&& (e->angleDelta().y() < 0)
+		&& (key == Qt::Key_Down || key == Qt::Key_PageDown)
 		&& (scrollTopMax() == scrollTop())) {
 		_addContentRequests.fire({});
-		if (base::take(_contentAdded)) {
-			viewportEvent(e);
-		}
-		return;
+		base::take(_contentAdded);
 	}
-	ScrollArea::wheelEvent(e);
+	ElasticScroll::keyPressEvent(e);
 }
 
 void ContinuousScroll::setTrackingContent(bool value) {
-	if (_tracking == value) {
-		return;
-	}
 	_tracking = value;
-	reconnect();
-}
-
-void ContinuousScroll::reconnect() {
-	if (!_tracking) {
-		_connection.release();
-		return;
-	}
-	const auto handleAction = [=](int action) {
-		const auto scroll = verticalScrollBar();
-		const auto step = (action == QAbstractSlider::SliderSingleStepAdd)
-			? scroll->singleStep()
-			: (action == QAbstractSlider::SliderPageStepAdd)
-			? scroll->pageStep()
-			: 0;
-		if (!action) {
-			return;
-		}
-		const auto newTop = scrollTop() + step;
-		if (newTop > scrollTopMax()) {
-			_addContentRequests.fire({});
-			if (base::take(_contentAdded)) {
-				scroll->setSliderPosition(newTop);
-			}
-		}
-	};
-	_connection = QObject::connect(
-		verticalScrollBar(),
-		&QAbstractSlider::actionTriggered,
-		handleAction);
 }
 
 void ContinuousScroll::contentAdded() {

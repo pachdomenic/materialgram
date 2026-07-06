@@ -2101,7 +2101,7 @@ void ListWidget::elementShowHiddenSenderTooltip(
 			}
 		}
 	}
-	_hiddenSenderTooltip.show(scroll, area, text);
+	_hiddenSenderTooltip.show(scroll, scroll->scrolls(), area, text);
 }
 
 bool ListWidget::elementAnimationsPaused() {
@@ -4696,7 +4696,9 @@ void ListWidget::setupThanosEffect() {
 				return preparePaintContext(clip);
 			},
 			.window = [=]() -> QWidget* { return window(); },
-			.scrollArea = [=]() -> not_null<Ui::ScrollArea*> {
+			.scrollTop = [=] { return scroll->scrollTop(); },
+			.scrollTopMax = [=] { return scroll->scrollTopMax(); },
+			.scrollWidget = [=]() -> not_null<QWidget*> {
 				return scroll;
 			},
 			.scrollToY = [=](int y) {

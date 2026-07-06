@@ -70,6 +70,7 @@ class SessionController;
 namespace Ui {
 class ChatTheme;
 class ChatStyle;
+class ElasticScroll;
 class PopupMenu;
 struct ChatPaintContext;
 class PathShiftGradient;
@@ -110,7 +111,7 @@ public:
 
 	HistoryInner(
 		not_null<HistoryWidget*> historyWidget,
-		not_null<Ui::ScrollArea*> scroll,
+		not_null<Ui::ElasticScroll*> scroll,
 		not_null<Window::SessionController*> controller,
 		not_null<History*> history);
 	~HistoryInner();
@@ -566,7 +567,7 @@ private:
 	mutable std::vector<HistoryView::MessageSubItem> _activeColumns;
 
 	const not_null<HistoryWidget*> _widget;
-	const not_null<Ui::ScrollArea*> _scroll;
+	const not_null<Ui::ElasticScroll*> _scroll;
 	const not_null<Window::SessionController*> _controller;
 	const not_null<PeerData*> _peer;
 	const not_null<History*> _history;

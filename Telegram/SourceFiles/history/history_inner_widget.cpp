@@ -44,6 +44,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/widgets/menu/menu_add_action_callback_factory.h"
 #include "ui/widgets/menu/menu_multiline_action.h"
 #include "ui/widgets/popup_menu.h"
+#include "ui/widgets/elastic_scroll.h"
 #include "ui/delayed_activation.h"
 #include "ui/power_saving.h"
 #include "ui/effects/path_shift_gradient.h"
@@ -357,7 +358,7 @@ public:
 
 HistoryInner::HistoryInner(
 	not_null<HistoryWidget*> historyWidget,
-	not_null<Ui::ScrollArea*> scroll,
+	not_null<Ui::ElasticScroll*> scroll,
 	not_null<Window::SessionController*> controller,
 	not_null<History*> history)
 : RpWidget(nullptr)
@@ -4672,7 +4673,9 @@ void HistoryInner::setupThanosEffect() {
 				return preparePaintContext(clip);
 			},
 			.window = [=]() -> QWidget* { return window(); },
-			.scrollArea = [=]() -> not_null<Ui::ScrollArea*> {
+			.scrollTop = [=] { return _scroll->scrollTop(); },
+			.scrollTopMax = [=] { return _scroll->scrollTopMax(); },
+			.scrollWidget = [=]() -> not_null<QWidget*> {
 				return _scroll;
 			},
 			.scrollToY = [=](int y) {

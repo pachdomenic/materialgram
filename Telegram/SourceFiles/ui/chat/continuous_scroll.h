@@ -7,30 +7,27 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #pragma once
 
-#include "ui/widgets/scroll_area.h"
-#include "base/qt_connection.h"
+#include "ui/widgets/elastic_scroll.h"
 
 namespace Ui {
 
 // This class is designed for seamless scrolling of
 // on-demand augmented content.
-class ContinuousScroll final : public ScrollArea {
+class ContinuousScroll final : public ElasticScroll {
 public:
-	using ScrollArea::ScrollArea;
+	ContinuousScroll(
+		QWidget *parent,
+		const style::ScrollArea &st = st::defaultScrollArea,
+		Qt::Orientation orientation = Qt::Vertical);
+
+	void keyPressEvent(QKeyEvent *e) override;
 
 	[[nodiscard]] rpl::producer<> addContentRequests() const;
 	void contentAdded();
 
 	void setTrackingContent(bool value);
 
-protected:
-	void wheelEvent(QWheelEvent *e) override;
-
 private:
-	void reconnect();
-
-	base::qt_connection _connection;
-
 	bool _contentAdded = false;
 	bool _tracking = false;
 
