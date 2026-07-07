@@ -10,8 +10,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "iv/markdown/iv_markdown_prepare_serialize.h"
 #include "ui/basic_click_handlers.h"
 
-#include <QtCore/QUrl>
-
 #include <algorithm>
 #include <limits>
 
@@ -42,17 +40,6 @@ enum class RawInlineTag {
 	MarkOpen,
 	MarkClose,
 };
-
-[[nodiscard]] QString ExternalLinkDisplayText(const PreparedLink &link) {
-	if (link.entityType == EntityType::Email) {
-		return link.target;
-	}
-	const auto original = QUrl(link.target);
-	const auto good = QUrl(original.isValid()
-		? original.toEncoded()
-		: QString());
-	return good.isValid() ? good.toDisplayString() : link.target;
-}
 
 void FinalizePreparedExternalLink(
 		PreparedLink *link,

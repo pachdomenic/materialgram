@@ -142,7 +142,9 @@ namespace {
 	return result.trimmed();
 }
 
-[[nodiscard]] QString ExternalLinkDisplayText(const PreparedLink &link) {
+} // namespace
+
+QString ExternalLinkDisplayText(const PreparedLink &link) {
 	if (link.entityType == EntityType::Email) {
 		return link.target;
 	}
@@ -152,8 +154,6 @@ namespace {
 		: QString());
 	return good.isValid() ? good.toDisplayString() : link.target;
 }
-
-} // namespace
 
 void NormalizePreparedUrlLink(PreparedLink *result, const QString &target) {
 	if (!result) {

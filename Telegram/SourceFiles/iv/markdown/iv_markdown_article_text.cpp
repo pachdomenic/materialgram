@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "iv/markdown/iv_markdown_article_text.h"
 #include "iv/markdown/iv_markdown_article_layout_blocks.h"
+#include "iv/markdown/iv_markdown_prepare_links.h"
 #include "iv/markdown/iv_markdown_prepare_serialize.h"
 #include "lang/lang_keys.h"
 #include "ui/style/style_core.h"
@@ -143,6 +144,8 @@ public:
 
 	TextEntity getTextEntity() const override;
 
+	QString tooltip() const override;
+
 private:
 	PreparedLink _link;
 
@@ -175,6 +178,17 @@ QString PreparedLinkClickHandler::copyToClipboardContextItemText() const {
 
 ClickHandler::TextEntity PreparedLinkClickHandler::getTextEntity() const {
 	return TextEntityForLink(_link);
+}
+
+QString PreparedLinkClickHandler::tooltip() const {
+	if (_link.kind != PreparedLinkKind::External
+		&& _link.kind != PreparedLinkKind::InstantViewPage) {
+		return QString();
+	} else if (_link.entityType == EntityType::CustomUrl
+		|| _link.shown == EntityLinkShown::Partial) {
+		return ExternalLinkDisplayText(_link);
+	}
+	return QString();
 }
 
 [[nodiscard]] int FormulaTextSize(const style::TextStyle &textStyle) {

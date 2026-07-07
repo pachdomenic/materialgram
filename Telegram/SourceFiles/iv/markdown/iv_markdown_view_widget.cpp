@@ -23,6 +23,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/toast/toast.h"
 #include "ui/ui_utility.h"
 #include "ui/widgets/popup_menu.h"
+#include "ui/widgets/tooltip.h"
 #include "ui/color_contrast.h"
 #include "ui/integration.h"
 
@@ -806,6 +807,7 @@ bool MarkdownDocumentWidget::eventHook(QEvent *e) {
 
 void MarkdownDocumentWidget::leaveEventHook(QEvent *e) {
 	ClickHandler::clearActive(this);
+	Ui::Tooltip::Hide();
 	applyCursor((_dragAction == Selecting)
 		? style::cur_text
 		: style::cur_default);
@@ -822,6 +824,21 @@ void MarkdownDocumentWidget::clickHandlerPressedChanged(
 		const ClickHandlerPtr &,
 		bool) {
 	update();
+}
+
+QString MarkdownDocumentWidget::tooltipText() const {
+	if (const auto lnk = ClickHandler::getActive()) {
+		return lnk->tooltip();
+	}
+	return QString();
+}
+
+QPoint MarkdownDocumentWidget::tooltipPos() const {
+	return QCursor::pos();
+}
+
+bool MarkdownDocumentWidget::tooltipWindowActive() const {
+	return Ui::AppInFocus() && Ui::InFocusChain(window());
 }
 
 ClickHandlerPtr MarkdownDocumentWidget::linkAt(QPoint point) const {
@@ -1021,6 +1038,12 @@ void MarkdownDocumentWidget::forceRelayoutCurrentWidth() {
 void MarkdownDocumentWidget::updateHover(
 		const MarkdownArticleHitTestResult &state) {
 	const auto changed = ClickHandler::setActive(state.state.link, this);
+	if (changed) {
+		Ui::Tooltip::Hide();
+	}
+	if (state.state.link && _dragAction == NoDrag) {
+		Ui::Tooltip::Show(1000, this);
+	}
 	auto cursor = style::cur_default;
 	if (_dragAction == NoDrag) {
 		if (state.codeHeaderCopy

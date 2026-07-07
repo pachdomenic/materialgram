@@ -17,6 +17,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/rp_widget.h"
 #include "ui/style/style_core_types.h"
 #include "ui/ui_utility.h"
+#include "ui/widgets/tooltip.h"
 
 #include <functional>
 #include <memory>
@@ -41,7 +42,8 @@ namespace Iv::Markdown {
 class MarkdownDocumentWidget final
 	: public Ui::RpWidget
 	, public ClickHandlerHost
-	, public MediaBlockHost {
+	, public MediaBlockHost
+	, public Ui::AbstractTooltipShower {
 public:
 	explicit MarkdownDocumentWidget(QWidget *parent);
 	~MarkdownDocumentWidget() override;
@@ -72,6 +74,10 @@ public:
 	void clearAllPlaceholderLoading();
 	void addPlaceholderRipple(PreparedPlaceholderBlockId id, QPoint point);
 	void stopPlaceholderRipple(PreparedPlaceholderBlockId id);
+
+	QString tooltipText() const override;
+	QPoint tooltipPos() const override;
+	bool tooltipWindowActive() const override;
 
 protected:
 	void paintEvent(QPaintEvent *e) override;

@@ -15,6 +15,7 @@ namespace Iv::Markdown {
 
 [[nodiscard]] QString InternalLinkData(uint16 index);
 [[nodiscard]] QString NormalizeFragmentId(QString fragment);
+[[nodiscard]] QString ExternalLinkDisplayText(const PreparedLink &link);
 void NormalizePreparedUrlLink(PreparedLink *result, const QString &target);
 void FinalizePreparedUrlLink(PreparedLink *link, QStringView renderedText);
 [[nodiscard]] PreparedLink ClassifiedLink(
