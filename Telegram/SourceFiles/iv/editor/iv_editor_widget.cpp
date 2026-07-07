@@ -2887,6 +2887,9 @@ bool Widget::commitAndActivateTextOrdinal(
 		refreshAfterInlineFieldCommit(committed, std::move(source));
 	}
 	endArticleRelayoutDeferral();
+	if (_search && _search->shown()) {
+		_search->refresh();
+	}
 	if (restoreScroll) {
 		restoreScroll();
 	}
