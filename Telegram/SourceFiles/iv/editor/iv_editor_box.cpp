@@ -1322,6 +1322,7 @@ private:
 		not_null<Ui::RpWidget*> button,
 		not_null<Main::Session*> session);
 	void layout();
+	void updateBottomMask();
 	void toggleEmojiColumn();
 	void showEmojiColumn();
 	void hideEmojiColumn(bool skipResize = false);
@@ -1355,6 +1356,7 @@ private:
 	object_ptr<ToolbarPill> _cancel = { nullptr };
 	object_ptr<ToolbarPill> _aiPill = { nullptr };
 	object_ptr<Ui::SendButton> _send = { nullptr };
+	Ui::RpWidget *_sendLock = nullptr;
 	object_ptr<ChatHelpers::TabbedSelector> _emojiColumn = { nullptr };
 	object_ptr<Ui::PlainShadow> _emojiColumnShadow = { nullptr };
 	object_ptr<ToolbarPill> _emojiColumnClose = { nullptr };
@@ -1635,12 +1637,17 @@ void WindowHost::Impl::setupWindow(ShowWindowDescriptor &&descriptor) {
 	{
 		const auto lockIcon = &st::ivEditorSendLockIcon;
 		const auto lockPadding = st::ivEditorSendLockBadgePadding;
-		const auto lock = Ui::CreateChild<Ui::RpWidget>(raw);
+		_sendLock = Ui::CreateChild<Ui::RpWidget>(_bottom.data());
+		const auto lock = _sendLock;
 		lock->setAttribute(Qt::WA_TransparentForMouseEvents);
 		lock->resize(
 			lockIcon->width() + 2 * lockPadding,
 			lockIcon->height() + 2 * lockPadding);
-		lock->move(st::ivEditorSendLockBadgePosition);
+		raw->geometryValue() | rpl::on_next([=](QRect geometry) {
+			lock->move(geometry.topLeft() + st::ivEditorSendLockBadgeShift);
+			lock->raise();
+			updateBottomMask();
+		}, lock->lifetime());
 		lock->paintRequest() | rpl::on_next([=] {
 			auto p = QPainter(lock);
 			auto hq = PainterHighQualityEnabler(p);
@@ -1666,6 +1673,7 @@ void WindowHost::Impl::setupWindow(ShowWindowDescriptor &&descriptor) {
 			if (locked) {
 				lock->raise();
 			}
+			updateBottomMask();
 		};
 		Data::AmPremiumValue(
 			session
@@ -1881,21 +1889,7 @@ void WindowHost::Impl::layout() {
 			buttonsTop,
 			editorWidth);
 	}
-	auto bottomMask = QRegion();
-	const auto addMask = [&](Ui::RpWidget *widget) {
-		if (widget && !widget->isHidden()) {
-			bottomMask += widget->geometry();
-		}
-	};
-	addMask(_discard.data());
-	addMask(_cancel.data());
-	addMask(_aiPill.data());
-	addMask(_send.data());
-	if (bottomMask.isEmpty()) {
-		_bottom->clearMask();
-	} else {
-		_bottom->setMask(bottomMask);
-	}
+	updateBottomMask();
 	_scroll->setGeometry(0, 0, editorWidth, std::max(height, 1));
 	_scroll->setBarTopInset(toolbarHeight);
 	_scroll->setBarBottomInset(bottomHeight);
@@ -1935,6 +1929,28 @@ void WindowHost::Impl::layout() {
 	_editor->setBottomContentPadding(bottomHeight);
 	_editor->resizeToWidth(std::max(_scroll->width(), 1));
 	updateEditorVisibleTopBottom();
+}
+
+void WindowHost::Impl::updateBottomMask() {
+	if (!_bottom) {
+		return;
+	}
+	auto bottomMask = QRegion();
+	const auto addMask = [&](Ui::RpWidget *widget) {
+		if (widget && !widget->isHidden()) {
+			bottomMask += widget->geometry();
+		}
+	};
+	addMask(_discard.data());
+	addMask(_cancel.data());
+	addMask(_aiPill.data());
+	addMask(_send.data());
+	addMask(_sendLock);
+	if (bottomMask.isEmpty()) {
+		_bottom->clearMask();
+	} else {
+		_bottom->setMask(bottomMask);
+	}
 }
 
 void WindowHost::Impl::toggleEmojiColumn() {
