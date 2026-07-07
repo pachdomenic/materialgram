@@ -9215,6 +9215,9 @@ bool Widget::handleFieldKey(QKeyEvent *e) {
 	const auto key = e->key();
 	if (key == Qt::Key_Escape) {
 		hideInlineFieldAndRefresh();
+		if (_search && _search->shown()) {
+			_search->refresh();
+		}
 		e->accept();
 		return true;
 	}
