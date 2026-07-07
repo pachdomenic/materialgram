@@ -775,17 +775,39 @@ void PaintTextLeaf(
 			.elisionLines = elisionLines,
 		};
 	};
+	auto drawContext = makeContext();
+	drawContext.selection = selection.value_or(TextSelection());
+	drawContext.linePostprocess = linePostprocess ? &*linePostprocess : nullptr;
+	leaf.draw(p, drawContext);
 	const auto searchRanges = PaintSearchRangesForSegmentIndex(
 		context.selectionState,
 		context.searchState,
 		segmentIndex);
 	if (!searchRanges.empty()) {
-		auto otherPath = QPainterPath();
-		auto currentPath = QPainterPath();
-		const auto compose = [&](TextSelection range, QPainterPath *to) {
+		const auto makePalette = [&](
+				const style::color &bg,
+				const style::color &fg) {
+			auto result = p.textPalette();
+			result.selectBg = bg;
+			result.selectFg = fg;
+			result.selectLinkFg = fg;
+			result.selectMonoFg = fg;
+			result.selectSpoilerFg = fg;
+			return result;
+		};
+		const auto otherPalette = makePalette(
+			st::searchedTextMatchBg,
+			st::searchedTextMatchFg);
+		const auto currentPalette = makePalette(
+			st::searchedTextCurrentMatchBg,
+			st::searchedTextCurrentMatchFg);
+		const auto paintMatch = [&](
+				TextSelection range,
+				const style::TextPalette &palette) {
+			auto path = QPainterPath();
 			auto request = Ui::Text::HighlightInfoRequest{
 				.range = range,
-				.outPath = to,
+				.outPath = &path,
 			};
 			auto composeContext = makeContext();
 			composeContext.highlight = &request;
@@ -793,26 +815,25 @@ void PaintTextLeaf(
 			p.setClipRect(QRect(), Qt::ReplaceClip);
 			leaf.draw(p, composeContext);
 			p.restore();
+			if (path.isEmpty()) {
+				return;
+			}
+			path.setFillRule(Qt::WindingFill);
+			auto matchContext = makeContext();
+			matchContext.palette = &palette;
+			matchContext.selection = range;
+			p.save();
+			p.setClipPath(path, Qt::IntersectClip);
+			leaf.draw(p, matchContext);
+			p.restore();
 		};
 		for (const auto range : searchRanges.other) {
-			compose(range, &otherPath);
+			paintMatch(range, otherPalette);
 		}
 		if (searchRanges.current) {
-			compose(*searchRanges.current, &currentPath);
-		}
-		if (!otherPath.isEmpty()) {
-			otherPath.setFillRule(Qt::WindingFill);
-			p.fillPath(otherPath, context.searchState.allBg);
-		}
-		if (!currentPath.isEmpty()) {
-			currentPath.setFillRule(Qt::WindingFill);
-			p.fillPath(currentPath, context.searchState.currentBg);
+			paintMatch(*searchRanges.current, currentPalette);
 		}
 	}
-	auto drawContext = makeContext();
-	drawContext.selection = selection.value_or(TextSelection());
-	drawContext.linePostprocess = linePostprocess ? &*linePostprocess : nullptr;
-	leaf.draw(p, drawContext);
 	p.restore();
 }
 

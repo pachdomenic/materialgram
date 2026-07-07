@@ -11906,10 +11906,6 @@ Markdown::MarkdownArticlePaintContext Widget::textPaintContext(QRect clip) {
 	if (!_structuralSelection.empty()) {
 		context.selectionState.structuralSelection = &_structuralSelection;
 	}
-	context.searchState.allBg = st::msgSelectOverlay->c;
-	auto currentBg = st::windowBgActive->c;
-	currentBg.setAlphaF(0.5);
-	context.searchState.currentBg = currentBg;
 	return context;
 }
 

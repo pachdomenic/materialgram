@@ -148,8 +148,6 @@ struct MarkdownArticleSearchSource {
 struct PaintSearchState {
 	const std::vector<MarkdownArticleSearchMatch> *matches = nullptr;
 	int current = -1;
-	QColor allBg;
-	QColor currentBg;
 
 	[[nodiscard]] bool empty() const {
 		return !matches || matches->empty();

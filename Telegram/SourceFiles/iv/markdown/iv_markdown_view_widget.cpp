@@ -1247,10 +1247,6 @@ MarkdownArticlePaintContext MarkdownDocumentWidget::textPaintContext(
 	context.selectionState.endpoints = !_selection.empty()
 		? &_selectionEndpoints
 		: &_savedSelectionEndpoints;
-	context.searchState.allBg = st::msgSelectOverlay->c;
-	auto currentBg = st::windowBgActive->c;
-	currentBg.setAlphaF(0.5);
-	context.searchState.currentBg = currentBg;
 	return context;
 }
 
