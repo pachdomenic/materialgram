@@ -86,8 +86,8 @@ void SearchBar::setup(not_null<Ui::RpWidget*> parent) {
 	_select->setQueryChangedCallback([=](const QString &query) {
 		_queryChanges.fire_copy(query);
 	});
-	_select->setSubmittedCallback([=](Qt::KeyboardModifiers) {
-		_submits.fire({});
+	_select->setSubmittedCallback([=](Qt::KeyboardModifiers modifiers) {
+		_navigates.fire((modifiers & Qt::ShiftModifier) ? -1 : 1);
 	});
 	_select->setCancelledCallback([=] {
 		_closeRequests.fire({});
@@ -122,16 +122,15 @@ void SearchBar::setResults(int current, int total) {
 	} else {
 		_counter->hide();
 	}
-	const auto upDisabled = (total <= 0) || (current <= 1);
-	const auto downDisabled = (total <= 0) || (current >= total);
-	_up->setIconOverride(upDisabled
+	const auto disabled = (total <= 0);
+	_up->setIconOverride(disabled
 		? &st::calendarPreviousDisabled
 		: nullptr);
-	_down->setIconOverride(downDisabled
+	_down->setIconOverride(disabled
 		? &st::calendarNextDisabled
 		: nullptr);
-	_up->setAttribute(Qt::WA_TransparentForMouseEvents, upDisabled);
-	_down->setAttribute(Qt::WA_TransparentForMouseEvents, downDisabled);
+	_up->setAttribute(Qt::WA_TransparentForMouseEvents, disabled);
+	_down->setAttribute(Qt::WA_TransparentForMouseEvents, disabled);
 	updateControlsGeometry();
 }
 
@@ -168,12 +167,9 @@ rpl::producer<QString> SearchBar::queryChanges() const {
 	return _queryChanges.events();
 }
 
-rpl::producer<> SearchBar::submits() const {
-	return _submits.events();
-}
-
 rpl::producer<int> SearchBar::navigateRequests() const {
 	return rpl::merge(
+		_navigates.events(),
 		_up->clicks() | rpl::map_to(-1),
 		_down->clicks() | rpl::map_to(1));
 }

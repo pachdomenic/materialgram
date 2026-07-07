@@ -35,7 +35,6 @@ public:
 	void setResults(int current, int total);
 
 	[[nodiscard]] rpl::producer<QString> queryChanges() const;
-	[[nodiscard]] rpl::producer<> submits() const;
 	[[nodiscard]] rpl::producer<int> navigateRequests() const;
 	[[nodiscard]] rpl::producer<> closeRequests() const;
 	[[nodiscard]] rpl::producer<int> heightValue() const;
@@ -54,7 +53,7 @@ private:
 	Ui::IconButton *_down = nullptr;
 	Ui::CrossButton *_close = nullptr;
 	rpl::event_stream<QString> _queryChanges;
-	rpl::event_stream<> _submits;
+	rpl::event_stream<int> _navigates;
 	rpl::event_stream<> _closeRequests;
 
 };

@@ -51,9 +51,17 @@ void ScrollMarkdownPreviewToY(
 	Ui::RpWidget *preview);
 
 struct MarkdownArticleSearchMatch;
+struct MarkdownArticleSearchSource;
 
-[[nodiscard]] std::vector<QString> MarkdownPreviewSearchTexts(
-	Ui::RpWidget *preview);
+[[nodiscard]] auto MarkdownPreviewSearchSources(Ui::RpWidget *preview)
+-> std::vector<MarkdownArticleSearchSource>;
+bool ExpandMarkdownPreviewDetails(
+	Ui::RpWidget *preview,
+	const QString &anchorId);
+void ScrollMarkdownPreviewToSegment(
+	Ui::RpWidget *preview,
+	int segmentIndex,
+	int topMargin);
 void SetMarkdownPreviewSearchMatches(
 	Ui::RpWidget *preview,
 	std::vector<MarkdownArticleSearchMatch> matches,

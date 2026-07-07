@@ -359,6 +359,27 @@ bool MarkdownDocumentWidget::expandDetailsToAnchor(const QString &anchorId) {
 	return true;
 }
 
+bool MarkdownDocumentWidget::expandDetailsBlock(const QString &anchorId) {
+	if (!_article) {
+		return false;
+	}
+	const auto result = _article->expandDetailsBlock(anchorId);
+	if (!result.found || !result.changed) {
+		return false;
+	}
+	clearSelection();
+	forceRelayoutCurrentWidth();
+	updateHoverAtCursor();
+	return true;
+}
+
+QRect MarkdownDocumentWidget::segmentRect(int segmentIndex) const {
+	const auto rect = _article
+		? _article->segmentRect(segmentIndex)
+		: QRect();
+	return rect.isEmpty() ? QRect() : articleRectToWidget(rect);
+}
+
 bool MarkdownDocumentWidget::toggleDetails(const QString &anchorId) {
 	if (!_article || !_article->toggleDetails(anchorId)) {
 		return false;

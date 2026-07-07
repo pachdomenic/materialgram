@@ -71,6 +71,8 @@ public:
 	[[nodiscard]] int scrollTopForAnchor(
 		const MarkdownArticleScrollAnchor &anchor) const;
 	[[nodiscard]] bool expandDetailsToAnchor(const QString &anchorId);
+	[[nodiscard]] bool expandDetailsBlock(const QString &anchorId);
+	[[nodiscard]] QRect segmentRect(int segmentIndex) const;
 	[[nodiscard]] bool toggleDetails(const QString &anchorId);
 	[[nodiscard]] int lastRelayoutMs() const;
 	int resizeGetHeight(int newWidth) override;

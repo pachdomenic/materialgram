@@ -139,6 +139,12 @@ struct MarkdownArticleSearchMatch {
 	int to = 0;
 };
 
+struct MarkdownArticleSearchSource {
+	QString text;
+	QString hiddenText;
+	QString detailsAnchorId;
+};
+
 struct PaintSearchState {
 	const std::vector<MarkdownArticleSearchMatch> *matches = nullptr;
 	int current = -1;
@@ -354,7 +360,8 @@ public:
 	void setSearchMatches(
 		std::vector<MarkdownArticleSearchMatch> matches,
 		int current);
-	[[nodiscard]] std::vector<QString> searchableTexts() const;
+	[[nodiscard]] auto searchSources() const
+	-> std::vector<MarkdownArticleSearchSource>;
 	void updatePreparedLeaf(
 		const PreparedEditLeafSource &source,
 		const MarkdownArticleContent &prepared);
@@ -410,6 +417,8 @@ public:
 	[[nodiscard]] int scrollTopForAnchor(
 		const MarkdownArticleScrollAnchor &anchor) const;
 	[[nodiscard]] MarkdownArticleAnchorExpansion expandDetailsToAnchor(
+		const QString &anchorId);
+	[[nodiscard]] MarkdownArticleAnchorExpansion expandDetailsBlock(
 		const QString &anchorId);
 	[[nodiscard]] bool toggleDetails(const QString &anchorId);
 	[[nodiscard]] bool segmentIsText(int index) const;

@@ -73,6 +73,7 @@ public:
 
 private:
 	struct HistoryEntry;
+	struct SearchEntry;
 
 	void close();
 	void createWindow();
@@ -94,6 +95,11 @@ private:
 	void hideSearchBar();
 	void applySearchQuery(const QString &query);
 	void refreshSearchResults();
+	void rebuildSearchResults(int preferredCurrent, bool activate);
+	void resolveCurrentSearchEntry();
+	void applyCurrentSearchEntry(bool activate);
+	void stepSearchResult(int delta);
+	[[nodiscard]] std::vector<SearchEntry> collectSearchEntries() const;
 	void openSource();
 	[[nodiscard]] ViewerKind viewerKind() const;
 	[[nodiscard]] QString subtitleText() const;
@@ -141,6 +147,13 @@ private:
 		}
 	};
 
+	struct SearchEntry {
+		int segment = -1;
+		int from = 0;
+		int to = 0;
+		QString hiddenDetailsId;
+	};
+
 	const not_null<Delegate*> _delegate;
 
 	const std::shared_ptr<const PreparedDocument> _document;
@@ -165,6 +178,8 @@ private:
 	std::unique_ptr<Ui::RpWidget> _preview;
 	std::unique_ptr<SearchBar> _searchBar;
 	QString _searchQuery;
+	std::vector<SearchEntry> _searchEntries;
+	int _searchCurrentEntry = -1;
 	std::vector<HistoryEntry> _history;
 	int _historyIndex = -1;
 	int _shownHistoryIndex = -1;

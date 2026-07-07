@@ -212,10 +212,13 @@ public:
 	[[nodiscard]] int scrollTop() const;
 	[[nodiscard]] rpl::producer<int> scrollTopValue() const;
 	bool updateContent(MarkdownArticleContent prepared, OpenOptions options);
-	[[nodiscard]] std::vector<QString> searchTexts() const;
+	[[nodiscard]] auto searchSources() const
+	-> std::vector<MarkdownArticleSearchSource>;
 	void setSearchMatches(
 		std::vector<MarkdownArticleSearchMatch> matches,
 		int current);
+	bool expandDetails(const QString &anchorId);
+	void scrollToSegment(int segmentIndex, int topMargin);
 
 private:
 	struct PendingEmbedState {
@@ -832,8 +835,11 @@ rpl::producer<int> MarkdownPreviewRoot::scrollTopValue() const {
 		: rpl::single(0) | rpl::type_erased;
 }
 
-std::vector<QString> MarkdownPreviewRoot::searchTexts() const {
-	return _article ? _article->searchableTexts() : std::vector<QString>();
+auto MarkdownPreviewRoot::searchSources() const
+-> std::vector<MarkdownArticleSearchSource> {
+	return _article
+		? _article->searchSources()
+		: std::vector<MarkdownArticleSearchSource>();
 }
 
 void MarkdownPreviewRoot::setSearchMatches(
@@ -842,6 +848,33 @@ void MarkdownPreviewRoot::setSearchMatches(
 	if (_body) {
 		_body->setSearchMatches(std::move(matches), current);
 	}
+}
+
+bool MarkdownPreviewRoot::expandDetails(const QString &anchorId) {
+	return _body ? _body->expandDetailsBlock(anchorId) : false;
+}
+
+void MarkdownPreviewRoot::scrollToSegment(
+		int segmentIndex,
+		int topMargin) {
+	if (!_body || !_scroll) {
+		return;
+	}
+	const auto rect = _body->segmentRect(segmentIndex);
+	if (rect.isEmpty()) {
+		return;
+	}
+	const auto current = _scroll->scrollTop();
+	const auto height = _scroll->height();
+	const auto from = rect.y() - topMargin;
+	const auto till = rect.y() + rect.height();
+	auto target = current;
+	if (from < current) {
+		target = from;
+	} else if (till > current + height) {
+		target = std::min(till - height, from);
+	}
+	scrollToYAnimated(target);
 }
 
 bool ScrollMarkdownPreviewToAnchor(
@@ -871,9 +904,28 @@ rpl::producer<int> MarkdownPreviewScrollTopValue(Ui::RpWidget *preview) {
 	return root ? root->scrollTopValue() : rpl::single(0);
 }
 
-std::vector<QString> MarkdownPreviewSearchTexts(Ui::RpWidget *preview) {
+auto MarkdownPreviewSearchSources(Ui::RpWidget *preview)
+-> std::vector<MarkdownArticleSearchSource> {
 	const auto root = dynamic_cast<MarkdownPreviewRoot*>(preview);
-	return root ? root->searchTexts() : std::vector<QString>();
+	return root
+		? root->searchSources()
+		: std::vector<MarkdownArticleSearchSource>();
+}
+
+bool ExpandMarkdownPreviewDetails(
+		Ui::RpWidget *preview,
+		const QString &anchorId) {
+	const auto root = dynamic_cast<MarkdownPreviewRoot*>(preview);
+	return root ? root->expandDetails(anchorId) : false;
+}
+
+void ScrollMarkdownPreviewToSegment(
+		Ui::RpWidget *preview,
+		int segmentIndex,
+		int topMargin) {
+	if (const auto root = dynamic_cast<MarkdownPreviewRoot*>(preview)) {
+		root->scrollToSegment(segmentIndex, topMargin);
+	}
 }
 
 void SetMarkdownPreviewSearchMatches(

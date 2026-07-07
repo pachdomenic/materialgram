@@ -265,31 +265,6 @@ void LogDocumentWarnings(
 	}
 }
 
-[[nodiscard]] std::vector<MarkdownArticleSearchMatch> FindSearchMatches(
-		const std::vector<QString> &texts,
-		const QString &query) {
-	auto result = std::vector<MarkdownArticleSearchMatch>();
-	if (query.isEmpty()) {
-		return result;
-	}
-	for (auto i = 0; i != int(texts.size()); ++i) {
-		const auto &text = texts[i];
-		auto from = 0;
-		while ((from = int(text.indexOf(
-				query,
-				from,
-				Qt::CaseInsensitive))) >= 0) {
-			result.push_back({
-				.segment = i,
-				.from = from,
-				.to = from + int(query.size()),
-			});
-			from += int(query.size());
-		}
-	}
-	return result;
-}
-
 } // namespace
 
 Controller::Controller(
@@ -1065,6 +1040,9 @@ void Controller::createSearchBar() {
 	_searchBar->queryChanges() | rpl::on_next([=](const QString &query) {
 		applySearchQuery(query);
 	}, _searchBar->lifetime());
+	_searchBar->navigateRequests() | rpl::on_next([=](int delta) {
+		stepSearchResult(delta);
+	}, _searchBar->lifetime());
 }
 
 void Controller::toggleSearchBar() {
@@ -1091,6 +1069,41 @@ void Controller::hideSearchBar() {
 		SetMarkdownPreviewSearchMatches(_preview.get(), {}, -1);
 		_preview->setFocus();
 	}
+	_searchEntries.clear();
+	_searchCurrentEntry = -1;
+}
+
+auto Controller::collectSearchEntries() const
+-> std::vector<SearchEntry> {
+	auto result = std::vector<SearchEntry>();
+	if (_searchQuery.isEmpty() || !_preview) {
+		return result;
+	}
+	const auto sources = MarkdownPreviewSearchSources(_preview.get());
+	const auto scan = [&](const QString &text, auto &&push) {
+		auto from = 0;
+		while ((from = int(text.indexOf(
+				_searchQuery,
+				from,
+				Qt::CaseInsensitive))) >= 0) {
+			push(from, from + int(_searchQuery.size()));
+			from += int(_searchQuery.size());
+		}
+	};
+	for (auto i = 0; i != int(sources.size()); ++i) {
+		const auto &source = sources[i];
+		scan(source.text, [&](int from, int to) {
+			result.push_back({ .segment = i, .from = from, .to = to });
+		});
+		if (!source.hiddenText.isEmpty()) {
+			scan(source.hiddenText, [&](int, int) {
+				result.push_back({
+					.hiddenDetailsId = source.detailsAnchorId,
+				});
+			});
+		}
+	}
+	return result;
 }
 
 void Controller::applySearchQuery(const QString &query) {
@@ -1098,25 +1111,113 @@ void Controller::applySearchQuery(const QString &query) {
 	if (!_searchBar) {
 		return;
 	}
-	auto matches = _preview
-		? FindSearchMatches(
-			MarkdownPreviewSearchTexts(_preview.get()),
-			query)
-		: std::vector<MarkdownArticleSearchMatch>();
-	const auto total = int(matches.size());
-	if (_preview) {
-		SetMarkdownPreviewSearchMatches(
-			_preview.get(),
-			std::move(matches),
-			total ? 0 : -1);
-	}
-	_searchBar->setResults(total ? 1 : 0, total);
+	rebuildSearchResults(0, true);
 }
 
 void Controller::refreshSearchResults() {
 	if (_searchBar && _searchBar->shown()) {
-		applySearchQuery(_searchQuery);
+		rebuildSearchResults(_searchCurrentEntry, false);
 	}
+}
+
+void Controller::rebuildSearchResults(int preferredCurrent, bool activate) {
+	_searchEntries = collectSearchEntries();
+	const auto total = int(_searchEntries.size());
+	_searchCurrentEntry = total
+		? std::clamp(preferredCurrent, 0, total - 1)
+		: -1;
+	applyCurrentSearchEntry(activate);
+}
+
+void Controller::resolveCurrentSearchEntry() {
+	if (!_preview) {
+		return;
+	}
+	while (_searchCurrentEntry >= 0
+		&& _searchCurrentEntry < int(_searchEntries.size())) {
+		const auto anchorId
+			= _searchEntries[_searchCurrentEntry].hiddenDetailsId;
+		if (anchorId.isEmpty()) {
+			return;
+		}
+		auto runStart = _searchCurrentEntry;
+		while (runStart > 0
+			&& (_searchEntries[runStart - 1].hiddenDetailsId
+				== anchorId)) {
+			--runStart;
+		}
+		auto runEnd = _searchCurrentEntry + 1;
+		while (runEnd < int(_searchEntries.size())
+			&& _searchEntries[runEnd].hiddenDetailsId == anchorId) {
+			++runEnd;
+		}
+		const auto offset = _searchCurrentEntry - runStart;
+		const auto oldTotal = int(_searchEntries.size());
+		if (!ExpandMarkdownPreviewDetails(_preview.get(), anchorId)) {
+			return;
+		}
+		_searchEntries = collectSearchEntries();
+		const auto newTotal = int(_searchEntries.size());
+		const auto materialized = newTotal
+			- (oldTotal - (runEnd - runStart));
+		if (!newTotal) {
+			_searchCurrentEntry = -1;
+		} else if (materialized <= 0) {
+			_searchCurrentEntry = std::min(runStart, newTotal - 1);
+		} else {
+			_searchCurrentEntry = runStart
+				+ std::min(offset, materialized - 1);
+		}
+	}
+}
+
+void Controller::applyCurrentSearchEntry(bool activate) {
+	if (!_searchBar) {
+		return;
+	}
+	if (activate) {
+		resolveCurrentSearchEntry();
+	}
+	const auto total = int(_searchEntries.size());
+	auto matches = std::vector<MarkdownArticleSearchMatch>();
+	auto currentMatch = -1;
+	auto currentSegment = -1;
+	for (auto i = 0; i != total; ++i) {
+		const auto &entry = _searchEntries[i];
+		if (entry.segment < 0) {
+			continue;
+		} else if (i == _searchCurrentEntry) {
+			currentMatch = int(matches.size());
+			currentSegment = entry.segment;
+		}
+		matches.push_back({
+			.segment = entry.segment,
+			.from = entry.from,
+			.to = entry.to,
+		});
+	}
+	if (_preview) {
+		SetMarkdownPreviewSearchMatches(
+			_preview.get(),
+			std::move(matches),
+			currentMatch);
+		if (activate && currentSegment >= 0) {
+			ScrollMarkdownPreviewToSegment(
+				_preview.get(),
+				currentSegment,
+				st::ivSearchBarHeight);
+		}
+	}
+	_searchBar->setResults(total ? (_searchCurrentEntry + 1) : 0, total);
+}
+
+void Controller::stepSearchResult(int delta) {
+	const auto total = int(_searchEntries.size());
+	if (!total || !_preview) {
+		return;
+	}
+	_searchCurrentEntry = (_searchCurrentEntry + delta + total) % total;
+	applyCurrentSearchEntry(true);
 }
 
 void Controller::createWindow() {

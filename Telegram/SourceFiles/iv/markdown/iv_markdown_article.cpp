@@ -2879,15 +2879,24 @@ void ConsiderStructuralListItemDropTargets(
 
 [[nodiscard]] MarkdownArticleAnchorExpansion ExpandDetailsToAnchor(
 		std::vector<PreparedBlock> *blocks,
-		const QString &anchorId) {
+		const QString &anchorId,
+		bool expandTarget) {
 	if (!blocks || anchorId.isEmpty()) {
 		return {};
 	}
 	for (auto &block : *blocks) {
+		auto result = MarkdownArticleAnchorExpansion();
 		if (PreparedBlockHasAnchor(block, anchorId)) {
-			return { true, false };
+			result.found = true;
+			if (!expandTarget) {
+				return result;
+			}
+		} else {
+			result = ExpandDetailsToAnchor(
+				&block.children,
+				anchorId,
+				expandTarget);
 		}
-		auto result = ExpandDetailsToAnchor(&block.children, anchorId);
 		if (result.found) {
 			if (block.kind == PreparedBlockKind::Details
 				&& block.collapsed) {
@@ -2898,6 +2907,46 @@ void ConsiderStructuralListItemDropTargets(
 		}
 	}
 	return {};
+}
+
+[[nodiscard]] const PreparedBlock *FindPreparedDetailsBlock(
+		const std::vector<PreparedBlock> &blocks,
+		const QString &anchorId) {
+	for (const auto &block : blocks) {
+		if (block.kind == PreparedBlockKind::Details
+			&& block.anchorId == anchorId) {
+			return &block;
+		}
+		if (const auto nested = FindPreparedDetailsBlock(
+				block.children,
+				anchorId)) {
+			return nested;
+		}
+	}
+	return nullptr;
+}
+
+void AppendPreparedBlocksText(
+		const std::vector<PreparedBlock> &blocks,
+		QString *to) {
+	const auto append = [&](const QString &text) {
+		if (text.isEmpty()) {
+			return;
+		}
+		if (!to->isEmpty()) {
+			to->append('\n');
+		}
+		to->append(text);
+	};
+	for (const auto &block : blocks) {
+		append(block.text.text);
+		for (const auto &row : block.tableRows) {
+			for (const auto &cell : row.cells) {
+				append(cell.text.text);
+			}
+		}
+		AppendPreparedBlocksText(block.children, to);
+	}
 }
 
 void ClearColorizedFormulaImages(std::vector<LaidOutBlock> *blocks) {
@@ -3255,7 +3304,8 @@ public:
 	void setSearchMatches(
 		std::vector<MarkdownArticleSearchMatch> matches,
 		int current);
-	[[nodiscard]] std::vector<QString> searchableTexts() const;
+	[[nodiscard]] auto searchSources() const
+	-> std::vector<MarkdownArticleSearchSource>;
 	void updatePreparedLeaf(
 		const PreparedEditLeafSource &source,
 		const MarkdownArticleContent &prepared);
@@ -3332,6 +3382,9 @@ public:
 		const MarkdownArticleScrollAnchor &anchor) const;
 
 	[[nodiscard]] MarkdownArticleAnchorExpansion expandDetailsToAnchor(
+		const QString &anchorId);
+
+	[[nodiscard]] MarkdownArticleAnchorExpansion expandDetailsBlock(
 		const QString &anchorId);
 
 	[[nodiscard]] bool toggleDetails(const QString &anchorId);
@@ -3703,13 +3756,30 @@ void MarkdownArticle::Impl::setSearchMatches(
 		: -1;
 }
 
-std::vector<QString> MarkdownArticle::Impl::searchableTexts() const {
-	auto result = std::vector<QString>();
+auto MarkdownArticle::Impl::searchSources() const
+-> std::vector<MarkdownArticleSearchSource> {
+	auto result = std::vector<MarkdownArticleSearchSource>();
 	result.reserve(_segments.size());
 	for (const auto &segment : _segments) {
-		result.push_back(segment.isTextLeaf()
-			? segment.leaf->toString()
-			: QString());
+		auto source = MarkdownArticleSearchSource();
+		if (segment.isTextLeaf()) {
+			source.text = segment.leaf->toString();
+		}
+		const auto block = segment.block;
+		if (block && block->kind == PreparedBlockKind::Details) {
+			source.detailsAnchorId = block->anchorId;
+			if (block->collapsed) {
+				const auto prepared = FindPreparedDetailsBlock(
+					_content.blocks.blocks,
+					block->anchorId);
+				if (prepared) {
+					AppendPreparedBlocksText(
+						prepared->children,
+						&source.hiddenText);
+				}
+			}
+		}
+		result.push_back(std::move(source));
 	}
 	return result;
 }
@@ -4205,7 +4275,20 @@ MarkdownArticleAnchorExpansion MarkdownArticle::Impl::expandDetailsToAnchor(
 		const QString &anchorId) {
 	const auto result = ExpandDetailsToAnchor(
 		&_content.blocks.blocks,
-		anchorId);
+		anchorId,
+		false);
+	if (result.changed) {
+		invalidateLayout();
+	}
+	return result;
+}
+
+MarkdownArticleAnchorExpansion MarkdownArticle::Impl::expandDetailsBlock(
+		const QString &anchorId) {
+	const auto result = ExpandDetailsToAnchor(
+		&_content.blocks.blocks,
+		anchorId,
+		true);
 	if (result.changed) {
 		invalidateLayout();
 	}
@@ -5843,8 +5926,9 @@ void MarkdownArticle::setSearchMatches(
 	_impl->setSearchMatches(std::move(matches), current);
 }
 
-std::vector<QString> MarkdownArticle::searchableTexts() const {
-	return _impl->searchableTexts();
+auto MarkdownArticle::searchSources() const
+-> std::vector<MarkdownArticleSearchSource> {
+	return _impl->searchSources();
 }
 
 void MarkdownArticle::updatePreparedLeaf(
@@ -6011,6 +6095,11 @@ int MarkdownArticle::scrollTopForAnchor(
 MarkdownArticleAnchorExpansion MarkdownArticle::expandDetailsToAnchor(
 		const QString &anchorId) {
 	return _impl->expandDetailsToAnchor(anchorId);
+}
+
+MarkdownArticleAnchorExpansion MarkdownArticle::expandDetailsBlock(
+		const QString &anchorId) {
+	return _impl->expandDetailsBlock(anchorId);
 }
 
 bool MarkdownArticle::toggleDetails(const QString &anchorId) {
