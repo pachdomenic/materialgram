@@ -35,7 +35,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/controls/swipe_handler.h"
 #include "ui/widgets/menu/menu_add_action_callback_factory.h"
 #include "ui/widgets/buttons.h"
-#include "ui/widgets/scroll_area.h"
+#include "ui/widgets/elastic_scroll.h"
 #include "ui/widgets/popup_menu.h"
 #include "ui/text/format_values.h"
 #include "ui/text/text_utilities.h"
@@ -279,10 +279,9 @@ ChatWidget::ChatWidget(
 	}))
 , _translateBar(
 	std::make_unique<TranslateBar>(_topBars.get(), controller, _history))
-, _scroll(std::make_unique<Ui::ScrollArea>(
+, _scroll(std::make_unique<Ui::ElasticScroll>(
 	this,
-	controller->chatStyle()->value(lifetime(), st::historyScroll),
-	false))
+	controller->chatStyle()->value(lifetime(), st::historyScroll)))
 , _cornerButtons(
 		_scroll.get(),
 		controller->chatStyle(),
@@ -349,12 +348,15 @@ ChatWidget::ChatWidget(
 		updateAdaptiveLayout();
 	}, lifetime());
 
+	_scroll->setHandleTouch(false);
 	_inner = _scroll->setOwnedWidget(object_ptr<ListWidget>(
 		this,
 		&controller->session(),
 		static_cast<ListDelegate*>(this)));
+	_inner->lower();
 	_scroll->move(0, _topBar->height());
 	_scroll->show();
+	_scroll->setOverscrollBg(QColor(0, 0, 0, 0));
 	_scroll->setOverscrollEdges([=] {
 		return _inner->loadedAtTopKnown() && _inner->loadedAtTop();
 	}, [=] {
@@ -3670,7 +3672,7 @@ base::unique_qptr<Ui::PopupMenu> ChatWidget::listFillSenderUserpicMenu(
 	return menu->empty() ? nullptr : std::move(menu);
 }
 
-Ui::ScrollArea *ChatWidget::listScrollArea() const {
+Ui::ElasticScroll *ChatWidget::listScrollArea() const {
 	return _scroll.get();
 }
 

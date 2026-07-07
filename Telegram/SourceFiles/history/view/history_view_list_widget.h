@@ -33,6 +33,7 @@ namespace Ui {
 class Show;
 class PopupMenu;
 class ChatTheme;
+class ElasticScroll;
 struct ChatPaintContext;
 struct ChatPaintContextArgs;
 enum class TouchScrollState;
@@ -207,7 +208,7 @@ public:
 	virtual void listLaunchDrag(
 		std::unique_ptr<QMimeData> data,
 		Fn<void()> finished) = 0;
-	virtual Ui::ScrollArea *listScrollArea() const { return nullptr; }
+	virtual Ui::ElasticScroll *listScrollArea() const { return nullptr; }
 	virtual bool listThanosEffectEnabled() const { return true; }
 	virtual AboutView *listAboutView() { return nullptr; }
 };
