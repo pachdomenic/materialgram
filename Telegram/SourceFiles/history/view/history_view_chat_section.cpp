@@ -1600,7 +1600,7 @@ void ChatWidget::sendTextWithTags(
 		Data::ShowSendErrorToast(controller(), _peer, error);
 		return;
 	}
-	if (!options.scheduled) {
+	if (!options.scheduled && !ephemeral) {
 		const auto withPaymentApproved = [=](int approved) {
 			auto copy = options;
 			copy.starsApproved = approved;

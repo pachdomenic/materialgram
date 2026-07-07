@@ -7387,7 +7387,7 @@ bool HistoryWidget::showSendMessageError(
 		bool ignoreSlowmodeCountdown,
 		Fn<void(int starsApproved)> withPaymentApproved,
 		Api::SendOptions options,
-		bool ignoreRestrictions) {
+		bool ephemeral) {
 	if (!_canSendMessages) {
 		return false;
 	}
@@ -7397,7 +7397,7 @@ bool HistoryWidget::showSendMessageError(
 		.forward = &_forwardPanel->items(),
 		.text = &textWithTags,
 		.ignoreSlowmodeCountdown = ignoreSlowmodeCountdown,
-		.ignoreRestrictions = ignoreRestrictions,
+		.ignoreRestrictions = ephemeral,
 	};
 	request.messagesCount = ComputeSendingMessagesCount(_history, request);
 	const auto error = GetErrorForSending(_peer, request);
@@ -7407,6 +7407,7 @@ bool HistoryWidget::showSendMessageError(
 	}
 
 	return withPaymentApproved
+		&& !ephemeral
 		&& !checkSendPayment(
 			request.messagesCount,
 			options,
