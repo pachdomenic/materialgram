@@ -91,6 +91,9 @@ void SearchBar::setup(rpl::producer<int> width) {
 	_select->setCancelledCallback([=] {
 		_closeRequests.fire({});
 	});
+	_select->setFocusedChangedCallback([=](bool focused) {
+		_focusChanges.fire_copy(focused);
+	});
 
 	setResults(0, 0);
 }
@@ -177,6 +180,10 @@ rpl::producer<> SearchBar::closeRequests() const {
 	return rpl::merge(
 		_closeRequests.events(),
 		_close->clicks() | rpl::to_empty);
+}
+
+rpl::producer<bool> SearchBar::focusChanges() const {
+	return _focusChanges.events();
 }
 
 rpl::producer<int> SearchBar::heightValue() const {

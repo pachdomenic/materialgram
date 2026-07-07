@@ -427,6 +427,7 @@ public:
 	void setQueryChangedCallback(Fn<void(const QString &query)> callback);
 	void setSubmittedCallback(Fn<void(Qt::KeyboardModifiers)> callback);
 	void setCancelledCallback(Fn<void()> callback);
+	void setFocusedChangedCallback(Fn<void(bool focused)> callback);
 
 	void addItemInBunch(std::unique_ptr<Item> item);
 	void finishItemsBunch(AddItemWay way);
@@ -504,6 +505,7 @@ private:
 	Fn<void(const QString &query)> _queryChangedCallback;
 	Fn<void(Qt::KeyboardModifiers)> _submittedCallback;
 	Fn<void()> _cancelledCallback;
+	Fn<void(bool focused)> _focusedChangedCallback;
 	Fn<void(uint64 itemId)> _itemRemovedCallback;
 	Fn<void(int heightDelta)> _resizedCallback;
 
@@ -580,6 +582,10 @@ void MultiSelect::setSubmittedCallback(Fn<void(Qt::KeyboardModifiers)> callback)
 
 void MultiSelect::setCancelledCallback(Fn<void()> callback) {
 	_inner->setCancelledCallback(std::move(callback));
+}
+
+void MultiSelect::setFocusedChangedCallback(Fn<void(bool focused)> callback) {
+	_inner->setFocusedChangedCallback(std::move(callback));
 }
 
 void MultiSelect::setResizedCallback(Fn<void()> callback) {
@@ -662,6 +668,12 @@ MultiSelect::Inner::Inner(
 	) | rpl::filter(rpl::mappers::_1) | rpl::on_next([=] {
 		fieldFocused();
 	}, _field->lifetime());
+	_field->focusedChanges(
+	) | rpl::on_next([=](bool focused) {
+		if (_focusedChangedCallback) {
+			_focusedChangedCallback(focused);
+		}
+	}, _field->lifetime());
 	_field->changes(
 	) | rpl::on_next([=] {
 		queryChanged();
@@ -728,6 +740,11 @@ void MultiSelect::Inner::setSubmittedCallback(
 
 void MultiSelect::Inner::setCancelledCallback(Fn<void()> callback) {
 	_cancelledCallback = std::move(callback);
+}
+
+void MultiSelect::Inner::setFocusedChangedCallback(
+		Fn<void(bool focused)> callback) {
+	_focusedChangedCallback = std::move(callback);
 }
 
 void MultiSelect::Inner::updateFieldGeometry() {

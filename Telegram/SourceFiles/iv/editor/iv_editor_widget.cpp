@@ -2935,6 +2935,7 @@ void Widget::createSearchController() {
 		},
 		.expandDetails = [](const QString &) { return false; },
 		.focusContent = [=] { setFocus(); },
+		.fieldFocused = [=] { hideInlineFieldAndRefresh(); },
 	};
 	_search = std::make_unique<SearchController>(
 		_outer,

@@ -37,6 +37,7 @@ struct SearchHost {
 	Fn<void(int segmentIndex)> scrollToSegment;
 	Fn<bool(const QString &anchorId)> expandDetails;
 	Fn<void()> focusContent;
+	Fn<void()> fieldFocused;
 };
 
 class SearchController final : public base::has_weak_ptr {

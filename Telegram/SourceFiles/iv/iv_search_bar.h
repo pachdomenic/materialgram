@@ -37,6 +37,7 @@ public:
 	[[nodiscard]] rpl::producer<QString> queryChanges() const;
 	[[nodiscard]] rpl::producer<int> navigateRequests() const;
 	[[nodiscard]] rpl::producer<> closeRequests() const;
+	[[nodiscard]] rpl::producer<bool> focusChanges() const;
 	[[nodiscard]] rpl::producer<int> heightValue() const;
 
 	[[nodiscard]] rpl::lifetime &lifetime();
@@ -55,6 +56,7 @@ private:
 	rpl::event_stream<QString> _queryChanges;
 	rpl::event_stream<int> _navigates;
 	rpl::event_stream<> _closeRequests;
+	rpl::event_stream<bool> _focusChanges;
 
 };
 

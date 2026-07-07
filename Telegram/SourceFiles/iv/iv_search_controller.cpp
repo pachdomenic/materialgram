@@ -41,6 +41,15 @@ SearchController::SearchController(
 	_searchBar->navigateRequests() | rpl::on_next([=](int delta) {
 		stepSearchResult(delta);
 	}, _searchBar->lifetime());
+	_searchBar->focusChanges() | rpl::on_next([=](bool focused) {
+		if (!focused || !_searchBar->shown()) {
+			return;
+		}
+		if (_host.fieldFocused) {
+			_host.fieldFocused();
+		}
+		refresh();
+	}, _searchBar->lifetime());
 }
 
 SearchController::~SearchController() = default;
