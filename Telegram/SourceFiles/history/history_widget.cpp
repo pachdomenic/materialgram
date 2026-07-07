@@ -5714,7 +5714,9 @@ void HistoryWidget::sendScheduled(Api::SendOptions initialOptions) {
 }
 
 SendMenu::Details HistoryWidget::sendMenuDetails() const {
-	const auto type = !_peer
+	const auto ephemeralReply = session().ephemeralMessages()
+		.isEphemeralBotReply(replyTo().messageId);
+	const auto type = (!_peer || ephemeralReply)
 		? SendMenu::Type::Disabled
 		: _peer->starsPerMessageChecked()
 		? SendMenu::Type::SilentOnly

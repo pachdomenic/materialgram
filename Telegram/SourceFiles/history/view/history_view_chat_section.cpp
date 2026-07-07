@@ -2016,7 +2016,11 @@ void ChatWidget::sendInlineResult(
 
 SendMenu::Details ChatWidget::sendMenuDetails() const {
 	using Type = SendMenu::Type;
-	const auto type = (_topic && !_peer->starsPerMessageChecked())
+	const auto ephemeralReply = session().ephemeralMessages()
+		.isEphemeralBotReply(replyTo().messageId);
+	const auto type = ephemeralReply
+		? Type::Disabled
+		: (_topic && !_peer->starsPerMessageChecked())
 		? Type::Scheduled
 		: Type::SilentOnly;
 	return SendMenu::Details{ .type = type };
