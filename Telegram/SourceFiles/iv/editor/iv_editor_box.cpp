@@ -126,6 +126,15 @@ enum class ToolbarActionId : uchar {
 		: (label + u" ("_q + shortcut + u")"_q);
 }
 
+[[nodiscard]] QString WithTabShortcut(
+		const QString &label,
+		QKeySequence seq) {
+	const auto shortcut = seq.toString(QKeySequence::NativeText);
+	return shortcut.isEmpty()
+		? label
+		: (label + QChar('\t') + shortcut);
+}
+
 [[nodiscard]] QString ToolbarActionLabel(
 		ToolbarActionId action,
 		Widget::ToolbarLinkMode linkMode
@@ -833,7 +842,9 @@ void Toolbar::buildPills() {
 				&& _editor->currentTableRangeAtCaret().has_value();
 			return active
 				? tr::lng_article_tooltip_table_style(tr::now)
-				: tr::lng_article_tooltip_table_insert(tr::now);
+				: WithParenShortcut(
+					tr::lng_article_tooltip_table_insert(tr::now),
+					kEditorTableSequence);
 		});
 	tableStyle->setIsMenuButton(true);
 	tableStyle->setClickedCallback([=] {
@@ -902,9 +913,14 @@ void Toolbar::fillHeadingMenu(not_null<Ui::PopupMenu*> menu) {
 		: st::ivEditorStyleMenuPremiumStarSize;
 	for (const auto level : std::array{ 1, 2, 3, 4, 5, 6 }) {
 		const auto icon = HeadingIcon(level);
+		const auto shortcut = (level == 1)
+			? kEditorHeading1Sequence
+			: (level == 2)
+			? kEditorHeading2Sequence
+			: QKeySequence();
 		Menu::AddActiveColorAction(
 			menu,
-			HeadingLabel(level),
+			WithTabShortcut(HeadingLabel(level), shortcut),
 			[=] {
 				if (_editor) {
 					_editor->insertBlock({
@@ -954,7 +970,9 @@ void Toolbar::fillBlockStyleMenu(not_null<Ui::PopupMenu*> menu) {
 
 	Menu::AddActiveColorAction(
 		menu,
-		tr::lng_article_insert_text(tr::now),
+		WithTabShortcut(
+			tr::lng_article_insert_text(tr::now),
+			kEditorBodyTextSequence),
 		[=] { applyBlockText(); },
 		&st::ivEditorToolbarPlainTextIcon,
 		(kind == Kind::Paragraph));
@@ -1031,12 +1049,6 @@ void Toolbar::fillTextStyleMenu(not_null<Ui::PopupMenu*> menu) {
 	const auto starSize = premium
 		? 0
 		: st::ivEditorStyleMenuPremiumStarSize;
-	const auto withShortcut = [&](const QString &label, QKeySequence seq) {
-		const auto shortcut = seq.toString(QKeySequence::NativeText);
-		return shortcut.isEmpty()
-			? label
-			: (label + QChar('\t') + shortcut);
-	};
 	const auto add = [&](
 			Action action,
 			const QString &label,
@@ -1049,7 +1061,7 @@ void Toolbar::fillTextStyleMenu(not_null<Ui::PopupMenu*> menu) {
 		}
 		Menu::AddActiveColorAction(
 			menu,
-			withShortcut(label, shortcut),
+			WithTabShortcut(label, shortcut),
 			[=] {
 				if (_editor) {
 					_editor->applyToolbarFormatAction(action);

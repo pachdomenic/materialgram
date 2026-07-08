@@ -4036,9 +4036,47 @@ bool Widget::handleClipboardKey(QKeyEvent *e) {
 	return false;
 }
 
+bool Widget::handleHardcodedBlockShortcut(QKeyEvent *e) {
+	const auto type = e->type();
+	if (type != QEvent::ShortcutOverride && type != QEvent::KeyPress) {
+		return false;
+	}
+	const auto perform = (type == QEvent::KeyPress);
+	if (MatchesKeySequence(e, kEditorHeading1Sequence)) {
+		if (perform) {
+			insertBlock({
+				.type = State::InsertBlockType::Heading,
+				.headingLevel = 1,
+			});
+		}
+	} else if (MatchesKeySequence(e, kEditorHeading2Sequence)) {
+		if (perform) {
+			insertBlock({
+				.type = State::InsertBlockType::Heading,
+				.headingLevel = 2,
+			});
+		}
+	} else if (MatchesKeySequence(e, kEditorTableSequence)) {
+		if (perform) {
+			insertBlock({ .type = State::InsertBlockType::Table });
+		}
+	} else if (MatchesKeySequence(e, kEditorBodyTextSequence)) {
+		if (perform) {
+			applyToolbarFormatAction(ToolbarFormatAction::PlainText);
+		}
+	} else {
+		return false;
+	}
+	e->accept();
+	return true;
+}
+
 bool Widget::handleFieldBlockInsertShortcut(QKeyEvent *e) {
 	if (_fieldMode != State::FieldMode::Rich || _field->isHidden()) {
 		return false;
+	}
+	if (handleHardcodedBlockShortcut(e)) {
+		return true;
 	}
 	const auto type = e->type();
 	if (type != QEvent::ShortcutOverride && type != QEvent::KeyPress) {
@@ -4066,6 +4104,9 @@ bool Widget::handleFieldBlockInsertShortcut(QKeyEvent *e) {
 bool Widget::handleStructuralBlockInsertShortcut(QKeyEvent *e) {
 	if (!hasStructuralSelection()) {
 		return false;
+	}
+	if (handleHardcodedBlockShortcut(e)) {
+		return true;
 	}
 	const auto type = e->type();
 	if (type != QEvent::ShortcutOverride && type != QEvent::KeyPress) {

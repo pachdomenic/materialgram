@@ -72,6 +72,11 @@ namespace Iv::Editor {
 
 class Widget;
 
+const auto kEditorHeading1Sequence = QKeySequence("ctrl+t");
+const auto kEditorHeading2Sequence = QKeySequence("ctrl+shift+h");
+const auto kEditorTableSequence = QKeySequence("ctrl+shift+t");
+const auto kEditorBodyTextSequence = QKeySequence("ctrl+shift+b");
+
 struct PreparedMediaPasteTarget {
 	std::optional<State::LeafPath> leaf;
 	std::optional<State::InsertionAnchor> anchor;
@@ -542,6 +547,7 @@ private:
 	[[nodiscard]] bool handleClipboardKey(QKeyEvent *e);
 	[[nodiscard]] bool handleFieldBlockInsertShortcut(QKeyEvent *e);
 	[[nodiscard]] bool handleStructuralBlockInsertShortcut(QKeyEvent *e);
+	[[nodiscard]] bool handleHardcodedBlockShortcut(QKeyEvent *e);
 	[[nodiscard]] bool fieldMonospaceShortcutUsesCodeBlock() const;
 	[[nodiscard]] bool structuralMonospaceShortcutTargetsCodeBlock() const;
 	void applyFieldMonospaceAction();
