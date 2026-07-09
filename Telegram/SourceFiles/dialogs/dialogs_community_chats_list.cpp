@@ -13,8 +13,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_session.h"
 #include "dialogs/ui/dialogs_layout.h"
 #include "dialogs/dialogs_entry.h"
-#include "dialogs/dialogs_indexed_list.h"
-#include "dialogs/dialogs_main_list.h"
 #include "dialogs/dialogs_row.h"
 #include "history/history.h"
 #include "main/main_session.h"
@@ -71,9 +69,12 @@ CommunityChatsList::CommunityChatsList(
 	_controller->session().data().chatListEntryRefreshes(
 	) | rpl::filter([=](const Event &event) {
 		const auto history = event.key.history();
-		return event.existenceChanged
+		return !event.filterId
 			&& history
-			&& (history->communityListInfo() == _community);
+			&& (history->communityListInfo() == _community)
+			&& (history->peer != _community->channel())
+			&& (event.existenceChanged
+				|| (_kind == CommunityChatsKind::Joined));
 	}) | rpl::on_next([=] {
 		rebuild();
 	}, lifetime());
@@ -106,10 +107,21 @@ void CommunityChatsList::rebuild() {
 		_view.add(history, 0.);
 	};
 	if (_kind == CommunityChatsKind::Joined) {
-		for (const auto &row : *_community->chatsList()->indexed()) {
-			if (const auto history = row->history()) {
-				add(history);
+		auto joined = std::vector<not_null<History*>>();
+		joined.reserve(_community->linkedPeers().size());
+		for (const auto &linked : _community->linkedPeers()) {
+			if (Data::CommunityChatJoined(linked.peer)) {
+				joined.push_back(owner->history(linked.peer));
 			}
+		}
+		ranges::stable_sort(joined, ranges::greater(), [](
+				not_null<History*> history) {
+			return std::pair(
+				history->sortKeyInChatList(FilterId()),
+				history->chatListTimeId());
+		});
+		for (const auto &history : joined) {
+			add(history);
 		}
 	} else {
 		for (const auto &linked : _community->linkedPeers()) {
@@ -129,6 +141,9 @@ void CommunityChatsList::rebuild() {
 		resizeToWidth(width());
 	}
 	update();
+	if (underMouse()) {
+		updateSelected(mapFromGlobal(QCursor::pos()));
+	}
 }
 
 int CommunityChatsList::resizeGetHeight(int newWidth) {
