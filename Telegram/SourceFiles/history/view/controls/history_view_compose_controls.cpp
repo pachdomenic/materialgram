@@ -34,6 +34,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/core_settings.h"
 #include "core/shortcuts.h"
 #include "core/ui_integration.h"
+#include "data/components/ephemeral_messages.h"
 #include "data/notify/data_notify_settings.h"
 #include "data/data_changes.h"
 #include "data/data_drafts.h"
@@ -206,6 +207,7 @@ public:
 	[[nodiscard]] FullReplyTo replyingToMessage() const;
 	[[nodiscard]] FullMsgId editMsgId() const;
 	[[nodiscard]] rpl::producer<FullMsgId> editMsgIdValue() const;
+	[[nodiscard]] rpl::producer<FullReplyTo> replyingToMessageValue() const;
 	[[nodiscard]] rpl::producer<FullReplyTo> jumpToItemRequests() const;
 	[[nodiscard]] rpl::producer<> editPhotoRequests() const;
 	[[nodiscard]] rpl::producer<> editOptionsRequests() const;
@@ -908,6 +910,10 @@ void FieldHeader::updateForwarding(
 
 rpl::producer<FullMsgId> FieldHeader::editMsgIdValue() const {
 	return _editMsgId.value();
+}
+
+rpl::producer<FullReplyTo> FieldHeader::replyingToMessageValue() const {
+	return _replyTo.value();
 }
 
 rpl::producer<FullReplyTo> FieldHeader::jumpToItemRequests() const {
@@ -2288,6 +2294,11 @@ void ComposeControls::init() {
 		registerDraftSource();
 	}, _wrap->lifetime());
 
+	_header->replyingToMessageValue(
+	) | rpl::on_next([=](const FullReplyTo &) {
+		updateFieldPlaceholder();
+	}, _wrap->lifetime());
+
 	_header->editPhotoRequests(
 	) | rpl::on_next([=] {
 		const auto queryToEdit = _header->queryToEdit();
@@ -2684,6 +2695,8 @@ void ComposeControls::updateFieldPlaceholder() {
 		return;
 	}
 
+	const auto ephemeralReply = session().ephemeralMessages()
+		.isEphemeralBotReply(replyingToMessage().messageId);
 	_field->setPlaceholder([&] {
 		const auto peer = _history ? _history->peer.get() : nullptr;
 		if (_fieldCustomPlaceholder) {
@@ -2692,7 +2705,9 @@ void ComposeControls::updateFieldPlaceholder() {
 			return tr::lng_edit_message_text();
 		} else if (!peer) {
 			return tr::lng_message_ph();
-		} else if (const auto stars = peer->starsPerMessageChecked()) {
+		} else if (const auto stars = ephemeralReply
+			? 0
+			: peer->starsPerMessageChecked()) {
 			return tr::lng_message_stars_ph(
 				lt_count,
 				rpl::single(stars * 1.));
@@ -3893,6 +3908,8 @@ void ComposeControls::updateSendButtonType() {
 			? _slowmodeSecondsLeft.current()
 			: 0;
 	}();
+	const auto ephemeralReply = session().ephemeralMessages()
+		.isEphemeralBotReply(replyingToMessage().messageId);
 	using namespace Calls::Group::Ui;
 	const auto &appConfig = _show->session().appConfig();
 	_send->setState({
@@ -3903,7 +3920,7 @@ void ComposeControls::updateSendButtonType() {
 				*_chosenStarsCount).bgLight)
 			: QColor()),
 		.slowmodeDelay = delay,
-		.starsToSend = shownStarsPerMessage(),
+		.starsToSend = ephemeralReply ? 0 : shownStarsPerMessage(),
 		.forbidden = forbidden,
 	});
 	_send->setDisabled(_sendDisabledBySlowmode.current()

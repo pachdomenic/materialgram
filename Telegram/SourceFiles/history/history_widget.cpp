@@ -6514,7 +6514,11 @@ void HistoryWidget::updateSendButtonType() {
 			? _peer->slowmodeSecondsLeft()
 			: 0;
 	}();
-	const auto perMessage = _peer ? _peer->starsPerMessageChecked() : 0;
+	const auto ephemeralReply = session().ephemeralMessages()
+		.isEphemeralBotReply(replyTo().messageId);
+	const auto perMessage = (_peer && !ephemeralReply)
+		? _peer->starsPerMessageChecked()
+		: 0;
 	const auto richPage = shownRichMessage();
 	const auto richMessage = (richPage != nullptr);
 	_sendLockBadge.fire(richMessage
@@ -7281,6 +7285,8 @@ void HistoryWidget::updateFieldPlaceholder() {
 		return;
 	}
 
+	const auto ephemeralReply = session().ephemeralMessages()
+		.isEphemeralBotReply(replyTo().messageId);
 	_field->setPlaceholder([&]() -> rpl::producer<QString> {
 		const auto peer = _history ? _history->peer.get() : nullptr;
 		if (_editMsgId) {
@@ -7290,7 +7296,9 @@ void HistoryWidget::updateFieldPlaceholder() {
 		} else if ((_kbShown || _keyboard->forceReply())
 			&& !_keyboard->placeholder().isEmpty()) {
 			return rpl::single(_keyboard->placeholder());
-		} else if (const auto stars = peer->starsPerMessageChecked()) {
+		} else if (const auto stars = ephemeralReply
+			? 0
+			: peer->starsPerMessageChecked()) {
 			return tr::lng_message_stars_ph(
 				lt_count,
 				rpl::single(stars * 1.));
