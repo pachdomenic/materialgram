@@ -96,6 +96,8 @@ ChatSearchTab SearchState::defaultTabForMe() const {
 		? ChatSearchTab::ThisTopic
 		: (inChat.history() || inChat.sublist())
 		? ChatSearchTab::ThisPeer
+		: inChat.folder()
+		? ChatSearchTab::Archive
 		: ChatSearchTab::MyMessages;
 }
 

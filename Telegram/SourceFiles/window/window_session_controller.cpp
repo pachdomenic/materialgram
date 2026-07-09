@@ -2040,7 +2040,8 @@ void SessionController::activateFirstChatsFilter() {
 bool SessionController::uniqueChatsInSearchResults(
 		const Dialogs::SearchState &state) const {
 	const auto global = (state.tab == Dialogs::ChatSearchTab::MyMessages)
-		|| (state.tab == Dialogs::ChatSearchTab::PublicPosts);
+		|| (state.tab == Dialogs::ChatSearchTab::PublicPosts)
+		|| (state.tab == Dialogs::ChatSearchTab::Archive);
 	return session().supportMode()
 		&& !session().settings().supportAllSearchResults()
 		&& (global || !state.inChat);

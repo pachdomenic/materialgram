@@ -175,6 +175,7 @@ constexpr auto kPreviewPostsLimit = 3;
 	const auto trimmed = hashtag ? query.mid(1).trimmed() : query;
 	const auto fromPeer = (state.tab == ChatSearchTab::MyMessages
 		|| state.tab == ChatSearchTab::PublicPosts
+		|| state.tab == ChatSearchTab::Archive
 		|| !state.inChat.peer()
 		|| !(state.inChat.peer()->isChat()
 			|| state.inChat.peer()->isMegagroup()))
@@ -3789,7 +3790,8 @@ void InnerWidget::clearSelection() {
 
 void InnerWidget::fillSupportSearchMenu(not_null<Ui::PopupMenu*> menu) {
 	const auto globalSearch = (_searchState.tab == ChatSearchTab::MyMessages)
-		|| (_searchState.tab == ChatSearchTab::PublicPosts);
+		|| (_searchState.tab == ChatSearchTab::PublicPosts)
+		|| (_searchState.tab == ChatSearchTab::Archive);
 	if (!globalSearch && _searchState.inChat) {
 		return;
 	}
@@ -3797,26 +3799,6 @@ void InnerWidget::fillSupportSearchMenu(not_null<Ui::PopupMenu*> menu) {
 	const auto text = all ? "Only one from chat" : "Show all messages";
 	menu->addAction(text, [=] {
 		session().settings().setSupportAllSearchResults(!all);
-		session().saveSettingsDelayed();
-	});
-}
-
-void InnerWidget::fillArchiveSearchMenu(not_null<Ui::PopupMenu*> menu) {
-	const auto folder = session().data().folderLoaded(Data::Folder::kId);
-	const auto globalSearch = (_searchState.tab == ChatSearchTab::MyMessages)
-		|| (_searchState.tab == ChatSearchTab::PublicPosts);
-	if (!folder
-		|| !folder->chatsList()->fullSize().current()
-		|| (!globalSearch && _searchState.inChat)
-		|| (_searchState.tab == ChatSearchTab::PublicPosts)) {
-		return;
-	}
-	const auto skip = session().settings().skipArchiveInSearch();
-	const auto text = skip
-		? tr::lng_dialogs_show_archive_in_search(tr::now)
-		: tr::lng_dialogs_skip_archive_in_search(tr::now);
-	menu->addAction(text, [=] {
-		session().settings().setSkipArchiveInSearch(!skip);
 		session().saveSettingsDelayed();
 	});
 }
@@ -3916,8 +3898,6 @@ void InnerWidget::contextMenuEvent(QContextMenuEvent *e) {
 	if (row.fullId) {
 		if (session().supportMode()) {
 			fillSupportSearchMenu(_menu.get());
-		} else {
-			fillArchiveSearchMenu(_menu.get());
 		}
 	} else {
 		const auto addAction = Ui::Menu::CreateAddActionCallback(_menu);
@@ -4128,7 +4108,8 @@ void InnerWidget::applySearchState(SearchState state) {
 	const auto otherChanged = (_searchState != withSameQuery);
 
 	const auto ignoreInChat = (state.tab == ChatSearchTab::MyMessages)
-		|| (state.tab == ChatSearchTab::PublicPosts);
+		|| (state.tab == ChatSearchTab::PublicPosts)
+		|| (state.tab == ChatSearchTab::Archive);
 	const auto sublist = ignoreInChat ? nullptr : state.inChat.sublist();
 	const auto peer = ignoreInChat ? nullptr : state.inChat.peer();
 	if (const auto migrateFrom = peer ? peer->migrateFrom() : nullptr) {
@@ -4624,7 +4605,8 @@ void InnerWidget::searchReceived(
 	}
 
 	const auto globalSearch = (_searchState.tab == ChatSearchTab::MyMessages)
-		|| (_searchState.tab == ChatSearchTab::PublicPosts);
+		|| (_searchState.tab == ChatSearchTab::PublicPosts)
+		|| (_searchState.tab == ChatSearchTab::Archive);
 	const auto key = globalSearch
 		? Key()
 		: (!_openedForum || _searchState.inChat.topic())
@@ -5051,9 +5033,16 @@ auto InnerWidget::searchTagsChanges() const
 		: rpl::never<std::vector<Data::ReactionId>>();
 }
 
+bool InnerWidget::archiveSearchActive() const {
+	return _openedFolder
+		&& ((_searchState.tab == ChatSearchTab::Archive)
+			|| !QStringView(_searchState.query).trimmed().isEmpty());
+}
+
 void InnerWidget::updateSearchIn() {
 	if (!_searchState.inChat
-		&& _searchHashOrCashtag == HashOrCashtag::None) {
+		&& _searchHashOrCashtag == HashOrCashtag::None
+		&& !archiveSearchActive()) {
 		_searchIn = nullptr;
 		return;
 	} else if (!_searchIn) {
@@ -5112,6 +5101,9 @@ void InnerWidget::updateSearchIn() {
 		? Ui::MakeUserpicThumbnail(sublist->sublistPeer())
 		: nullptr;
 	const auto myIcon = Ui::MakeIconThumbnail(st::menuIconChats);
+	const auto archiveIcon = (_openedFolder && !_searchState.inChat)
+		? Ui::MakeIconThumbnail(st::menuIconArchive)
+		: nullptr;
 	const auto publicIcon = (_searchHashOrCashtag != HashOrCashtag::None)
 		? Ui::MakeIconThumbnail(st::menuIconChannel)
 		: nullptr;
@@ -5129,6 +5121,7 @@ void InnerWidget::updateSearchIn() {
 	_searchIn->apply({
 		{ ChatSearchTab::ThisTopic, topicIcon },
 		{ ChatSearchTab::ThisPeer, peerIcon },
+		{ ChatSearchTab::Archive, archiveIcon },
 		{ ChatSearchTab::MyMessages, myIcon },
 		{ ChatSearchTab::PublicPosts, publicIcon },
 	}, _searchState.tab, peerTabType, fromImage, fromName);
@@ -5157,8 +5150,10 @@ bool InnerWidget::computeSearchWithPostsPreview() const {
 }
 
 void InnerWidget::clearFilter() {
-	if (_state == WidgetState::Filtered || _searchState.inChat) {
-		if (_searchState.inChat) {
+	if (_state == WidgetState::Filtered
+		|| _searchState.inChat
+		|| archiveSearchActive()) {
+		if (_searchState.inChat || archiveSearchActive()) {
 			setState(WidgetState::Filtered);
 		} else {
 			setState(WidgetState::Default);

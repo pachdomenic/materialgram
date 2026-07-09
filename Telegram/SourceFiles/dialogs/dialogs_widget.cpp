@@ -488,9 +488,6 @@ Widget::Widget(
 		jumpToTop(true);
 	}, lifetime());
 
-	fullSearchRefreshOn(session().settings().skipArchiveInSearchChanges(
-	) | rpl::to_empty);
-
 	_inner->scrollByDeltaRequests(
 	) | rpl::on_next([=](int delta) {
 		if (_scroll) {
@@ -1807,7 +1804,7 @@ void Widget::setupShortcuts() {
 					return true;
 				} else if (_openedFolder) {
 					if (!_subsectionTopBar->searchSetFocus()) {
-						showSearchInTopBar(anim::type::normal);
+						controller()->searchInChat(_openedFolder);
 					}
 					return true;
 				} else if (!_childList && _search->isVisible()) {
@@ -3353,10 +3350,7 @@ void Widget::requestMessages(bool fromStart) {
 		.start = fromStart,
 	};
 	using Flag = MTPmessages_SearchGlobal::Flag;
-	const auto flags = Flag()
-		| (session().settings().skipArchiveInSearch()
-			? Flag::f_folder_id
-			: Flag())
+	const auto flags = Flag::f_folder_id
 		| (_searchQueryFilter == ChatTypeFilter::Private
 			? Flag::f_users_only
 			: _searchQueryFilter == ChatTypeFilter::Groups
@@ -3364,7 +3358,9 @@ void Widget::requestMessages(bool fromStart) {
 			: _searchQueryFilter == ChatTypeFilter::Channels
 			? Flag::f_broadcasts_only
 			: Flag());
-	const auto folderId = 0;
+	const auto folderId = (_searchQueryTab == ChatSearchTab::Archive)
+		? Data::Folder::kId
+		: 0;
 	_searchProcess.requestId = session().api().request(
 		MTPmessages_SearchGlobal(
 			MTP_flags(flags),
@@ -3905,11 +3901,18 @@ bool Widget::applySearchState(SearchState state) {
 		&& IsHashOrCashtagSearchQuery(state.query) == HashOrCashtag::None) {
 		state.tab = (_openedForum && !state.inChat)
 			? ChatSearchTab::ThisPeer
+			: _openedFolder
+			? ChatSearchTab::Archive
 			: ChatSearchTab::MyMessages;
 	} else if (!state.inChat
 		&& _searchHashOrCashtag == HashOrCashtag::None) {
+		const auto archive = _openedFolder
+			&& ((folder == _openedFolder)
+				|| (state.tab == ChatSearchTab::Archive));
 		state.tab = (forum || _openedForum)
 			? ChatSearchTab::ThisPeer
+			: archive
+			? ChatSearchTab::Archive
 			: ChatSearchTab::MyMessages;
 	}
 	if (!state.tags.empty()) {
@@ -3958,6 +3961,8 @@ bool Widget::applySearchState(SearchState state) {
 		|| (state.tab == ChatSearchTab::ThisPeer
 			&& !state.inChat
 			&& !_openedForum)
+		|| (state.tab == ChatSearchTab::Archive
+			&& (!_openedFolder || state.inChat))
 		|| (state.tab == ChatSearchTab::PublicPosts
 			&& _searchHashOrCashtag == HashOrCashtag::None)) {
 		state.tab = state.inChat.topic()
@@ -4656,7 +4661,8 @@ void Widget::cancelSearchRequest() {
 
 PeerData *Widget::searchInPeer() const {
 	return (_searchState.tab == ChatSearchTab::MyMessages
-		|| _searchState.tab == ChatSearchTab::PublicPosts)
+		|| _searchState.tab == ChatSearchTab::PublicPosts
+		|| _searchState.tab == ChatSearchTab::Archive)
 		? nullptr
 		: _openedForum
 		? _openedForum->peer().get()
@@ -4767,6 +4773,11 @@ bool Widget::cancelSearch(CancelSearchOptions options) {
 		&& _subsectionTopBar->toggleSearch(false, anim::type::normal)) {
 		setInnerFocus(true);
 		clearingInChat = true;
+	}
+	if ((updatedState.tab == ChatSearchTab::Archive
+		|| updatedState.tab == ChatSearchTab::PublicPosts)
+		&& (forceFullCancel || !clearingQuery)) {
+		updatedState.tab = ChatSearchTab::MyMessages;
 	}
 	const auto clearSearchFocus = (forceFullCancel || !updatedState.inChat)
 		&& (_searchHasFocus || _searchSuggestionsLocked);

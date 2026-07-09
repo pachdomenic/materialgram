@@ -461,7 +461,6 @@ private:
 		QRect updateRect = QRect(),
 		UpdateRowSections sections = UpdateRowSection::All);
 	void fillSupportSearchMenu(not_null<Ui::PopupMenu*> menu);
-	void fillArchiveSearchMenu(not_null<Ui::PopupMenu*> menu);
 
 	void refreshShownList();
 	void rebuildCommunitySections();
@@ -534,6 +533,7 @@ private:
 	//	int top,
 	//	const style::icon *icon,
 	//	const Ui::Text::String &text) const;
+	[[nodiscard]] bool archiveSearchActive() const;
 	void updateSearchIn();
 	void repaintSearchResult(int index);
 	void repaintPreviewResult(int index);

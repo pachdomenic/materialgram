@@ -24,6 +24,7 @@ enum class ChatSearchTab : uchar {
 	ThisTopic,
 	ThisPeer,
 	PublicPosts,
+	Archive,
 };
 
 enum class ChatSearchPeerTabType : uchar {
