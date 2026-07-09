@@ -557,6 +557,7 @@ private:
 	void setAccessibilityFocusedItem(int index, HistoryItem *item);
 	void announceAccessibilityFocus(int index);
 	void applyAccessibilityFocus(int index, bool announceAlways);
+	void pruneAccessibilityIdentities();
 	[[nodiscard]] auto computeActiveColumns(int row) const
 		-> const std::vector<HistoryView::MessageSubItem> &;
 

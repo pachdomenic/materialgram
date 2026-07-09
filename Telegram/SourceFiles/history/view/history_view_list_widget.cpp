@@ -767,6 +767,8 @@ void ListWidget::refreshRows(const Data::MessagesSlice &old) {
 	}
 	_viewsCapacity.clear();
 
+	pruneAccessibilityIdentities();
+
 	const auto markLastAsRead = (scrolledTillEnd && markingMessagesRead());
 	checkUnreadBarCreation(markLastAsRead);
 	restoreScrollState();
@@ -5452,6 +5454,29 @@ int ListWidget::accessibilityChildIndexByIdentity(
 		}
 	}
 	return -1;
+}
+
+void ListWidget::pruneAccessibilityIdentities() {
+	// Items usually outlive their views by the whole session, so with
+	// the identities erased only in itemRemoved() the map would keep an
+	// entry for every row the accessibility layer ever touched while
+	// the slice window scrolls by. Once an item loses its view it is
+	// no longer exposed as an accessibility child, so drop its token:
+	// tokens are never reused, which means an identity the assistive
+	// technology still holds simply stops resolving, exactly as if the
+	// item was removed. Items with views keep their tokens (reissuing
+	// one would invalidate the provider of a live row), and so does the
+	// accessibility-focused item, whose identity must survive scrolling
+	// away and back.
+	for (auto i = begin(_accessibilityIdentities)
+		; i != end(_accessibilityIdentities);) {
+		const auto item = i->first.get();
+		if (item != _accessibilityFocusedItem && !viewForItem(item)) {
+			i = _accessibilityIdentities.erase(i);
+		} else {
+			++i;
+		}
+	}
 }
 
 void ListWidget::applyAccessibilityFocus(
