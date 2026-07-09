@@ -536,6 +536,7 @@ defaultCalendarSizes: CalendarSizes {
 	padding: margins(14px, 0px, 14px, 0px);
 }
 calendarDaysFont: normalFont;
+calendarDaysFontOver: semiboldFont;
 calendarDaysFg: boxTitleAdditionalFg;
 calendarScroll: ScrollArea(defaultSolidScroll) {
 	deltat: 3px;
