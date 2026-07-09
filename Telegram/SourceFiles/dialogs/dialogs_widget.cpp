@@ -2844,7 +2844,9 @@ void Widget::escape() {
 				controller()->closeFolder();
 			}
 		} else if (controller()->openedCommunity().current()) {
-			controller()->closeCommunity();
+			if (!controller()->windowId().community()) {
+				controller()->closeCommunity();
+			}
 		} else if (controller()->activeChatEntryCurrent().key) {
 			controller()->content()->dialogsCancelled();
 		} else if (controller()->isPrimary()) {
