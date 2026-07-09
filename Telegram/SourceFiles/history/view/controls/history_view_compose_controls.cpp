@@ -3849,6 +3849,7 @@ void ComposeControls::updateWrappingVisibility() {
 	if (!hidden && !restricted) {
 		updateControlsGeometry(_wrap->size());
 		_wrap->raise();
+		raisePanels();
 	}
 }
 
