@@ -452,6 +452,17 @@ bool PeerListController::hasComplexSearch() const {
 	return (_searchController != nullptr);
 }
 
+void PeerListController::customRowAddRipple(
+		not_null<PeerListRow*> row,
+		QPoint point,
+		Fn<void()> updateCallback) {
+	row->addRipple(
+		computeListSt().item,
+		customRowRippleMaskGenerator(),
+		point,
+		std::move(updateCallback));
+}
+
 void PeerListController::search(const QString &query) {
 	Expects(hasComplexSearch());
 
@@ -1860,7 +1871,10 @@ void PeerListContent::mousePressEvent(QMouseEvent *e) {
 		} else {
 			auto point = mapFromGlobal(QCursor::pos()) - QPoint(0, getRowTop(_selected.index));
 			if (_mode == Mode::Custom) {
-				row->addRipple(_st.item, _controller->customRowRippleMaskGenerator(), point, std::move(updateCallback));
+				_controller->customRowAddRipple(
+					row,
+					point,
+					std::move(updateCallback));
 			} else {
 				const auto maskGenerator = [&] {
 					return Ui::RippleAnimation::RectMask(

@@ -628,6 +628,10 @@ public:
 	[[nodiscard]] virtual Fn<QImage()> customRowRippleMaskGenerator() {
 		Unexpected("PeerListController::customRowRippleMaskGenerator.");
 	}
+	virtual void customRowAddRipple(
+		not_null<PeerListRow*> row,
+		QPoint point,
+		Fn<void()> updateCallback);
 
 	virtual bool overrideKeyboardNavigation(
 			int direction,
