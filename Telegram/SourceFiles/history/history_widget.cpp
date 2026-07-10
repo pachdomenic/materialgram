@@ -4541,6 +4541,9 @@ void HistoryWidget::messagesReceived(
 		}
 		addMessagesToFront(peer, *histList);
 		_firstLoadRequest = 0;
+		if (_firstLoadFromTheStart && !toMigrated) {
+			_history->markLoadedAtTop();
+		}
 		if (_history->loadedAtTop() && _history->isEmpty() && count > 0) {
 			firstLoadMessages();
 			return;
@@ -4560,6 +4563,9 @@ void HistoryWidget::messagesReceived(
 		_history->getReadyFor(_delayedShowAtMsgId);
 		if (_history->isEmpty()) {
 			addMessagesToFront(peer, *histList);
+			if (_firstLoadFromTheStart && !toMigrated) {
+				_history->markLoadedAtTop();
+			}
 		}
 		_firstLoadRequest = 0;
 
@@ -4645,6 +4651,7 @@ void HistoryWidget::firstLoadMessages() {
 	auto offsetId = MsgId();
 	auto offset = 0;
 	auto loadCount = kMessagesPerPage;
+	_firstLoadFromTheStart = false;
 	if (_showAtMsgId == ShowAtUnreadMsgId) {
 		if (const auto around = _migrated ? _migrated->loadAroundId() : 0) {
 			_history->getReadyFor(_showAtMsgId);
@@ -4655,6 +4662,7 @@ void HistoryWidget::firstLoadMessages() {
 			_history->getReadyFor(_showAtMsgId);
 			offset = -loadCount / 2;
 			offsetId = around;
+			_firstLoadFromTheStart = (around == 1);
 		} else {
 			_history->getReadyFor(ShowAtTheEndMsgId);
 		}
@@ -4877,6 +4885,7 @@ void HistoryWidget::delayedShowAt(
 	auto offsetId = MsgId();
 	auto offset = 0;
 	auto loadCount = kMessagesPerPage;
+	_firstLoadFromTheStart = false;
 	if (_delayedShowAtMsgId == ShowAtUnreadMsgId) {
 		if (const auto around = _migrated ? _migrated->loadAroundId() : 0) {
 			from = _migrated;
@@ -4885,6 +4894,7 @@ void HistoryWidget::delayedShowAt(
 		} else if (const auto around = _history->loadAroundId()) {
 			offset = -loadCount / 2;
 			offsetId = around;
+			_firstLoadFromTheStart = (around == 1);
 		} else {
 			loadCount = kMessagesPerPageFirst;
 		}
@@ -7952,6 +7962,12 @@ int HistoryWidget::countInitialScrollTop() {
 		}
 	} else if (_showAtMsgId == ShowAtTheEndMsgId) {
 		return ScrollMax;
+	} else if (_showAtMsgId == ShowAtUnreadMsgId
+		&& _history->loadedAtTop()
+		&& (_history->loadAroundId() == 1)
+		&& (!_migrated || !_migrated->unreadCount())) {
+		createUnreadBarIfBelowVisibleArea(0);
+		return 0;
 	} else if (const auto top = unreadBarTop()) {
 		return *top;
 	} else {
