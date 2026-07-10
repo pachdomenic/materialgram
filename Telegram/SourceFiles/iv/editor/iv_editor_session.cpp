@@ -1655,17 +1655,17 @@ private:
 		_editorShow = nullptr;
 		if (!_submittedPage && !_submitApiRequested) {
 			_backgroundHold = nullptr;
-			if (_composeAction && _composeThreadKey) {
-				// Sync the local draft and the chat input field with the
-				// cloud draft saved on close, like an incoming server draft
-				// update: simple-text drafts go back into the message field,
-				// rich drafts show the draft preview. Must happen after the
-				// compose entry is released above, otherwise the field code
-				// still bypasses normal draft handling and skips the update.
-				_composeAction->history->applyCloudDraft(
-					_composeThreadKey->draftKey.topicRootId(),
-					_composeThreadKey->draftKey.monoforumPeerId());
-			}
+			// Sync the local draft and the chat input field with the
+			// cloud draft saved on close, like an incoming server draft
+			// update: simple-text drafts go back into the message field,
+			// rich drafts show the draft preview. Must happen after the
+			// compose entry is released above, otherwise the field code
+			// still bypasses normal draft handling and skips the update.
+			// Skipped when no cloud draft object exists at all: then this
+			// editor never wrote one (blank open, blank close), and syncing
+			// would wipe an unrelated local draft (e.g. reply-only) through
+			// the cloud-to-local clear branch.
+			syncFieldWithCloudDraftAfterClose();
 		}
 		if (const auto continuation = base::take(_onWindowClosedContinuation)) {
 			continuation();
@@ -1729,12 +1729,31 @@ private:
 	// The caller must hold a strong reference (see CloseAll() and the session
 	// clear handler) so that the eventual ~ArticleSession runs after this
 	// returns rather than re-entrantly.
+	//
+	// Runs on passcode lock, account switch and application shutdown, so
+	// it must stay synchronous and must not start network requests: the
+	// current article state is captured into the in-memory cloud draft
+	// and mirrored to the local draft / input field, while the server
+	// save is only scheduled (it fires after unlock and simply never
+	// happens during logout or shutdown).
 	void forceClose() {
 		if (!_windowHost && !_backgroundHold) {
 			return;
 		}
 		cancelRichDraftAutosave();
 		cancelCloseWithDraftSave(_closeDraftSaveGeneration);
+		const auto sync = _composeAction
+			&& _composeThreadKey
+			&& !_submittedPage
+			&& !_submitApiRequested;
+		if (sync && !hasPendingPreparation()) {
+			if (const auto prepared = prepareRichDraftForAutosave()) {
+				_composeAction->history->createCloudDraft(
+					_composeThreadKey->draftKey.topicRootId(),
+					_composeThreadKey->draftKey.monoforumPeerId(),
+					&*prepared);
+			}
+		}
 		releaseComposeThreadWindow();
 		_editor = nullptr;
 		_submitButton = nullptr;
@@ -1743,6 +1762,15 @@ private:
 		_backgroundHold = nullptr;
 		_closeDraftSaveContinuation = nullptr;
 		_onWindowClosedContinuation = nullptr;
+		if (sync) {
+			syncFieldWithCloudDraftAfterClose();
+			const auto history = _composeAction->history;
+			if (const auto thread = history->threadFor(
+					_composeThreadKey->draftKey.topicRootId(),
+					_composeThreadKey->draftKey.monoforumPeerId())) {
+				_session->api().saveDraftToCloudDelayed(not_null{ thread });
+			}
+		}
 	}
 
 	void handleMediaDialogResult(
@@ -2941,6 +2969,7 @@ private:
 	void cancelCloseWithDraftSave(uint64 generation);
 	void showCloseDraftSavingBox(uint64 generation);
 	void showCloseDraftSaveFailedBox(uint64 generation, const QString &error);
+	void syncFieldWithCloudDraftAfterClose();
 
 	[[nodiscard]] AttachmentRecord *findAttachment(FullMsgId uploadId) {
 		for (auto &attachment : _attachments) {
@@ -3935,6 +3964,18 @@ void ArticleSession::cancelCloseWithDraftSave(uint64 generation) {
 	++_closeDraftSaveGeneration;
 	if (_closeDraftSaveBox) {
 		_closeDraftSaveBox->closeBox();
+	}
+}
+
+void ArticleSession::syncFieldWithCloudDraftAfterClose() {
+	if (!_composeAction || !_composeThreadKey) {
+		return;
+	}
+	const auto history = _composeAction->history;
+	const auto topicRootId = _composeThreadKey->draftKey.topicRootId();
+	const auto monoforumPeerId = _composeThreadKey->draftKey.monoforumPeerId();
+	if (history->cloudDraft(topicRootId, monoforumPeerId)) {
+		history->applyCloudDraft(topicRootId, monoforumPeerId);
 	}
 }
 

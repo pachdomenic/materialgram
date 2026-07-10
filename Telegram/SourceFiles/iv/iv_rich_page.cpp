@@ -1702,8 +1702,7 @@ void AppendSummaryBlocks(
 		const auto type = entity.type();
 		if (type == EntityType::Subscript
 			|| type == EntityType::Superscript
-			|| type == EntityType::Marked
-			|| type == EntityType::CustomEmoji) {
+			|| type == EntityType::Marked) {
 			return false;
 		}
 	}
