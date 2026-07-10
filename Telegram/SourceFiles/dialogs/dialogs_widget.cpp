@@ -2252,6 +2252,7 @@ void Widget::changeOpenedFolder(Data::Folder *folder, anim::type animated) {
 		_openedFolder = folder;
 		_inner->changeOpenedFolder(folder);
 		if (_stories) {
+			_stories->setShowTitle(folder != nullptr);
 			storiesExplicitCollapse();
 		}
 		updateFrozenAccountBar();
