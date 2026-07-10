@@ -535,7 +535,7 @@ template <typename Container>
 			MsgId()),
 		.caption = TextWithTags(),
 		.spoiler = file.spoiler,
-		.album = nullptr,
+		.album = std::make_shared<SendingAlbum>(),
 		.forceFile = false,
 		.sendLargePhotos = file.sendLargePhotos,
 		.idOverride = 0,
@@ -2490,6 +2490,10 @@ private:
 		}
 		if (data.info.videoCover) {
 			flags |= Flag::f_video_cover;
+		}
+		if (attachment.blockKind == RichPage::BlockKind::Video
+			&& !attachment.forceFile) {
+			flags |= Flag::f_nosound_video;
 		}
 		auto attributes = !attachment.attributes.isEmpty()
 			? attachment.attributes
