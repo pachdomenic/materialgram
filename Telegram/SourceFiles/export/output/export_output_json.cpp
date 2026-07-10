@@ -23,6 +23,11 @@ namespace {
 
 using Context = details::JsonContext;
 
+struct RichSerializeContext {
+	Context &json;
+	const Data::RichMessage &message;
+};
+
 QByteArray SerializeString(const QByteArray &value) {
 	const auto size = value.size();
 	const auto begin = value.data();
@@ -241,6 +246,154 @@ QByteArray SerializeRichNumberString(Value value) {
 	return SerializeString(Data::NumberToString(value));
 }
 
+const Data::Photo *FindRichPhoto(
+		const RichSerializeContext &context,
+		uint64 photoId) {
+	const auto i = context.message.photos.find(photoId);
+	return (i != end(context.message.photos)) ? &i->second : nullptr;
+}
+
+const Data::Document *FindRichDocument(
+		const RichSerializeContext &context,
+		uint64 documentId) {
+	const auto i = context.message.documents.find(documentId);
+	return (i != end(context.message.documents)) ? &i->second : nullptr;
+}
+
+void AppendRichFileAvailability(
+		std::vector<std::pair<QByteArray, QByteArray>> &values,
+		const Data::File *file,
+		const QByteArray &pathKey,
+		const QByteArray &reasonKey) {
+	using SkipReason = Data::File::SkipReason;
+	if (file) {
+		switch (file->skipReason) {
+		case SkipReason::Unavailable:
+			values.emplace_back(
+				reasonKey,
+				SerializeString("unavailable"));
+			return;
+		case SkipReason::FileType:
+			values.emplace_back(reasonKey, SerializeString("file_type"));
+			return;
+		case SkipReason::FileSize:
+			values.emplace_back(reasonKey, SerializeString("file_size"));
+			return;
+		case SkipReason::DateLimits:
+			values.emplace_back(reasonKey, SerializeString("date_limits"));
+			return;
+		case SkipReason::None:
+			if (!file->relativePath.isEmpty()) {
+				values.emplace_back(
+					pathKey,
+					SerializeString(file->relativePath.toUtf8()));
+				return;
+			}
+			break;
+		}
+	}
+	values.emplace_back(reasonKey, SerializeString("unavailable"));
+}
+
+void AppendRichPhotoMetadata(
+		std::vector<std::pair<QByteArray, QByteArray>> &values,
+		const Data::Photo *photo,
+		const QByteArray &pathKey,
+		const QByteArray &reasonKey,
+		const QByteArray &sizeKey,
+		const QByteArray &widthKey,
+		const QByteArray &heightKey) {
+	AppendRichFileAvailability(
+		values,
+		photo ? &photo->image.file : nullptr,
+		pathKey,
+		reasonKey);
+	if (!photo) {
+		return;
+	}
+	values.emplace_back(
+		sizeKey,
+		Data::NumberToString(photo->image.file.size));
+	if (photo->image.width && photo->image.height) {
+		values.emplace_back(
+			widthKey,
+			Data::NumberToString(photo->image.width));
+		values.emplace_back(
+			heightKey,
+			Data::NumberToString(photo->image.height));
+	}
+}
+
+void AppendRichDocumentMetadata(
+		std::vector<std::pair<QByteArray, QByteArray>> &values,
+		const Data::Document *document,
+		bool includeDimensions) {
+	AppendRichFileAvailability(
+		values,
+		document ? &document->file : nullptr,
+		"file",
+		"file_skip_reason");
+	if (!document) {
+		return;
+	}
+	if (!document->name.isEmpty()) {
+		values.emplace_back("file_name", SerializeString(document->name));
+	}
+	values.emplace_back(
+		"file_size",
+		Data::NumberToString(document->file.size));
+	if (document->thumb.width > 0) {
+		AppendRichFileAvailability(
+			values,
+			&document->thumb.file,
+			"thumbnail",
+			"thumbnail_skip_reason");
+		values.emplace_back(
+			"thumbnail_file_size",
+			Data::NumberToString(document->thumb.file.size));
+	}
+	if (document->isSticker) {
+		values.emplace_back("media_type", SerializeString("sticker"));
+		if (!document->stickerEmoji.isEmpty()) {
+			values.emplace_back(
+				"sticker_emoji",
+				SerializeString(document->stickerEmoji));
+		}
+	} else if (document->isVideoMessage) {
+		values.emplace_back("media_type", SerializeString("video_message"));
+	} else if (document->isVoiceMessage) {
+		values.emplace_back("media_type", SerializeString("voice_message"));
+	} else if (document->isAnimated) {
+		values.emplace_back("media_type", SerializeString("animation"));
+	} else if (document->isVideoFile) {
+		values.emplace_back("media_type", SerializeString("video_file"));
+	} else if (document->isAudioFile) {
+		values.emplace_back("media_type", SerializeString("audio_file"));
+		if (!document->songPerformer.isEmpty()) {
+			values.emplace_back(
+				"performer",
+				SerializeString(document->songPerformer));
+		}
+		if (!document->songTitle.isEmpty()) {
+			values.emplace_back(
+				"title",
+				SerializeString(document->songTitle));
+		}
+	}
+	if (!document->mime.isEmpty()) {
+		values.emplace_back("mime_type", SerializeString(document->mime));
+	}
+	if (document->duration) {
+		values.emplace_back(
+			"duration_seconds",
+			Data::NumberToString(document->duration));
+	}
+	if (includeDimensions && document->width && document->height) {
+		values.emplace_back("width", Data::NumberToString(document->width));
+		values.emplace_back("height", Data::NumberToString(document->height));
+	}
+}
+
 template <typename Value, typename Serializer>
 QByteArray SerializeRichArray(
 		Context &context,
@@ -301,31 +454,31 @@ QByteArray RichTextTypeToString(Data::RichText::Type type) {
 }
 
 QByteArray SerializeRichText(
-		Context &context,
+		RichSerializeContext &context,
 		const Data::RichText &data);
 
 QByteArray SerializeRichTexts(
-		Context &context,
+		RichSerializeContext &context,
 		const std::vector<Data::RichText> &data);
 
 QByteArray SerializeRichTextChild(
-		Context &context,
+		RichSerializeContext &context,
 		const std::vector<Data::RichText> &children) {
 	Expects(children.size() == 1);
 	return SerializeRichText(context, children.front());
 }
 
 QByteArray SerializeRichText(
-		Context &context,
+		RichSerializeContext &context,
 		const Data::RichText &data) {
 	using Type = Data::RichText::Type;
 	auto values = std::vector<std::pair<QByteArray, QByteArray>>{
 		{ "type", SerializeString(RichTextTypeToString(data.type)) },
 	};
 	{
-		context.nesting.push_back(Context::kObject);
+		context.json.nesting.push_back(Context::kObject);
 		const auto guard = gsl::finally([&] {
-			context.nesting.pop_back();
+			context.json.nesting.pop_back();
 		});
 		switch (data.type) {
 		case Type::Empty:
@@ -433,10 +586,13 @@ QByteArray SerializeRichText(
 				SerializeRichBool(data.dayOfWeek));
 			break;
 		case Type::InlineImage:
-			values.emplace_back("unsupported", "true");
 			values.emplace_back(
 				"document_id",
 				SerializeRichNumberString(data.id));
+			AppendRichDocumentMetadata(
+				values,
+				FindRichDocument(context, data.id),
+				false);
 			values.emplace_back(
 				"width",
 				Data::NumberToString(data.width));
@@ -455,14 +611,14 @@ QByteArray SerializeRichText(
 			break;
 		}
 	}
-	return SerializeObject(context, values);
+	return SerializeObject(context.json, values);
 }
 
 QByteArray SerializeRichTexts(
-		Context &context,
+		RichSerializeContext &context,
 		const std::vector<Data::RichText> &data) {
 	return SerializeRichArray(
-		context,
+		context.json,
 		data,
 		[&](const Data::RichText &text) {
 			return SerializeRichText(context, text);
@@ -470,20 +626,20 @@ QByteArray SerializeRichTexts(
 }
 
 QByteArray SerializeRichCaption(
-		Context &context,
+		RichSerializeContext &context,
 		const Data::RichCaption &data) {
 	auto values = std::vector<std::pair<QByteArray, QByteArray>>();
 	{
-		context.nesting.push_back(Context::kObject);
+		context.json.nesting.push_back(Context::kObject);
 		const auto guard = gsl::finally([&] {
-			context.nesting.pop_back();
+			context.json.nesting.pop_back();
 		});
 		values.emplace_back("text", SerializeRichText(context, data.text));
 		values.emplace_back(
 			"credit",
 			SerializeRichText(context, data.credit));
 	}
-	return SerializeObject(context, values);
+	return SerializeObject(context.json, values);
 }
 
 QByteArray RichTaskStateToString(Data::RichTaskState state) {
@@ -570,15 +726,15 @@ QByteArray RichMapPointSourceToString(Data::RichMapPoint::Source source) {
 }
 
 QByteArray SerializeRichBlock(
-		Context &context,
+		RichSerializeContext &context,
 		const Data::RichBlock &data);
 
 QByteArray SerializeRichBlocks(
-		Context &context,
+		RichSerializeContext &context,
 		const std::vector<Data::RichBlock> &data);
 
 QByteArray SerializeRichListItem(
-		Context &context,
+		RichSerializeContext &context,
 		const Data::RichListItem &data) {
 	using Content = Data::RichListItemContent;
 	auto values = std::vector<std::pair<QByteArray, QByteArray>>{
@@ -592,9 +748,9 @@ QByteArray SerializeRichListItem(
 		},
 	};
 	{
-		context.nesting.push_back(Context::kObject);
+		context.json.nesting.push_back(Context::kObject);
 		const auto guard = gsl::finally([&] {
-			context.nesting.pop_back();
+			context.json.nesting.pop_back();
 		});
 		switch (data.content) {
 		case Content::Text:
@@ -624,14 +780,14 @@ QByteArray SerializeRichListItem(
 	if (data.type) {
 		values.emplace_back("item_type", SerializeString(*data.type));
 	}
-	return SerializeObject(context, values);
+	return SerializeObject(context.json, values);
 }
 
 QByteArray SerializeRichListItems(
-		Context &context,
+		RichSerializeContext &context,
 		const std::vector<Data::RichListItem> &data) {
 	return SerializeRichArray(
-		context,
+		context.json,
 		data,
 		[&](const Data::RichListItem &item) {
 			return SerializeRichListItem(context, item);
@@ -639,13 +795,13 @@ QByteArray SerializeRichListItems(
 }
 
 QByteArray SerializeRichTableCell(
-		Context &context,
+		RichSerializeContext &context,
 		const Data::RichTableCell &data) {
 	auto values = std::vector<std::pair<QByteArray, QByteArray>>();
 	if (data.text) {
-		context.nesting.push_back(Context::kObject);
+		context.json.nesting.push_back(Context::kObject);
 		const auto guard = gsl::finally([&] {
-			context.nesting.pop_back();
+			context.json.nesting.pop_back();
 		});
 		values.emplace_back(
 			"text",
@@ -665,14 +821,14 @@ QByteArray SerializeRichTableCell(
 		"vertical_align",
 		SerializeString(RichTableVerticalAlignmentToString(
 			data.verticalAlignment)));
-	return SerializeObject(context, values);
+	return SerializeObject(context.json, values);
 }
 
 QByteArray SerializeRichTableCells(
-		Context &context,
+		RichSerializeContext &context,
 		const std::vector<Data::RichTableCell> &data) {
 	return SerializeRichArray(
-		context,
+		context.json,
 		data,
 		[&](const Data::RichTableCell &cell) {
 			return SerializeRichTableCell(context, cell);
@@ -680,26 +836,26 @@ QByteArray SerializeRichTableCells(
 }
 
 QByteArray SerializeRichTableRow(
-		Context &context,
+		RichSerializeContext &context,
 		const Data::RichTableRow &data) {
 	auto cells = QByteArray();
 	{
-		context.nesting.push_back(Context::kObject);
+		context.json.nesting.push_back(Context::kObject);
 		const auto guard = gsl::finally([&] {
-			context.nesting.pop_back();
+			context.json.nesting.pop_back();
 		});
 		cells = SerializeRichTableCells(context, data.cells);
 	}
-	return SerializeObject(context, {
+	return SerializeObject(context.json, {
 		{ "cells", cells },
 	});
 }
 
 QByteArray SerializeRichTableRows(
-		Context &context,
+		RichSerializeContext &context,
 		const std::vector<Data::RichTableRow> &data) {
 	return SerializeRichArray(
-		context,
+		context.json,
 		data,
 		[&](const Data::RichTableRow &row) {
 			return SerializeRichTableRow(context, row);
@@ -707,7 +863,7 @@ QByteArray SerializeRichTableRows(
 }
 
 QByteArray SerializeRichRelatedArticle(
-		Context &context,
+		RichSerializeContext &context,
 		const Data::RichRelatedArticle &data) {
 	auto values = std::vector<std::pair<QByteArray, QByteArray>>{
 		{ "url", SerializeString(data.url) },
@@ -725,6 +881,14 @@ QByteArray SerializeRichRelatedArticle(
 		values.emplace_back(
 			"photo_id",
 			SerializeRichNumberString(*data.photoId));
+		AppendRichPhotoMetadata(
+			values,
+			FindRichPhoto(context, *data.photoId),
+			"photo",
+			"photo_skip_reason",
+			"photo_file_size",
+			"photo_width",
+			"photo_height");
 	}
 	if (data.author) {
 		values.emplace_back("author", SerializeString(*data.author));
@@ -737,14 +901,14 @@ QByteArray SerializeRichRelatedArticle(
 			"published_date_unixtime",
 			SerializeDateRaw(*data.publishedDate));
 	}
-	return SerializeObject(context, values);
+	return SerializeObject(context.json, values);
 }
 
 QByteArray SerializeRichRelatedArticles(
-		Context &context,
+		RichSerializeContext &context,
 		const std::vector<Data::RichRelatedArticle> &data) {
 	return SerializeRichArray(
-		context,
+		context.json,
 		data,
 		[&](const Data::RichRelatedArticle &article) {
 			return SerializeRichRelatedArticle(context, article);
@@ -752,7 +916,7 @@ QByteArray SerializeRichRelatedArticles(
 }
 
 QByteArray SerializeRichChannel(
-		Context &context,
+		RichSerializeContext &context,
 		const Data::RichChannel &data) {
 	using Source = Data::RichChannel::Source;
 	auto values = std::vector<std::pair<QByteArray, QByteArray>>{
@@ -779,11 +943,11 @@ QByteArray SerializeRichChannel(
 		values.emplace_back("megagroup", SerializeRichBool(data.megagroup));
 		values.emplace_back("monoforum", SerializeRichBool(data.monoforum));
 	}
-	return SerializeObject(context, values);
+	return SerializeObject(context.json, values);
 }
 
 QByteArray SerializeRichMapPoint(
-		Context &context,
+		RichSerializeContext &context,
 		const Data::RichMapPoint &data) {
 	using Source = Data::RichMapPoint::Source;
 	auto values = std::vector<std::pair<QByteArray, QByteArray>>{
@@ -816,7 +980,7 @@ QByteArray SerializeRichMapPoint(
 			"accuracy_radius",
 			Data::NumberToString(*data.accuracyRadius));
 	}
-	return SerializeObject(context, values);
+	return SerializeObject(context.json, values);
 }
 
 QByteArray RichBlockKindToString(Data::RichBlock::Kind kind) {
@@ -854,7 +1018,7 @@ QByteArray RichBlockKindToString(Data::RichBlock::Kind kind) {
 }
 
 QByteArray SerializeRichBlock(
-		Context &context,
+		RichSerializeContext &context,
 		const Data::RichBlock &data) {
 	using Kind = Data::RichBlock::Kind;
 	using ListKind = Data::RichListKind;
@@ -863,9 +1027,9 @@ QByteArray SerializeRichBlock(
 		{ "type", SerializeString(RichBlockKindToString(data.kind)) },
 	};
 	{
-		context.nesting.push_back(Context::kObject);
+		context.json.nesting.push_back(Context::kObject);
 		const auto guard = gsl::finally([&] {
-			context.nesting.pop_back();
+			context.json.nesting.pop_back();
 		});
 		switch (data.kind) {
 		case Kind::Unsupported:
@@ -959,10 +1123,17 @@ QByteArray SerializeRichBlock(
 				SerializeRichText(context, data.quoteCaption));
 			break;
 		case Kind::Photo:
-			values.emplace_back("unsupported", "true");
 			values.emplace_back(
 				"photo_id",
 				SerializeRichNumberString(data.photoId));
+			AppendRichPhotoMetadata(
+				values,
+				FindRichPhoto(context, data.photoId),
+				"photo",
+				"photo_skip_reason",
+				"photo_file_size",
+				"width",
+				"height");
 			values.emplace_back(
 				"spoiler",
 				SerializeRichBool(data.spoiler));
@@ -981,10 +1152,13 @@ QByteArray SerializeRichBlock(
 				SerializeRichCaption(context, data.caption));
 			break;
 		case Kind::Video:
-			values.emplace_back("unsupported", "true");
 			values.emplace_back(
 				"document_id",
 				SerializeRichNumberString(data.documentId));
+			AppendRichDocumentMetadata(
+				values,
+				FindRichDocument(context, data.documentId),
+				true);
 			values.emplace_back(
 				"autoplay",
 				SerializeRichBool(data.autoplay));
@@ -997,14 +1171,12 @@ QByteArray SerializeRichBlock(
 				SerializeRichCaption(context, data.caption));
 			break;
 		case Kind::Cover:
-			values.emplace_back("unsupported", "true");
 			Expects(data.blocks.size() == 1);
 			values.emplace_back(
 				"block",
 				SerializeRichBlock(context, data.blocks.front()));
 			break;
 		case Kind::Embed:
-			values.emplace_back("unsupported", "true");
 			if (data.optionalUrl) {
 				values.emplace_back(
 					"url",
@@ -1017,6 +1189,14 @@ QByteArray SerializeRichBlock(
 				values.emplace_back(
 					"poster_photo_id",
 					SerializeRichNumberString(*data.posterPhotoId));
+				AppendRichPhotoMetadata(
+					values,
+					FindRichPhoto(context, *data.posterPhotoId),
+					"poster_photo",
+					"poster_photo_skip_reason",
+					"poster_photo_file_size",
+					"poster_photo_width",
+					"poster_photo_height");
 			}
 			if (data.width) {
 				values.emplace_back(
@@ -1039,7 +1219,6 @@ QByteArray SerializeRichBlock(
 				SerializeRichCaption(context, data.caption));
 			break;
 		case Kind::EmbedPost:
-			values.emplace_back("unsupported", "true");
 			values.emplace_back("url", SerializeString(data.url));
 			values.emplace_back(
 				"webpage_id",
@@ -1047,6 +1226,14 @@ QByteArray SerializeRichBlock(
 			values.emplace_back(
 				"author_photo_id",
 				SerializeRichNumberString(data.authorPhotoId));
+			AppendRichPhotoMetadata(
+				values,
+				FindRichPhoto(context, data.authorPhotoId),
+				"author_photo",
+				"author_photo_skip_reason",
+				"author_photo_file_size",
+				"author_photo_width",
+				"author_photo_height");
 			values.emplace_back("author", SerializeString(data.author));
 			values.emplace_back("date", SerializeDate(data.date));
 			values.emplace_back(
@@ -1061,7 +1248,6 @@ QByteArray SerializeRichBlock(
 			break;
 		case Kind::Collage:
 		case Kind::Slideshow:
-			values.emplace_back("unsupported", "true");
 			values.emplace_back(
 				"items",
 				SerializeRichBlocks(context, data.blocks));
@@ -1070,16 +1256,18 @@ QByteArray SerializeRichBlock(
 				SerializeRichCaption(context, data.caption));
 			break;
 		case Kind::Channel:
-			values.emplace_back("unsupported", "true");
 			values.emplace_back(
 				"channel",
 				SerializeRichChannel(context, data.channel));
 			break;
 		case Kind::Audio:
-			values.emplace_back("unsupported", "true");
 			values.emplace_back(
 				"document_id",
 				SerializeRichNumberString(data.documentId));
+			AppendRichDocumentMetadata(
+				values,
+				FindRichDocument(context, data.documentId),
+				true);
 			values.emplace_back(
 				"caption",
 				SerializeRichCaption(context, data.caption));
@@ -1111,7 +1299,6 @@ QByteArray SerializeRichBlock(
 				SerializeRichBlocks(context, data.blocks));
 			break;
 		case Kind::RelatedArticles:
-			values.emplace_back("unsupported", "true");
 			values.emplace_back(
 				"title",
 				SerializeRichText(context, data.text));
@@ -1123,7 +1310,6 @@ QByteArray SerializeRichBlock(
 			break;
 		case Kind::Map:
 		case Kind::InputMap:
-			values.emplace_back("unsupported", "true");
 			values.emplace_back(
 				"geo",
 				SerializeRichMapPoint(context, data.mapPoint));
@@ -1146,14 +1332,14 @@ QByteArray SerializeRichBlock(
 			break;
 		}
 	}
-	return SerializeObject(context, values);
+	return SerializeObject(context.json, values);
 }
 
 QByteArray SerializeRichBlocks(
-		Context &context,
+		RichSerializeContext &context,
 		const std::vector<Data::RichBlock> &data) {
 	return SerializeRichArray(
-		context,
+		context.json,
 		data,
 		[&](const Data::RichBlock &block) {
 			return SerializeRichBlock(context, block);
@@ -1163,6 +1349,7 @@ QByteArray SerializeRichBlocks(
 QByteArray SerializeRichMessage(
 		Context &context,
 		const Data::RichMessage &data) {
+	auto richContext = RichSerializeContext{ context, data };
 	auto values = std::vector<std::pair<QByteArray, QByteArray>>{
 		{ "rtl", SerializeRichBool(data.rtl) },
 		{ "part", SerializeRichBool(data.part) },
@@ -1174,7 +1361,7 @@ QByteArray SerializeRichMessage(
 		});
 		values.emplace_back(
 			"blocks",
-			SerializeRichBlocks(context, data.blocks));
+			SerializeRichBlocks(richContext, data.blocks));
 	}
 	return SerializeObject(context, values);
 }

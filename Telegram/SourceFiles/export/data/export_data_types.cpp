@@ -343,6 +343,8 @@ std::vector<TextPart> ParseText(const MTPTextWithEntities &text) {
 	return ParseText(text.data().vtext(), text.data().ventities().v);
 }
 
+Photo ParsePhoto(const MTPPhoto &data, const QString &suggestedPath);
+
 namespace {
 
 RichText ParseRichText(const MTPRichText &text);
@@ -416,7 +418,6 @@ RichText ParseRichText(const MTPRichText &text) {
 		result.id = uint64(data.vdocument_id().v);
 		result.width = data.vw().v;
 		result.height = data.vh().v;
-		result.unsupported = true;
 		return result;
 	}, [](const MTPDtextAnchor &data) {
 		auto result = ParseRichTextWrapper(Type::Anchor, data.vtext());
@@ -721,6 +722,12 @@ RichMapPoint ParseRichMapPoint(const MTPInputGeoPoint &point) {
 	});
 }
 
+RichBlock ParseRichSupportedBlock(RichBlock::Kind kind) {
+	auto result = RichBlock();
+	result.kind = kind;
+	return result;
+}
+
 RichBlock ParseRichTextBlock(
 		RichBlock::Kind kind,
 		const MTPRichText &text) {
@@ -739,8 +746,7 @@ RichBlock ParseRichHeadingBlock(
 }
 
 RichBlock ParseRichUnsupportedBlock(RichBlock::Kind kind) {
-	auto result = RichBlock();
-	result.kind = kind;
+	auto result = ParseRichSupportedBlock(kind);
 	result.unsupported = true;
 	return result;
 }
@@ -801,7 +807,7 @@ RichBlock ParseRichBlock(const MTPPageBlock &block) {
 		result.pullquote = true;
 		return result;
 	}, [](const MTPDpageBlockPhoto &data) {
-		auto result = ParseRichUnsupportedBlock(Kind::Photo);
+		auto result = ParseRichSupportedBlock(Kind::Photo);
 		result.photoId = uint64(data.vphoto_id().v);
 		result.caption = ParseRichCaption(data.vcaption());
 		result.spoiler = data.is_spoiler();
@@ -813,7 +819,7 @@ RichBlock ParseRichBlock(const MTPPageBlock &block) {
 		}
 		return result;
 	}, [](const MTPDpageBlockVideo &data) {
-		auto result = ParseRichUnsupportedBlock(Kind::Video);
+		auto result = ParseRichSupportedBlock(Kind::Video);
 		result.documentId = uint64(data.vvideo_id().v);
 		result.caption = ParseRichCaption(data.vcaption());
 		result.autoplay = data.is_autoplay();
@@ -821,12 +827,12 @@ RichBlock ParseRichBlock(const MTPPageBlock &block) {
 		result.spoiler = data.is_spoiler();
 		return result;
 	}, [](const MTPDpageBlockCover &data) {
-		auto result = ParseRichUnsupportedBlock(Kind::Cover);
+		auto result = ParseRichSupportedBlock(Kind::Cover);
 		result.blocks.reserve(1);
 		result.blocks.push_back(ParseRichBlock(data.vcover()));
 		return result;
 	}, [](const MTPDpageBlockEmbed &data) {
-		auto result = ParseRichUnsupportedBlock(Kind::Embed);
+		auto result = ParseRichSupportedBlock(Kind::Embed);
 		result.fullWidth = data.is_full_width();
 		result.allowScrolling = data.is_allow_scrolling();
 		result.caption = ParseRichCaption(data.vcaption());
@@ -847,7 +853,7 @@ RichBlock ParseRichBlock(const MTPPageBlock &block) {
 		}
 		return result;
 	}, [](const MTPDpageBlockEmbedPost &data) {
-		auto result = ParseRichUnsupportedBlock(Kind::EmbedPost);
+		auto result = ParseRichSupportedBlock(Kind::EmbedPost);
 		result.url = ParseString(data.vurl());
 		result.webpageId = uint64(data.vwebpage_id().v);
 		result.authorPhotoId = uint64(data.vauthor_photo_id().v);
@@ -857,21 +863,21 @@ RichBlock ParseRichBlock(const MTPPageBlock &block) {
 		result.caption = ParseRichCaption(data.vcaption());
 		return result;
 	}, [](const MTPDpageBlockCollage &data) {
-		auto result = ParseRichUnsupportedBlock(Kind::Collage);
+		auto result = ParseRichSupportedBlock(Kind::Collage);
 		result.blocks = ParseRichBlocks(data.vitems().v);
 		result.caption = ParseRichCaption(data.vcaption());
 		return result;
 	}, [](const MTPDpageBlockSlideshow &data) {
-		auto result = ParseRichUnsupportedBlock(Kind::Slideshow);
+		auto result = ParseRichSupportedBlock(Kind::Slideshow);
 		result.blocks = ParseRichBlocks(data.vitems().v);
 		result.caption = ParseRichCaption(data.vcaption());
 		return result;
 	}, [](const MTPDpageBlockChannel &data) {
-		auto result = ParseRichUnsupportedBlock(Kind::Channel);
+		auto result = ParseRichSupportedBlock(Kind::Channel);
 		result.channel = ParseRichChannel(data.vchannel());
 		return result;
 	}, [](const MTPDpageBlockAudio &data) {
-		auto result = ParseRichUnsupportedBlock(Kind::Audio);
+		auto result = ParseRichSupportedBlock(Kind::Audio);
 		result.documentId = uint64(data.vaudio_id().v);
 		result.caption = ParseRichCaption(data.vcaption());
 		return result;
@@ -910,7 +916,7 @@ RichBlock ParseRichBlock(const MTPPageBlock &block) {
 		result.blocks = ParseRichBlocks(data.vblocks().v);
 		return result;
 	}, [](const MTPDpageBlockRelatedArticles &data) {
-		auto result = ParseRichUnsupportedBlock(Kind::RelatedArticles);
+		auto result = ParseRichSupportedBlock(Kind::RelatedArticles);
 		result.text = ParseRichText(data.vtitle());
 		const auto &articles = data.varticles().v;
 		result.relatedArticles.reserve(articles.size());
@@ -920,7 +926,7 @@ RichBlock ParseRichBlock(const MTPPageBlock &block) {
 		}
 		return result;
 	}, [](const MTPDpageBlockMap &data) {
-		auto result = ParseRichUnsupportedBlock(Kind::Map);
+		auto result = ParseRichSupportedBlock(Kind::Map);
 		result.mapPoint = ParseRichMapPoint(data.vgeo());
 		result.zoom = data.vzoom().v;
 		result.mapWidth = data.vw().v;
@@ -947,7 +953,7 @@ RichBlock ParseRichBlock(const MTPPageBlock &block) {
 	}, [](const MTPDpageBlockThinking &data) {
 		return ParseRichTextBlock(Kind::Thinking, data.vtext());
 	}, [](const MTPDinputPageBlockMap &data) {
-		auto result = ParseRichUnsupportedBlock(Kind::InputMap);
+		auto result = ParseRichSupportedBlock(Kind::InputMap);
 		result.mapPoint = ParseRichMapPoint(data.vgeo());
 		result.zoom = data.vzoom().v;
 		result.mapWidth = data.vw().v;
@@ -974,11 +980,34 @@ std::vector<RichBlock> ParseRichBlocks(
 	return result;
 }
 
-RichMessage ParseRichMessage(const MTPRichMessage &message) {
+RichMessage ParseRichMessage(
+		ParseMediaContext &context,
+		const MTPRichMessage &message,
+		const QString &mediaFolder,
+		TimeId messageDate) {
 	const auto &data = message.data();
 	auto result = RichMessage();
 	result.rtl = data.is_rtl();
 	result.part = data.is_part();
+	for (const auto &photo : data.vphotos().v) {
+		++context.photos;
+		auto parsed = ParsePhoto(
+			photo,
+			mediaFolder
+				+ "photos/"
+				+ PreparePhotoFileName(context.photos, messageDate));
+		const auto id = parsed.id;
+		result.photos.insert_or_assign(id, std::move(parsed));
+	}
+	for (const auto &document : data.vdocuments().v) {
+		auto parsed = ParseDocument(
+			context,
+			document,
+			mediaFolder,
+			messageDate);
+		const auto id = parsed.id;
+		result.documents.insert_or_assign(id, std::move(parsed));
+	}
 	result.blocks = ParseRichBlocks(data.vblocks().v);
 	return result;
 }
@@ -2716,7 +2745,11 @@ Message ParseMessage(
 				result.reactions = ParseReactions(*data.vreactions());
 			}
 		if (const auto richMessage = data.vrich_message()) {
-			result.richMessage = ParseRichMessage(*richMessage);
+			result.richMessage = ParseRichMessage(
+				context,
+				*richMessage,
+				mediaFolder,
+				result.date);
 		}
 	}, [&](const MTPDmessageService &data) {
 		result.action = ParseServiceAction(

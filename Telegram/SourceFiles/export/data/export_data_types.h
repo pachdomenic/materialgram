@@ -18,6 +18,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtCore/QString>
 #include <QtCore/QByteArray>
 
+#include <map>
 #include <vector>
 
 namespace Export {
@@ -325,12 +326,6 @@ struct RichBlock {
 	bool pullquote : 1 = false;
 };
 
-struct RichMessage {
-	std::vector<RichBlock> blocks;
-	bool rtl : 1 = false;
-	bool part : 1 = false;
-};
-
 struct UserpicsInfo {
 	int count = 0;
 };
@@ -439,6 +434,14 @@ struct Document {
 	bool isVideoFile = false;
 	bool isAudioFile = false;
 	bool spoilered = false;
+};
+
+struct RichMessage {
+	std::vector<RichBlock> blocks;
+	std::map<uint64, Photo> photos;
+	std::map<uint64, Document> documents;
+	bool rtl : 1 = false;
+	bool part : 1 = false;
 };
 
 struct SharedContact {
