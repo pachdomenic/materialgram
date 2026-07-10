@@ -1828,6 +1828,17 @@ private:
 			i != end(_originalMediaImages)) {
 			return i->second;
 		}
+		for (const auto &attachment : _attachments) {
+			if ((attachment.blockKind == RichPage::BlockKind::Photo)
+				&& mediaIdMatchesAttachment(photoId, attachment)) {
+				const auto i = _originalMediaImages.find(
+					attachment.localMediaId);
+				if (i != end(_originalMediaImages)) {
+					return i->second;
+				}
+				break;
+			}
+		}
 		const auto photo = _session->data().photo(PhotoId(photoId));
 		const auto media = photo->createMediaView();
 		const auto origin = composeDraftOrigin();
