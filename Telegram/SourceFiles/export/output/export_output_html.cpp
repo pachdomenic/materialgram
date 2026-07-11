@@ -498,6 +498,12 @@ constexpr auto kRichTargetMaxBytes = 4096;
 constexpr auto kRichAnchorDirectBytes = 72;
 constexpr auto kRichAnchorPrefixBytes = 48;
 constexpr auto kRichTableSpanMax = 1000;
+constexpr auto kRichHashtagMinLength = 2;
+constexpr auto kRichHashtagMaxLength = 64;
+constexpr auto kRichCommandMaxLength = 64;
+constexpr auto kRichCashtagMaxLength = 8;
+constexpr auto kRichUsernameMinLength = 5;
+constexpr auto kRichUsernameMaxLength = 32;
 
 class RichHtmlRenderer {
 public:
@@ -747,6 +753,94 @@ std::optional<QByteArray> SafeMentionHref(
 	return SafeHttpHref(internalLinksDomain.toUtf8() + username);
 }
 
+bool IsAsciiWord(
+		const QByteArray &value,
+		int minimumLength,
+		int maximumLength) {
+	if (value.size() < minimumLength || value.size() > maximumLength) {
+		return false;
+	}
+	for (const auto character : value) {
+		if ((character < 'a' || character > 'z')
+			&& (character < 'A' || character > 'Z')
+			&& (character < '0' || character > '9')
+			&& character != '_') {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool IsUnicodeHashtagWord(const QByteArray &value) {
+	const auto characters = QString::fromUtf8(value).toUcs4();
+	if (characters.size() < kRichHashtagMinLength
+		|| characters.size() > kRichHashtagMaxLength) {
+		return false;
+	}
+	auto allDecimalDigits = true;
+	for (const auto character : characters) {
+		const auto category = QChar::category(character);
+		const auto isMark = (category >= QChar::Mark_NonSpacing)
+			&& (category <= QChar::Mark_Enclosing);
+		if (!QChar::isLetterOrNumber(character)
+			&& category != QChar::Punctuation_Connector
+			&& !isMark) {
+			return false;
+		}
+		allDecimalDigits = allDecimalDigits && QChar::isDigit(character);
+	}
+	return !allDecimalDigits;
+}
+
+bool IsHashtagAction(const QByteArray &value) {
+	const auto separator = value.indexOf('@');
+	const auto hashtag = (separator < 0) ? value : value.left(separator);
+	if (!IsUnicodeHashtagWord(hashtag)) {
+		return false;
+	}
+	return (separator < 0)
+		|| (separator == value.lastIndexOf('@')
+			&& IsAsciiWord(
+				value.mid(separator + 1),
+				1,
+				kRichUsernameMaxLength));
+}
+
+bool IsBotCommandAction(const QByteArray &value) {
+	const auto separator = value.indexOf('@');
+	const auto command = (separator < 0) ? value : value.left(separator);
+	if (!IsAsciiWord(command, 1, kRichCommandMaxLength)) {
+		return false;
+	}
+	return (separator < 0)
+		|| (separator == value.lastIndexOf('@')
+			&& IsAsciiWord(
+				value.mid(separator + 1),
+				kRichUsernameMinLength,
+				kRichUsernameMaxLength));
+}
+
+bool IsCashtagAction(const QByteArray &value) {
+	if (value.isEmpty() || value.size() > kRichCashtagMaxLength) {
+		return false;
+	}
+	for (const auto character : value) {
+		if (character < 'A' || character > 'Z') {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool IsValidActionValue(const QByteArray &value, char prefix) {
+	switch (prefix) {
+	case '#': return IsHashtagAction(value);
+	case '/': return IsBotCommandAction(value);
+	case '$': return IsCashtagAction(value);
+	}
+	return false;
+}
+
 std::optional<QByteArray> SafeActionData(
 		const QByteArray &target,
 		char prefix) {
@@ -756,7 +850,7 @@ std::optional<QByteArray> SafeActionData(
 		return std::nullopt;
 	}
 	const auto result = target.mid(1);
-	return IsStrictTarget(result)
+	return (IsValidActionValue(result, prefix) && IsStrictTarget(result))
 		? std::make_optional(result)
 		: std::nullopt;
 }
