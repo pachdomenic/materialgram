@@ -7417,6 +7417,12 @@ void HistoryItem::setServiceMessageByAction(const MTPmessageAction &action) {
 					fromLinkText(),
 					tr::marked);
 			}
+		} else if (fromChatItself) {
+			result.text = (_history->peer->isBroadcast()
+				? tr::lng_action_community_removed_channel
+				: tr::lng_action_community_removed_chat)(
+					tr::now,
+					tr::marked);
 		} else {
 			result.links.push_back(fromLink());
 			result.text = tr::lng_action_community_removed(

@@ -2219,6 +2219,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_community_remove_done" = "Removed from the community.";
 "lng_community_remove_sure" = "Remove {group} from the community?";
 "lng_community_add_about" = "Make your group part of a community with multiple related chats.";
+"lng_community_add_about_channel" = "Make your channel part of a community with multiple related chats.";
 "lng_community_add_about_bot" = "Make your bot part of a community with multiple related chats.";
 "lng_community_create" = "Create Community";
 "lng_community_existing" = "Add to an existing community";
@@ -2229,6 +2230,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_community_create_name" = "Community Name";
 "lng_community_created" = "Community created.";
 "lng_community_create_hidden" = "Hidden group";
+"lng_community_create_hidden_channel" = "Hidden channel";
+"lng_community_create_hidden_bot" = "Hidden bot";
 "lng_community_visibility_title" = "Chat visibility";
 "lng_community_visibility_visible" = "Visible";
 "lng_community_visibility_visible_about" = "Anyone in the community will be able to see this chat.";
@@ -2237,6 +2240,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_community_visibility_note" = "You won't be able to change this later.";
 "lng_community_add_to" = "Add to Community";
 "lng_community_add_confirm" = "If this group is approved by a community admin, its members will be able to join or request to join other chats in the community.";
+"lng_community_add_confirm_channel" = "If this channel is approved by a community admin, its subscribers will be able to join or request to join other chats in the community.";
 "lng_community_add_confirm_bot" = "If this bot is approved by a community admin, community members will be able to see and use it.";
 "lng_community_add_confirm_add" = "Add";
 "lng_community_add_done" = "Group added to the community.";
@@ -2280,8 +2284,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_community_request_add" = "Add";
 "lng_community_request_decline" = "Decline";
 "lng_community_request_invite_only" = "This group is invite-only. Only its members can view it.";
+"lng_community_request_invite_only_channel" = "This channel is invite-only. Only its subscribers can view it.";
 "lng_community_request_invite_only_bot" = "This bot is invite-only. Only invited members can use it.";
 "lng_community_request_message_owner" = "Message Group Owner";
+"lng_community_request_message_owner_channel" = "Message Channel Owner";
 "lng_community_request_message_owner_bot" = "Message Bot Owner";
 "lng_community_requests_add_all" = "Add All";
 "lng_community_requests_decline_all" = "Decline All";
@@ -2311,13 +2317,15 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_community_hidden_status" = "Hidden";
 "lng_community_hidden_chat_title" = "Hidden Chat";
 "lng_community_hidden_not_accessible" = "You can't join or view this group until an admin invites you.";
+"lng_community_hidden_not_accessible_channel" = "You can't join or view this channel until an admin invites you.";
+"lng_community_hidden_not_accessible_bot" = "You can't use this bot until an admin invites you.";
 "lng_community_join_sure" = "Do you want to join {group}?";
 "lng_community_admin_title" = "You are a community admin";
 "lng_community_admin_about" = "You can now edit {community} info and use other admin tools.";
 "lng_community_admin_continue" = "Continue";
 "lng_community_admin_decline" = "No, thanks";
 "lng_community_admin_dismiss_title" = "Dismiss yourself as community admin";
-"lng_community_admin_dismiss_text" = "You'll lose access to community admin tools, but keep your group admin rights.";
+"lng_community_admin_dismiss_text" = "You'll lose access to community admin tools, but keep your admin rights in your own chats.";
 "lng_community_removed_list_about" = "Users removed from the community will be shown here.";
 "lng_community_chat_view_channel" = "View Channel";
 "lng_community_chat_view_group" = "View Group";
@@ -2787,6 +2795,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_action_community_added_unknown_chat" = "This chat was added to a community.";
 "lng_action_community_added_unknown_channel" = "This channel was added to a community.";
 "lng_action_community_removed" = "{from} removed this group from the community.";
+"lng_action_community_removed_chat" = "This chat was removed from the community.";
+"lng_action_community_removed_channel" = "This channel was removed from the community.";
 
 "lng_create_bot_title" = "Create Bot";
 "lng_create_bot_subtitle" = "{bot} would like to create and manage a chatbot on your behalf.";
