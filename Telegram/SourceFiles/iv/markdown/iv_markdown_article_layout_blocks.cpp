@@ -1585,10 +1585,14 @@ bool IsAnchorOnlyBlock(const PreparedBlock &block) {
 QString ListMarkerText(const PreparedBlock &block) {
 	if (block.listKind == ListKind::Ordered) {
 		if (!block.orderedMarkerText.isEmpty()) {
-			return block.orderedMarkerText;
+			return FormatPreparedOrderedRawMarkerText(
+				block.orderedMarkerText,
+				block.listDelimiter);
 		}
 		if (!block.articleOrderedMarkerText.isEmpty()) {
-			return block.articleOrderedMarkerText;
+			return FormatPreparedOrderedRawMarkerText(
+				block.articleOrderedMarkerText,
+				block.listDelimiter);
 		}
 		const auto delimiter = (block.listDelimiter == ListDelimiter::Parenthesis)
 			? u")"_q

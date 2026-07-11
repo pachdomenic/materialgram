@@ -339,18 +339,6 @@ bool AppendPreparedQuoteParagraph(
 	return FormatPreparedOrderedMarkerBody(value, type) + suffix;
 }
 
-[[nodiscard]] QString FormatPreparedOrderedRawMarkerText(
-		const QString &raw,
-		ListDelimiter delimiter) {
-	if (raw.isEmpty() || raw.endsWith('.') || raw.endsWith(')')) {
-		return raw;
-	}
-	const auto suffix = (delimiter == ListDelimiter::Parenthesis)
-		? u")"_q
-		: u"."_q;
-	return raw + suffix;
-}
-
 class NativeIvOrderedMarkerFormatter {
 public:
 	NativeIvOrderedMarkerFormatter(
@@ -2051,6 +2039,18 @@ void ClearPreparedEditSources(std::vector<PreparedBlock> *blocks) {
 }
 
 } // namespace
+
+QString FormatPreparedOrderedRawMarkerText(
+		const QString &raw,
+		ListDelimiter delimiter) {
+	if (raw.isEmpty() || raw.endsWith('.') || raw.endsWith(')')) {
+		return raw;
+	}
+	const auto suffix = (delimiter == ListDelimiter::Parenthesis)
+		? u")"_q
+		: u"."_q;
+	return raw + suffix;
+}
 
 bool PrepareNativeIvBlocks(
 		const Iv::RichPage &page,
