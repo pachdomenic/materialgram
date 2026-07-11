@@ -1129,7 +1129,7 @@ private:
 	bool _suggestAnimatedEmoji = true;
 	rpl::variable<bool> _cornerReply = true;
 	rpl::variable<bool> _cornerReaction = true;
-	rpl::variable<bool> _pullToNextChannel = false;
+	rpl::variable<bool> _pullToNextChannel = true;
 	rpl::variable<bool> _spellcheckerEnabled = true;
 	PlaybackSpeed _videoPlaybackSpeed;
 	rpl::variable<PlaybackSpeed> _voicePlaybackSpeed;

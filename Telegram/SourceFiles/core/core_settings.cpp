@@ -156,7 +156,6 @@ void LogPosition(const WindowPosition &position, const QString &name) {
 
 Settings::Settings()
 : _sendSubmitWay(Ui::InputSubmitSettings::Enter)
-, _pullToNextChannel(::Platform::IsMac())
 , _floatPlayerColumn(Window::Column::Second)
 , _floatPlayerCorner(RectPart::TopRight)
 , _dialogsWithChatWidthRatio(DefaultDialogsWidthRatio())
@@ -1653,7 +1652,7 @@ void Settings::resetOnLastLogout() {
 	_recordVideoMessages = false;
 	_videoQuality = {};
 	_chatFiltersHorizontal = false;
-	_pullToNextChannel = ::Platform::IsMac();
+	_pullToNextChannel = true;
 	_quickDialogAction = Dialogs::Ui::QuickDialogAction::Disabled;
 	_notificationsVolume = 100;
 
