@@ -520,11 +520,15 @@ void ContentWidget::replaceSwipeHandler(
 	Ui::Controls::SetupSwipeHandler(std::move(args));
 }
 
+void ContentWidget::setSwipeInterceptor(SwipeInterceptor interceptor) {
+	_swipeInterceptor = std::move(interceptor);
+}
+
 void ContentWidget::setupSwipeHandler(not_null<Ui::RpWidget*> widget) {
 	_swipeHandlerLifetime.destroy();
 
 	auto update = [=](Ui::Controls::SwipeContextData data) {
-		if (data.translation > 0) {
+		if (data.translation != 0) {
 			if (!_swipeBackData.callback) {
 				_swipeBackData = Ui::Controls::SetupSwipeBack(
 					this,
@@ -533,7 +537,8 @@ void ContentWidget::setupSwipeHandler(not_null<Ui::RpWidget*> widget) {
 							st::historyForwardChooseBg->c,
 							st::historyForwardChooseFg->c,
 						};
-					});
+					},
+					data.translation < 0);
 			}
 			_swipeBackData.callback(data);
 			return;
@@ -543,6 +548,22 @@ void ContentWidget::setupSwipeHandler(not_null<Ui::RpWidget*> widget) {
 	};
 
 	auto init = [=](Ui::Controls::SwipeHandlerInitData data) {
+		if (_swipeInterceptor) {
+			auto mapped = data;
+			mapped.cursorPosition = _innerWrap->entity()->mapFrom(
+				_innerWrap,
+				data.cursorPosition);
+			auto result = _swipeInterceptor(mapped);
+			if (result.callback) {
+				result.callback = crl::guard(
+					this,
+					[this, onstack = std::move(result.callback)] {
+						_swipeBackData = {};
+						onstack();
+					});
+				return result;
+			}
+		}
 		if (data.direction != Qt::RightToLeft) {
 			return Ui::Controls::SwipeHandlerFinishData();
 		}
