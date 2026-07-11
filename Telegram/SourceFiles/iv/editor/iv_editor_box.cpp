@@ -939,16 +939,6 @@ void Toolbar::fillBlockStyleMenu(not_null<Ui::PopupMenu*> menu) {
 	const auto starSize = premium
 		? 0
 		: st::ivEditorStyleMenuPremiumStarSize;
-	const auto withShortcut = [&](const QString &label, QKeySequence seq) {
-		if (!premium) {
-			return label;
-		}
-		const auto shortcut = seq.toString(QKeySequence::NativeText);
-		return shortcut.isEmpty()
-			? label
-			: (label + QChar('\t') + shortcut);
-	};
-
 	auto sub = std::make_unique<Ui::PopupMenu>(menu, st::popupMenuWithIcons);
 	fillHeadingMenu(not_null<Ui::PopupMenu*>(sub.get()));
 	menu->addAction(
@@ -967,7 +957,7 @@ void Toolbar::fillBlockStyleMenu(not_null<Ui::PopupMenu*> menu) {
 		(kind == Kind::Paragraph));
 	Menu::AddActiveColorAction(
 		menu,
-		withShortcut(
+		WithTabShortcut(
 			tr::lng_article_insert_blockquote(tr::now),
 			Ui::kBlockquoteSequence),
 		[=] { insertType(State::InsertBlockType::Blockquote); },
@@ -982,7 +972,7 @@ void Toolbar::fillBlockStyleMenu(not_null<Ui::PopupMenu*> menu) {
 		starSize);
 	Menu::AddActiveColorAction(
 		menu,
-		withShortcut(
+		WithTabShortcut(
 			tr::lng_article_insert_code(tr::now),
 			Ui::kMonospaceSequence),
 		[=] { insertType(State::InsertBlockType::Code); },
