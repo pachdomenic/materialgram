@@ -55,25 +55,6 @@ namespace {
 		|| (type == Type::Poll);
 }
 
-[[nodiscard]] Window::SeparateId SeparateId(
-		not_null<PeerData*> peer,
-		MsgId topicRootId,
-		Storage::SharedMediaType type) {
-	if (peer->isSelf() || !SeparateSupported(type)) {
-		return { nullptr };
-	}
-	const auto topic = topicRootId
-		? peer->forumTopicFor(topicRootId)
-		: nullptr;
-	if (topicRootId && !topic) {
-		return { nullptr };
-	}
-	const auto thread = topic
-			? (Data::Thread*)topic
-		: peer->owner().history(peer);
-	return { thread, type };
-}
-
 void AddContextMenuToButton(
 		not_null<Ui::AbstractButton*> button,
 		Fn<void()> openInWindow) {
@@ -121,6 +102,25 @@ Fn<QString(int)> MediaText(Type type) {
 	return [phrase = MediaTextPhrase(type)](int count) {
 		return phrase(tr::now, lt_count, count);
 	};
+}
+
+Window::SeparateId SeparateId(
+		not_null<PeerData*> peer,
+		MsgId topicRootId,
+		Storage::SharedMediaType type) {
+	if (peer->isSelf() || !SeparateSupported(type)) {
+		return { nullptr };
+	}
+	const auto topic = topicRootId
+		? peer->forumTopicFor(topicRootId)
+		: nullptr;
+	if (topicRootId && !topic) {
+		return { nullptr };
+	}
+	const auto thread = topic
+			? (Data::Thread*)topic
+		: peer->owner().history(peer);
+	return { thread, type };
 }
 
 not_null<Ui::SlideWrap<Ui::SettingsButton>*> AddCountedButton(

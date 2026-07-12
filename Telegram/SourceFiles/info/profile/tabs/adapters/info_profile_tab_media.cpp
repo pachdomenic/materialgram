@@ -261,6 +261,7 @@ MediaTabDescriptor MakeMediaTabDescriptor(
 		.id = MediaTabId(type),
 		.title = MediaTabTitle(type) | rpl::map(Ui::Text::WithEntities),
 		.shown = std::move(shown),
+		.sharedMediaType = type,
 		.factory = [type](MediaTabContext context) {
 			return std::make_unique<MediaTabAdapter>(
 				std::move(context),

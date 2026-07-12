@@ -186,6 +186,7 @@ MediaTabDescriptor MakePollsTabDescriptor(rpl::producer<bool> shown) {
 		.id = u"media:polls"_q,
 		.title = tr::lng_media_type_polls(tr::marked),
 		.shown = std::move(shown),
+		.sharedMediaType = Storage::SharedMediaType::Poll,
 		.factory = [](MediaTabContext context) {
 			return std::make_unique<PollsTabAdapter>(std::move(context));
 		},

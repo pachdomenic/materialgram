@@ -9,11 +9,16 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "info/profile/tabs/info_profile_tabs_strip.h"
 #include "apiwrap.h"
+#include "base/call_delayed.h"
 #include "base/options.h"
 #include "core/ui_integration.h"
 #include "data/data_changes.h"
 #include "data/data_channel.h"
+#include "data/data_forum_topic.h"
 #include "data/data_peer.h"
+#include "data/data_saved_sublist.h"
+#include "info/info_controller.h"
+#include "info/media/info_media_buttons.h"
 #include "lang/lang_keys.h"
 #include "main/main_session.h"
 #include "ui/widgets/menu/menu_add_action_callback.h"
@@ -23,6 +28,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/effects/slide_animation.h"
 #include "ui/painter.h"
 #include "ui/ui_utility.h"
+#include "window/window_session_controller.h"
 #include "styles/style_basic.h"
 #include "styles/style_info.h"
 #include "styles/style_menu_icons.h"
@@ -243,6 +249,24 @@ bool TabsHost::canSetMainTab(Data::ProfileTab tab) const {
 			|| (tab == Data::ProfileTab::Gifts));
 }
 
+Fn<void()> TabsHost::openInWindowFor(const MediaTabDescriptor &tab) const {
+	if (!tab.sharedMediaType) {
+		return nullptr;
+	}
+	const auto peer = _context.sublist
+		? _context.sublist->sublistPeer()
+		: _context.peer;
+	const auto separateId = Media::SeparateId(
+		peer,
+		_context.topic ? _context.topic->rootId() : MsgId(),
+		*tab.sharedMediaType);
+	if (!separateId) {
+		return nullptr;
+	}
+	const auto window = _context.controller->parentController();
+	return [=] { window->showInNewWindow(separateId); };
+}
+
 void TabsHost::showTabMenu(const QString &id) {
 	const auto strip = _stripWeak.get();
 	const auto i = ranges::find(_tabs, id, &MediaTabDescriptor::id);
@@ -251,16 +275,32 @@ void TabsHost::showTabMenu(const QString &id) {
 	}
 	const auto tab = i->profileTab;
 	const auto index = int(i - begin(_tabs));
-	if (!canSetMainTab(tab) || index == firstVisibleIndex()) {
+	const auto setAsMain = canSetMainTab(tab)
+		&& (index != firstVisibleIndex());
+	const auto openInWindow = openInWindowFor(*i);
+	if (!setAsMain && !openInWindow) {
 		return;
 	}
 	_menu = base::make_unique_q<Ui::PopupMenu>(
 		strip,
 		st::popupMenuWithIcons);
-	Ui::Menu::CreateAddActionCallback(_menu)(
-		tr::lng_profile_tab_set_as_main(tr::now),
-		crl::guard(this, [=] { setMainTab(tab); }),
-		&st::menuIconReorder);
+	const auto addAction = Ui::Menu::CreateAddActionCallback(_menu);
+	if (setAsMain) {
+		addAction(
+			tr::lng_profile_tab_set_as_main(tr::now),
+			crl::guard(this, [=] { setMainTab(tab); }),
+			&st::menuIconReorder);
+	}
+	if (openInWindow) {
+		addAction(
+			tr::lng_context_new_window(tr::now),
+			crl::guard(this, [=] {
+				base::call_delayed(
+					st::popupMenuWithIcons.showDuration,
+					crl::guard(this, openInWindow));
+			}),
+			&st::menuIconNewWindow);
+	}
 	_menu->popup(QCursor::pos());
 }
 

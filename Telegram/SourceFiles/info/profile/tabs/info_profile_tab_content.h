@@ -8,6 +8,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #pragma once
 
 #include "info/profile/tabs/info_profile_tab_top_bar_bindings.h"
+#include "storage/storage_shared_media.h"
 
 class PeerData;
 
@@ -64,6 +65,7 @@ struct MediaTabDescriptor {
 	QString id;
 	rpl::producer<TextWithEntities> title;
 	rpl::producer<bool> shown;
+	std::optional<Storage::SharedMediaType> sharedMediaType;
 	Fn<std::unique_ptr<MediaTabContent>(MediaTabContext)> factory;
 	Data::ProfileTab profileTab = {};
 };

@@ -68,6 +68,8 @@ private:
 	[[nodiscard]] int displayPosition(int index) const;
 	[[nodiscard]] int firstVisibleIndex() const;
 	[[nodiscard]] bool canSetMainTab(Data::ProfileTab tab) const;
+	[[nodiscard]] Fn<void()> openInWindowFor(
+		const MediaTabDescriptor &tab) const;
 	void showTabMenu(const QString &id);
 	void setMainTab(Data::ProfileTab tab);
 	void syncStripTitles();
