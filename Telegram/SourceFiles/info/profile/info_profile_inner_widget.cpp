@@ -265,15 +265,42 @@ object_ptr<Ui::RpWidget> InnerWidget::setupContent(
 			? _sublist->sublistPeer()->id
 			: PeerId();
 		auto tabs = std::vector<MediaTabDescriptor>();
+		const auto countValue = [&](Storage::SharedMediaType type) {
+			return SharedMediaCountValue(
+				tabsPeer,
+				topicRootId,
+				monoforumPeerId,
+				_migrated,
+				type);
+		};
 		const auto addTab = [&](Storage::SharedMediaType type) {
 			tabs.push_back(MakeMediaTabDescriptor(
 				type,
-				SharedMediaCountValue(
-					tabsPeer,
-					topicRootId,
-					monoforumPeerId,
-					_migrated,
-					type) | rpl::map(_1 > 0)));
+				countValue(type) | rpl::map(_1 > 0)));
+		};
+		const auto addMediaTabs = [&] {
+			using Type = Storage::SharedMediaType;
+			tabs.push_back(MakeMediaTabDescriptor(
+				Type::PhotoVideo,
+				rpl::combine(
+					MediaTabsExpandedValue(),
+					countValue(Type::Photo),
+					countValue(Type::Video)
+				) | rpl::map([](bool expanded, int photos, int videos) {
+					return !expanded && (photos + videos > 0);
+				})));
+			const auto addSplit = [&](Type type) {
+				tabs.push_back(MakeMediaTabDescriptor(
+					type,
+					rpl::combine(
+						MediaTabsExpandedValue(),
+						countValue(type)
+					) | rpl::map([](bool expanded, int count) {
+						return expanded && (count > 0);
+					})));
+			};
+			addSplit(Type::Photo);
+			addSplit(Type::Video);
 		};
 		if (!_topic) {
 			tabs.push_back(MakeStoriesTabDescriptor(tabsPeer));
@@ -289,8 +316,7 @@ object_ptr<Ui::RpWidget> InnerWidget::setupContent(
 				_peer,
 				MembersInTabValue(_peer)));
 		}
-		addTab(Storage::SharedMediaType::Photo);
-		addTab(Storage::SharedMediaType::Video);
+		addMediaTabs();
 		if (!_topic) {
 			tabs.push_back(MakeSavedTabDescriptor(tabsPeer));
 		}

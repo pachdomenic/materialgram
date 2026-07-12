@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "info/profile/tabs/adapters/info_profile_tab_media.h"
 
+#include "base/options.h"
 #include "data/data_forum_topic.h"
 #include "data/data_peer.h"
 #include "data/data_saved_sublist.h"
@@ -36,6 +37,19 @@ namespace {
 
 using SharedMediaType = Storage::SharedMediaType;
 
+base::options::toggle MediaTabsExpandedOption({
+	.id = kOptionProfileMediaTabsExpanded,
+	.name = "Split profile media tab into photos and videos.",
+	.description = "Show separate photo and video tabs in profiles instead "
+		"of a single combined media tab.",
+});
+
+[[nodiscard]] bool MediaTabGrid(SharedMediaType type) {
+	return (type == SharedMediaType::Photo)
+		|| (type == SharedMediaType::Video)
+		|| (type == SharedMediaType::PhotoVideo);
+}
+
 [[nodiscard]] bool MediaTabSearchable(SharedMediaType type) {
 	return (type == SharedMediaType::File)
 		|| (type == SharedMediaType::Link)
@@ -44,6 +58,7 @@ using SharedMediaType = Storage::SharedMediaType;
 
 [[nodiscard]] rpl::producer<QString> MediaTabTitle(SharedMediaType type) {
 	switch (type) {
+	case SharedMediaType::PhotoVideo: return tr::lng_media_type_media();
 	case SharedMediaType::Photo: return tr::lng_media_type_photos();
 	case SharedMediaType::Video: return tr::lng_media_type_videos();
 	case SharedMediaType::File: return tr::lng_media_type_files();
@@ -62,6 +77,7 @@ using SharedMediaType = Storage::SharedMediaType;
 
 [[nodiscard]] Data::ProfileTab MediaProfileTab(SharedMediaType type) {
 	switch (type) {
+	case SharedMediaType::PhotoVideo:
 	case SharedMediaType::Photo: return Data::ProfileTab::Media;
 	case SharedMediaType::File: return Data::ProfileTab::Files;
 	case SharedMediaType::MusicFile: return Data::ProfileTab::Music;
@@ -150,8 +166,7 @@ public:
 					? phrase(tr::now, lt_count, count)
 					: QString() };
 			}),
-			.fillMenu = ((_type == SharedMediaType::Photo
-				|| _type == SharedMediaType::Video)
+			.fillMenu = (MediaTabGrid(_type)
 				? Fn<void(const Ui::Menu::MenuCallback&)>(crl::guard(
 					base::make_weak(_list),
 					[this](const Ui::Menu::MenuCallback &addAction) {
@@ -204,8 +219,7 @@ private:
 	}
 
 	void fillMenu(const Ui::Menu::MenuCallback &addAction) {
-		if (_type != SharedMediaType::Photo
-			&& _type != SharedMediaType::Video) {
+		if (!MediaTabGrid(_type)) {
 			return;
 		}
 		const auto list = _list;
@@ -226,8 +240,8 @@ private:
 			controller->showCalendar({
 				.chat = Dialogs::Key(peer->owner().history(peer)),
 				.date = QDate::currentDate(),
-				.mediaPhoto = (type == SharedMediaType::Photo),
-				.mediaVideo = (type == SharedMediaType::Video),
+				.mediaPhoto = (type != SharedMediaType::Video),
+				.mediaVideo = (type != SharedMediaType::Photo),
 				.customJump = crl::guard(
 					base::make_weak(list),
 					[=](FullMsgId id, Fn<void()> close) {
@@ -253,6 +267,24 @@ private:
 };
 
 } // namespace
+
+const char kOptionProfileMediaTabsExpanded[] = "profile-media-tabs-expanded";
+
+bool MediaTabsExpanded() {
+	return MediaTabsExpandedOption.value();
+}
+
+rpl::producer<bool> MediaTabsExpandedValue() {
+	return rpl::single(rpl::empty) | rpl::then(
+		MediaTabsExpandedOption.changes()
+	) | rpl::map([] {
+		return MediaTabsExpandedOption.value();
+	});
+}
+
+void SetMediaTabsExpanded(bool expanded) {
+	MediaTabsExpandedOption.set(expanded);
+}
 
 MediaTabDescriptor MakeMediaTabDescriptor(
 		SharedMediaType type,
