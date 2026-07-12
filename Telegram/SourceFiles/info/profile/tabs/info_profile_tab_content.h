@@ -62,7 +62,7 @@ public:
 
 struct MediaTabDescriptor {
 	QString id;
-	rpl::producer<QString> title;
+	rpl::producer<TextWithEntities> title;
 	rpl::producer<bool> shown;
 	Fn<std::unique_ptr<MediaTabContent>(MediaTabContext)> factory;
 	Data::ProfileTab profileTab = {};

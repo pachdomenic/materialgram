@@ -148,8 +148,8 @@ MediaTabDescriptor MakeStoriesTabDescriptor(not_null<PeerData*> peer) {
 	return {
 		.id = u"stories"_q,
 		.title = (peer->isChannel()
-			? tr::lng_media_type_posts()
-			: tr::lng_media_type_stories()),
+			? tr::lng_media_type_posts(tr::marked)
+			: tr::lng_media_type_stories(tr::marked)),
 		.shown = StoriesCountValue(peer) | rpl::map(_1 > 0),
 		.factory = [](MediaTabContext context) {
 			return std::make_unique<StoriesTabAdapter>(std::move(context));

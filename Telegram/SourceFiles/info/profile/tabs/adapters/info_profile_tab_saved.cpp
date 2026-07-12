@@ -184,7 +184,7 @@ MediaTabDescriptor MakeSavedTabDescriptor(not_null<PeerData*> peer) {
 	using namespace rpl::mappers;
 	return {
 		.id = u"saved"_q,
-		.title = tr::lng_media_type_saved(),
+		.title = tr::lng_media_type_saved(tr::marked),
 		.shown = SavedSublistCountValue(peer) | rpl::map(_1 > 0),
 		.factory = [](MediaTabContext context) {
 			return std::make_unique<SavedTabAdapter>(std::move(context));

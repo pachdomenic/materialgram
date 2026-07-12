@@ -115,7 +115,7 @@ MediaTabDescriptor MakeMembersTabDescriptor(
 		rpl::producer<bool> shown) {
 	return {
 		.id = u"members"_q,
-		.title = tr::lng_profile_participants_section(),
+		.title = tr::lng_profile_participants_section(tr::marked),
 		.shown = std::move(shown),
 		.factory = [](MediaTabContext context) {
 			return std::make_unique<MembersTabAdapter>(std::move(context));

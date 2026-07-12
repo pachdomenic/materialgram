@@ -60,6 +60,10 @@ TabsStrip::TabsStrip(QWidget *parent, const style::ProfileTabsStrip &st)
 	setMouseTracking(true);
 }
 
+void TabsStrip::setTextContext(Ui::Text::MarkedContext context) {
+	_context = std::move(context);
+}
+
 void TabsStrip::setTabs(std::vector<StripTab> tabs) {
 	const auto activeId = (_active >= 0 && _active < int(_buttons.size()))
 		? _buttons[_active].tab.id
@@ -77,7 +81,11 @@ void TabsStrip::setTabs(std::vector<StripTab> tabs) {
 		Assert(!tab.id.isEmpty());
 
 		auto button = Button();
-		button.text.setText(_st.style, tab.text);
+		button.text.setMarkedText(
+			_st.style,
+			tab.text,
+			kMarkupTextOptions,
+			_context);
 		const auto width = _st.tabPadding.left()
 			+ button.text.maxWidth()
 			+ _st.tabPadding.right();
@@ -451,6 +459,7 @@ void TabsStrip::paintEvent(QPaintEvent *e) {
 				+ button.geometry.topLeft()
 				+ QPoint(_st.tabPadding.left(), textTop),
 			.availableWidth = button.text.maxWidth(),
+			.now = crl::now(),
 		});
 	}
 

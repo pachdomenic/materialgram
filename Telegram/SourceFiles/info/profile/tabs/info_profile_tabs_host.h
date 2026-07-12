@@ -85,7 +85,7 @@ private:
 
 	const MediaTabContext _context;
 	std::vector<MediaTabDescriptor> _tabs;
-	std::vector<QString> _stripTitles;
+	std::vector<TextWithEntities> _stripTitles;
 	std::vector<bool> _tabsShown;
 	std::vector<int> _order;
 	int _mainTabIndex = -1;

@@ -20,6 +20,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "info/profile/tabs/adapters/info_profile_tab_sub_controller.h"
 #include "info/profile/tabs/info_profile_tab_skeleton.h"
 #include "lang/lang_keys.h"
+#include "ui/text/text_utilities.h"
 #include "ui/effects/animations.h"
 #include "ui/painter.h"
 #include "ui/rp_widget.h"
@@ -258,7 +259,7 @@ MediaTabDescriptor MakeMediaTabDescriptor(
 		rpl::producer<bool> shown) {
 	return {
 		.id = MediaTabId(type),
-		.title = MediaTabTitle(type),
+		.title = MediaTabTitle(type) | rpl::map(Ui::Text::WithEntities),
 		.shown = std::move(shown),
 		.factory = [type](MediaTabContext context) {
 			return std::make_unique<MediaTabAdapter>(

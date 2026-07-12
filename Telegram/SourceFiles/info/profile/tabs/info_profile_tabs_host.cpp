@@ -10,6 +10,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "info/profile/tabs/info_profile_tabs_strip.h"
 #include "apiwrap.h"
 #include "base/options.h"
+#include "core/ui_integration.h"
 #include "data/data_changes.h"
 #include "data/data_channel.h"
 #include "data/data_peer.h"
@@ -51,12 +52,17 @@ TabsHost::TabsHost(not_null<QWidget*> parent, Descriptor descriptor)
 , _strip(Ui::CreateChild<TabsStrip>(this, st::infoProfileTabsStrip))
 , _stripWeak(_strip)
 , _body(Ui::CreateChild<Ui::RpWidget>(this)) {
+	_strip->setTextContext(Core::TextContext({
+		.session = &_context.peer->session(),
+		.repaint = [strip = _strip] { strip->update(); },
+		.customEmojiLoopLimit = 1,
+	}));
 	_strip->show();
 	_body->show();
 	if (_tabs.empty()) {
 		return;
 	}
-	_stripTitles.assign(_tabs.size(), QString());
+	_stripTitles.assign(_tabs.size(), TextWithEntities());
 	_tabsShown.assign(_tabs.size(), false);
 	refreshOrder();
 	wireStripTitles();
@@ -146,7 +152,7 @@ void TabsHost::wireStripTitles() {
 	for (auto i = 0; i != int(_tabs.size()); ++i) {
 		rpl::duplicate(
 			_tabs[i].title
-		) | rpl::on_next([this, i](QString text) {
+		) | rpl::on_next([this, i](TextWithEntities text) {
 			if (_stripTitles[i] != text) {
 				_stripTitles[i] = std::move(text);
 				syncStripTitles();

@@ -24,13 +24,14 @@ namespace Info::Profile {
 
 struct StripTab {
 	QString id;
-	QString text;
+	TextWithEntities text;
 };
 
 class TabsStrip final : public Ui::RpWidget {
 public:
 	TabsStrip(QWidget *parent, const style::ProfileTabsStrip &st);
 
+	void setTextContext(Ui::Text::MarkedContext context);
 	void setTabs(std::vector<StripTab> tabs);
 	void setActiveTab(const QString &id);
 	void trackVerticalScroll(rpl::producer<> scrolls);
@@ -72,6 +73,7 @@ private:
 	[[nodiscard]] int scrollValue() const;
 
 	const style::ProfileTabsStrip &_st;
+	Ui::Text::MarkedContext _context;
 	Ui::BoxShadow _shadow;
 	std::vector<Button> _buttons;
 	rpl::event_stream<QString> _activated;
