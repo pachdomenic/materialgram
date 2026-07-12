@@ -72,6 +72,11 @@ private:
 		const MediaTabDescriptor &tab) const;
 	void showTabMenu(const QString &id);
 	void setMainTab(Data::ProfileTab tab);
+	[[nodiscard]] QString mediaTabShownId(Storage::SharedMediaType type) const;
+	[[nodiscard]] auto activeMediaType() const
+		-> std::optional<Storage::SharedMediaType>;
+	[[nodiscard]] QString mediaSplitCounterpart() const;
+	[[nodiscard]] bool mediaSplitSwitching() const;
 	void syncStripTitles();
 	void ensureActiveVisible();
 	void pushViewportToActive();

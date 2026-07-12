@@ -8,6 +8,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "info/profile/tabs/info_profile_tabs_host.h"
 
 #include "info/profile/tabs/info_profile_tabs_strip.h"
+#include "info/profile/tabs/adapters/info_profile_tab_media.h"
 #include "apiwrap.h"
 #include "base/call_delayed.h"
 #include "base/options.h"
@@ -174,6 +175,7 @@ void TabsHost::wireTabsVisibility() {
 		) | rpl::on_next([this, i](bool shown) {
 			if (_tabsShown[i] != shown) {
 				_tabsShown[i] = shown;
+				refreshOrder();
 				syncStripTitles();
 				if (shown
 					&& !_pendingRestoreId.isEmpty()
@@ -202,12 +204,22 @@ void TabsHost::wireMainTab() {
 
 bool TabsHost::refreshOrder() {
 	const auto main = _context.peer->mainProfileTab();
-	const auto i = (main == Data::ProfileTab::None)
-		? end(_tabs)
-		: ranges::find(_tabs, main, &MediaTabDescriptor::profileTab);
-	const auto mainTabIndex = (i != end(_tabs))
-		? int(i - begin(_tabs))
-		: -1;
+	const auto mainTabIndex = [&] {
+		if (main == Data::ProfileTab::None) {
+			return -1;
+		}
+		auto fallback = -1;
+		for (auto i = 0; i != int(_tabs.size()); ++i) {
+			if (_tabs[i].profileTab != main) {
+				continue;
+			} else if (_tabsShown[i]) {
+				return i;
+			} else if (fallback < 0) {
+				fallback = i;
+			}
+		}
+		return fallback;
+	}();
 	if (!_order.empty() && _mainTabIndex == mainTabIndex) {
 		return false;
 	}
@@ -268,6 +280,8 @@ Fn<void()> TabsHost::openInWindowFor(const MediaTabDescriptor &tab) const {
 }
 
 void TabsHost::showTabMenu(const QString &id) {
+	using Type = Storage::SharedMediaType;
+
 	const auto strip = _stripWeak.get();
 	const auto i = ranges::find(_tabs, id, &MediaTabDescriptor::id);
 	if (!strip || i == end(_tabs)) {
@@ -275,16 +289,28 @@ void TabsHost::showTabMenu(const QString &id) {
 	}
 	const auto tab = i->profileTab;
 	const auto index = int(i - begin(_tabs));
+	const auto mediaType = i->sharedMediaType;
+	const auto expand = (mediaType == Type::PhotoVideo);
+	const auto collapse = (mediaType == Type::Photo)
+		|| (mediaType == Type::Video);
 	const auto setAsMain = canSetMainTab(tab)
 		&& (index != firstVisibleIndex());
 	const auto openInWindow = openInWindowFor(*i);
-	if (!setAsMain && !openInWindow) {
+	if (!expand && !collapse && !setAsMain && !openInWindow) {
 		return;
 	}
 	_menu = base::make_unique_q<Ui::PopupMenu>(
 		strip,
 		st::popupMenuWithIcons);
 	const auto addAction = Ui::Menu::CreateAddActionCallback(_menu);
+	if (expand || collapse) {
+		addAction(
+			(expand
+				? tr::lng_context_archive_expand(tr::now)
+				: tr::lng_context_archive_collapse(tr::now)),
+			[=] { SetMediaTabsExpanded(expand); },
+			(expand ? &st::menuIconExpand : &st::menuIconCollapse));
+	}
 	if (setAsMain) {
 		addAction(
 			tr::lng_profile_tab_set_as_main(tr::now),
@@ -302,6 +328,52 @@ void TabsHost::showTabMenu(const QString &id) {
 			&st::menuIconNewWindow);
 	}
 	_menu->popup(QCursor::pos());
+}
+
+QString TabsHost::mediaTabShownId(Storage::SharedMediaType type) const {
+	const auto i = ranges::find(
+		_tabs,
+		std::optional<Storage::SharedMediaType>(type),
+		&MediaTabDescriptor::sharedMediaType);
+	return ((i != end(_tabs)) && _tabsShown[i - begin(_tabs)])
+		? i->id
+		: QString();
+}
+
+std::optional<Storage::SharedMediaType> TabsHost::activeMediaType() const {
+	const auto i = ranges::find(_tabs, _activeId, &MediaTabDescriptor::id);
+	return (i != end(_tabs))
+		? i->sharedMediaType
+		: std::nullopt;
+}
+
+QString TabsHost::mediaSplitCounterpart() const {
+	using Type = Storage::SharedMediaType;
+
+	const auto active = activeMediaType();
+	if (!active) {
+		return QString();
+	} else if (*active == Type::PhotoVideo) {
+		const auto photos = mediaTabShownId(Type::Photo);
+		return photos.isEmpty() ? mediaTabShownId(Type::Video) : photos;
+	} else if (*active == Type::Photo || *active == Type::Video) {
+		return mediaTabShownId(Type::PhotoVideo);
+	}
+	return QString();
+}
+
+bool TabsHost::mediaSplitSwitching() const {
+	using Type = Storage::SharedMediaType;
+
+	const auto active = activeMediaType();
+	if (!active) {
+		return false;
+	} else if (*active == Type::PhotoVideo) {
+		return MediaTabsExpanded();
+	} else if (*active == Type::Photo || *active == Type::Video) {
+		return !MediaTabsExpanded();
+	}
+	return false;
 }
 
 void TabsHost::setMainTab(Data::ProfileTab tab) {
@@ -356,6 +428,15 @@ void TabsHost::ensureActiveVisible() {
 	if (activeVisible
 		&& (_userChosenTab || activeIndex == firstVisible)) {
 		return;
+	}
+	if (!activeVisible && (activeIndex >= 0)) {
+		const auto counterpart = mediaSplitCounterpart();
+		if (!counterpart.isEmpty()) {
+			activateTab(counterpart);
+			return;
+		} else if (mediaSplitSwitching()) {
+			return;
+		}
 	}
 	if (firstVisible >= 0) {
 		if (activeIndex != firstVisible) {
