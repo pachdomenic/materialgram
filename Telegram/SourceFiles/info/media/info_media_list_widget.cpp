@@ -43,6 +43,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "media/stories/media_stories_stealth.h"
 #include "window/window_session_controller.h"
 #include "window/window_peer_menu.h"
+#include "lang/lang_numbers_animation.h"
 #include "ui/widgets/menu/menu_add_action_callback.h"
 #include "ui/widgets/menu/menu_add_action_callback_factory.h"
 #include "ui/widgets/popup_menu.h"
@@ -472,6 +473,16 @@ auto ListWidget::collectSelectedItems() const -> SelectedItems {
 		return convert(item.first, item.second);
 	};
 	auto items = SelectedItems(_provider->type());
+	if (_provider->type() == Type::PhotoVideo
+		&& !_controller->storiesPeer()) {
+		items.title = [](int count) {
+			return tr::lng_media_selected_media(
+				tr::now,
+				lt_count,
+				count,
+				Ui::StringWithNumbers::FromString);
+		};
+	}
 	if (hasSelectedItems()) {
 		items.list.reserve(_selected.size());
 		std::transform(

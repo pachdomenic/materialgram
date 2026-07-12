@@ -47,6 +47,7 @@ namespace {
 	using Type = Storage::SharedMediaType;
 	return (type == Type::Photo)
 		|| (type == Type::Video)
+		|| (type == Type::PhotoVideo)
 		|| (type == Type::File)
 		|| (type == Type::MusicFile)
 		|| (type == Type::Link)
@@ -87,6 +88,7 @@ void AddContextMenuToButton(
 tr::phrase<lngtag_count> MediaTextPhrase(Type type) {
 	switch (type) {
 	case Type::Photo: return tr::lng_profile_photos;
+	case Type::PhotoVideo: return tr::lng_profile_media;
 	case Type::GIF: return tr::lng_profile_gifs;
 	case Type::Video: return tr::lng_profile_videos;
 	case Type::File: return tr::lng_profile_files;

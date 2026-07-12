@@ -1688,6 +1688,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_profile_posts#other" = "{count} posts";
 "lng_profile_photos#one" = "{count} photo";
 "lng_profile_photos#other" = "{count} photos";
+"lng_profile_media#one" = "{count} media";
+"lng_profile_media#other" = "{count} media";
 "lng_profile_gifs#one" = "{count} GIF";
 "lng_profile_gifs#other" = "{count} GIFs";
 "lng_profile_polls#one" = "{count} poll";
@@ -1855,6 +1857,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_profile_action_short_live_stream" = "Live stream";
 "lng_profile_action_short_video_chat" = "Video chat";
 
+"lng_media_type_media" = "Media";
 "lng_media_type_photos" = "Photos";
 "lng_media_type_gifs" = "GIFs";
 "lng_media_type_videos" = "Videos";
@@ -1887,6 +1890,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_profile_export_chat" = "Export chat history";
 "lng_profile_export_topic" = "Export topic history";
 "lng_profile_gift_premium" = "Gift Premium";
+"lng_media_selected_media#one" = "{count} Media";
+"lng_media_selected_media#other" = "{count} Media";
 "lng_media_selected_photo#one" = "{count} Photo";
 "lng_media_selected_photo#other" = "{count} Photos";
 "lng_media_selected_gif#one" = "{count} GIF";
