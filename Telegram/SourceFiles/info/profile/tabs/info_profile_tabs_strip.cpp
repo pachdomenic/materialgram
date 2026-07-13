@@ -414,11 +414,27 @@ void TabsStrip::paintEvent(QPaintEvent *e) {
 	p.drawRoundedRect(island, radius, radius);
 	PaintIslandOutline(p, QRectF(island), radius, _st.bg);
 
+	paintContent(island);
+
 	auto clip = QPainterPath();
 	clip.addRoundedRect(QRectF(island), radius, radius);
 	p.setClipPath(clip);
+	p.drawImage(island.topLeft(), _content);
+}
 
-	const auto origin = contentOrigin();
+void TabsStrip::paintContent(QRect island) {
+	const auto ratio = style::DevicePixelRatio();
+	const auto size = island.size() * ratio;
+	if (_content.size() != size) {
+		_content = QImage(size, QImage::Format_ARGB32_Premultiplied);
+		_content.setDevicePixelRatio(ratio);
+	}
+	_content.fill(Qt::transparent);
+
+	auto p = QPainter(&_content);
+	auto hq = PainterHighQualityEnabler(p);
+
+	const auto origin = contentOrigin() - island.topLeft();
 	const auto progress = _activeAnimation.value(1.);
 	const auto animating = _activeAnimation.animating();
 	if (_active >= 0) {
@@ -436,7 +452,7 @@ void TabsStrip::paintEvent(QPaintEvent *e) {
 			continue;
 		}
 		const auto highlight = highlightRect(i).translated(origin);
-		button.ripple->paint(p, highlight.x(), highlight.y(), width());
+		button.ripple->paint(p, highlight.x(), highlight.y(), island.width());
 		if (button.ripple->empty()) {
 			button.ripple.reset();
 		}
@@ -467,26 +483,20 @@ void TabsStrip::paintEvent(QPaintEvent *e) {
 		const auto &icon = st::defaultEmojiSuggestions;
 		const auto &c = _st.bg->c;
 		constexpr auto kF = 0.5;
+		const auto height = island.height();
 		const auto rightWidth = icon.fadeRight.width();
 		const auto opacityRight = (_scrollMax - _scroll)
 			/ (rightWidth * kF);
 		p.setOpacity(std::clamp(opacityRight, 0., 1.));
 		icon.fadeRight.fill(
 			p,
-			QRect(
-				island.x() + island.width() - rightWidth,
-				island.y(),
-				rightWidth,
-				island.height()),
+			QRect(island.width() - rightWidth, 0, rightWidth, height),
 			c);
 
 		const auto leftWidth = icon.fadeLeft.width();
 		const auto opacityLeft = _scroll / (leftWidth * kF);
 		p.setOpacity(std::clamp(opacityLeft, 0., 1.));
-		icon.fadeLeft.fill(
-			p,
-			QRect(island.x(), island.y(), leftWidth, island.height()),
-			c);
+		icon.fadeLeft.fill(p, QRect(0, 0, leftWidth, height), c);
 	}
 }
 

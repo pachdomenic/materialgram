@@ -56,6 +56,8 @@ private:
 	void paintEvent(QPaintEvent *e) override;
 	bool eventHook(QEvent *e) override;
 
+	void paintContent(QRect island);
+
 	void setSelected(int index);
 	void setActive(int index);
 	void scrollToTab(int index);
@@ -75,6 +77,7 @@ private:
 	const style::ProfileTabsStrip &_st;
 	Ui::Text::MarkedContext _context;
 	Ui::BoxShadow _shadow;
+	QImage _content;
 	std::vector<Button> _buttons;
 	rpl::event_stream<QString> _activated;
 	rpl::event_stream<QString> _contextMenuRequests;
