@@ -27,6 +27,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "main/main_session.h"
 #include "ui/text/text.h"
 #include "ui/text/text_utilities.h"
+#include "styles/style_iv.h"
 
 #include <algorithm>
 #include <limits>
@@ -1716,20 +1717,25 @@ void AppendSummaryLine(
 	return article.author;
 }
 
-void AppendSummaryBlock(TextWithEntities *result, const Block &block);
+void AppendSummaryBlock(
+	TextWithEntities *result,
+	const Block &block,
+	bool withIcons);
 
 void AppendSummaryBlocks(
 		TextWithEntities *result,
-		const std::vector<Block> &blocks) {
+		const std::vector<Block> &blocks,
+		bool withIcons) {
 	for (const auto &block : blocks) {
-		AppendSummaryBlock(result, block);
+		AppendSummaryBlock(result, block, withIcons);
 	}
 }
 
 [[nodiscard]] TextWithEntities FlattenSummaryBlocks(
-		const std::vector<Block> &blocks) {
+		const std::vector<Block> &blocks,
+		bool withIcons) {
 	auto result = TextWithEntities();
-	AppendSummaryBlocks(&result, blocks);
+	AppendSummaryBlocks(&result, blocks, withIcons);
 	TextUtilities::Trim(result);
 	return result;
 }
@@ -1946,7 +1952,10 @@ template <typename Accumulator>
 	return false;
 }
 
-void AppendSummaryBlock(TextWithEntities *result, const Block &block) {
+void AppendSummaryBlock(
+		TextWithEntities *result,
+		const Block &block,
+		bool withIcons) {
 	switch (block.kind) {
 	case BlockKind::Unsupported:
 	case BlockKind::Divider:
@@ -1992,7 +2001,7 @@ void AppendSummaryBlock(TextWithEntities *result, const Block &block) {
 			if (!item.text.text.empty()) {
 				AppendSummaryLine(result, item.text, prefix);
 			} else {
-				auto nested = FlattenSummaryBlocks(item.blocks);
+				auto nested = FlattenSummaryBlocks(item.blocks, withIcons);
 				AppendSummaryLine(result, std::move(nested), prefix);
 			}
 			if (block.listKind == ListKind::Ordered) {
@@ -2001,24 +2010,58 @@ void AppendSummaryBlock(TextWithEntities *result, const Block &block) {
 		}
 		return;
 	}
-	case BlockKind::Quote:
-		AppendSummaryLine(result, block.text);
-		AppendSummaryBlocks(result, block.blocks);
-		AppendSummaryLine(result, block.caption);
+	case BlockKind::Quote: {
+		if (!withIcons) {
+			AppendSummaryLine(result, block.text);
+			AppendSummaryBlocks(result, block.blocks, withIcons);
+			AppendSummaryLine(result, block.caption);
+			return;
+		}
+		auto inner = tr::marked();
+		AppendSummaryLine(&inner, block.text);
+		AppendSummaryBlocks(&inner, block.blocks, withIcons);
+		AppendSummaryLine(&inner, block.caption);
+		if (inner.empty()) {
+			return;
+		}
+		auto line = Ui::Text::IconEmoji(
+			(block.pullquote
+				? &st::ivSummaryPullquoteIcon
+				: &st::ivSummaryBlockquoteIcon),
+			(block.pullquote
+				? tr::lng_article_insert_pullquote(tr::now)
+				: tr::lng_menu_formatting_blockquote(tr::now)) + QChar(' '));
+		line.append(std::move(inner));
+		AppendSummaryLine(result, std::move(line));
 		return;
+	}
 	case BlockKind::Photo:
 	case BlockKind::Video:
 	case BlockKind::Audio:
 	case BlockKind::GroupedMedia:
-	case BlockKind::Map:
-		if (!block.caption.text.empty()) {
-			AppendSummaryLine(result, block.caption);
-		} else {
-			AppendSummaryLine(
-				result,
-				TextWithEntities::Simple(MediaSummaryFallback(block)));
+	case BlockKind::Map: {
+		if (!withIcons) {
+			if (!block.caption.text.empty()) {
+				AppendSummaryLine(result, block.caption);
+			} else {
+				AppendSummaryLine(
+					result,
+					TextWithEntities::Simple(MediaSummaryFallback(block)));
+			}
+			return;
 		}
+		const auto icon = (block.kind == BlockKind::Audio)
+			? &st::ivSummaryAudioIcon
+			: (block.kind == BlockKind::Map)
+			? &st::ivSummaryLocationIcon
+			: &st::ivSummaryMediaIcon;
+		auto line = Ui::Text::IconEmoji(
+			icon,
+			MediaSummaryFallback(block) + QChar(' '));
+		line.append(block.caption.text);
+		AppendSummaryLine(result, std::move(line));
 		return;
+	}
 	case BlockKind::Embed:
 		if (!block.caption.text.empty()) {
 			AppendSummaryLine(result, block.caption);
@@ -2040,7 +2083,7 @@ void AppendSummaryBlock(TextWithEntities *result, const Block &block) {
 		if (!line.isEmpty()) {
 			AppendSummaryLine(result, TextWithEntities::Simple(line));
 		}
-		AppendSummaryBlocks(result, block.blocks);
+		AppendSummaryBlocks(result, block.blocks, withIcons);
 		AppendSummaryLine(result, block.caption);
 		return;
 	}
@@ -2055,7 +2098,11 @@ void AppendSummaryBlock(TextWithEntities *result, const Block &block) {
 		AppendSummaryLine(result, TextWithEntities::Simple(block.formula));
 		return;
 	case BlockKind::Table:
-		if (!block.text.text.empty()) {
+		if (withIcons) {
+			AppendSummaryLine(result, Ui::Text::IconEmoji(
+				&st::ivSummaryTableIcon,
+				tr::lng_in_dlg_table(tr::now)));
+		} else if (!block.text.text.empty()) {
 			AppendSummaryLine(result, block.text);
 		} else {
 			AppendSummaryLine(
@@ -2065,7 +2112,7 @@ void AppendSummaryBlock(TextWithEntities *result, const Block &block) {
 		return;
 	case BlockKind::Details:
 		AppendSummaryLine(result, block.text);
-		AppendSummaryBlocks(result, block.blocks);
+		AppendSummaryBlocks(result, block.blocks, withIcons);
 		return;
 	case BlockKind::RelatedArticles:
 		AppendSummaryLine(result, block.text);
@@ -2279,7 +2326,7 @@ std::shared_ptr<const RichPage> ParseRichPage(
 TextWithEntities FlattenRichPageSummary(
 		const RichPage &page,
 		bool emptyFallback) {
-	auto result = FlattenSummaryBlocks(page.blocks);
+	auto result = FlattenSummaryBlocks(page.blocks, true);
 	TextUtilities::Trim(result);
 	if (result.empty() && emptyFallback) {
 		result = TextWithEntities::Simple(tr::lng_message_empty(tr::now));
@@ -2319,7 +2366,7 @@ TextWithEntities FlattenRichPageToSimpleText(const RichPage &page) {
 			// nested block formatting).
 			auto inner = TextWithEntities();
 			AppendSummaryLine(&inner, block.text);
-			AppendSummaryBlocks(&inner, block.blocks);
+			AppendSummaryBlocks(&inner, block.blocks, false);
 			AppendSummaryLine(&inner, block.caption);
 			RemovePremiumOnlyInlineEntities(&inner);
 			AppendSimpleBlock(
@@ -2333,7 +2380,7 @@ TextWithEntities FlattenRichPageToSimpleText(const RichPage &page) {
 			// is flattened to plain text lines, keeping the inline formatting a
 			// normal message can carry.
 			auto piece = TextWithEntities();
-			AppendSummaryBlock(&piece, block);
+			AppendSummaryBlock(&piece, block, false);
 			RemovePremiumOnlyInlineEntities(&piece);
 			AppendSummaryLine(&result, std::move(piece));
 			break;
