@@ -270,6 +270,10 @@ ivSummaryBlockquoteIcon: IconEmoji {
 	icon: icon {{ "menu/rich/blockquote-18x18", dialogsTextFg }};
 	padding: margins(0px, 1px, 3px, 0px);
 }
+ivSummaryMathIcon: IconEmoji {
+	icon: icon {{ "menu/rich/math-18x18", dialogsTextFg }};
+	padding: margins(0px, 1px, 3px, 0px);
+}
 ivEditorMediaCornerSize: 27px;
 ivEditorMediaCornerSkip: 6px;
 ivEditorMediaAddIcon: icon {{ "menu/rich/media_add-20x20", windowFgActive }};

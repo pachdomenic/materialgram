@@ -1612,7 +1612,7 @@ void AppendBlocks(
 	}
 }
 
-void ExpandInlineTextObjects(TextWithEntities *text) {
+void ExpandInlineTextObjects(TextWithEntities *text, bool withIcons) {
 	auto &entities = text->entities;
 	for (auto i = entities.begin(); i != entities.end();) {
 		if (i->type() != EntityType::CustomEmoji) {
@@ -1635,21 +1635,38 @@ void ExpandInlineTextObjects(TextWithEntities *text) {
 		const auto length = i->length();
 		const auto delta = int(replacement.size()) - length;
 		text->text.replace(offset, length, replacement);
-		i = entities.erase(i);
 		for (auto &entity : entities) {
-			if (entity.offset() > offset) {
+			if (&entity == &*i) {
+				continue;
+			} else if (entity.offset() > offset) {
 				entity.shiftRight(delta);
 			} else if (entity.offset() + entity.length() > offset) {
 				entity.shrinkFromRight(-delta);
 			}
+		}
+		const auto formula = (object->kind
+			== Markdown::InlineTextObjectKind::Formula);
+		if (withIcons && formula && !replacement.isEmpty()) {
+			const auto icon = Ui::Text::IconEmoji(
+				&st::ivSummaryMathIcon,
+				replacement);
+			*i = EntityInText(
+				EntityType::CustomEmoji,
+				offset,
+				int(replacement.size()),
+				icon.entities.front().data());
+			++i;
+		} else {
+			i = entities.erase(i);
 		}
 	}
 }
 
 void AppendSummaryLine(
 		TextWithEntities *result,
-		TextWithEntities &&line) {
-	ExpandInlineTextObjects(&line);
+		TextWithEntities &&line,
+		bool withIcons) {
+	ExpandInlineTextObjects(&line, withIcons);
 	TextUtilities::Trim(line);
 	if (line.empty()) {
 		return;
@@ -1663,20 +1680,22 @@ void AppendSummaryLine(
 void AppendSummaryLine(
 		TextWithEntities *result,
 		const TextWithEntities &line,
+		bool withIcons,
 		const QString &prefix = QString()) {
 	auto prepared = TextWithEntities();
 	if (!prefix.isEmpty()) {
 		prepared.append(prefix);
 	}
 	prepared.append(line);
-	AppendSummaryLine(result, std::move(prepared));
+	AppendSummaryLine(result, std::move(prepared), withIcons);
 }
 
 void AppendSummaryLine(
 		TextWithEntities *result,
 		const RichText &line,
+		bool withIcons,
 		const QString &prefix = QString()) {
-	AppendSummaryLine(result, line.text, prefix);
+	AppendSummaryLine(result, line.text, withIcons, prefix);
 }
 
 [[nodiscard]] QString MediaSummaryFallback(const Block &block) {
@@ -1753,9 +1772,10 @@ void AppendSummaryBlocks(
 }
 
 // Drops the inline entities that a normal (non-premium) message can't carry.
-// Math formulas are already expanded to plain text by ExpandInlineTextObjects
-// (in AppendSummaryLine), so only Subscript/Superscript/Marked remain to strip;
-// real custom emoji are kept (they're allowed in normal messages).
+// Math formulas are expanded to plain text by ExpandInlineTextObjects (in
+// AppendSummaryLine, which always runs without icons on the simple-text
+// paths), so only Subscript/Superscript/Marked remain to strip; real custom
+// emoji are kept (they're allowed in normal messages).
 void RemovePremiumOnlyInlineEntities(TextWithEntities *text) {
 	auto &list = text->entities;
 	for (auto i = list.begin(); i != list.end();) {
@@ -1966,7 +1986,7 @@ void AppendSummaryBlock(
 	case BlockKind::Footer:
 	case BlockKind::Code:
 	case BlockKind::Thinking:
-		AppendSummaryLine(result, block.text);
+		AppendSummaryLine(result, block.text, withIcons);
 		return;
 	case BlockKind::AuthorDate: {
 		auto line = block.text.text;
@@ -1976,7 +1996,7 @@ void AppendSummaryBlock(
 			}
 			line.append(DateText(block.date));
 		}
-		AppendSummaryLine(result, std::move(line));
+		AppendSummaryLine(result, std::move(line), withIcons);
 		return;
 	}
 	case BlockKind::List: {
@@ -1999,10 +2019,10 @@ void AppendSummaryBlock(
 				prefix = u"- "_q;
 			}
 			if (!item.text.text.empty()) {
-				AppendSummaryLine(result, item.text, prefix);
+				AppendSummaryLine(result, item.text, withIcons, prefix);
 			} else {
 				auto nested = FlattenSummaryBlocks(item.blocks, withIcons);
-				AppendSummaryLine(result, std::move(nested), prefix);
+				AppendSummaryLine(result, std::move(nested), withIcons, prefix);
 			}
 			if (block.listKind == ListKind::Ordered) {
 				ordered = orderedValue + step;
@@ -2012,15 +2032,15 @@ void AppendSummaryBlock(
 	}
 	case BlockKind::Quote: {
 		if (!withIcons) {
-			AppendSummaryLine(result, block.text);
+			AppendSummaryLine(result, block.text, withIcons);
 			AppendSummaryBlocks(result, block.blocks, withIcons);
-			AppendSummaryLine(result, block.caption);
+			AppendSummaryLine(result, block.caption, withIcons);
 			return;
 		}
 		auto inner = tr::marked();
-		AppendSummaryLine(&inner, block.text);
+		AppendSummaryLine(&inner, block.text, withIcons);
 		AppendSummaryBlocks(&inner, block.blocks, withIcons);
-		AppendSummaryLine(&inner, block.caption);
+		AppendSummaryLine(&inner, block.caption, withIcons);
 		if (inner.empty()) {
 			return;
 		}
@@ -2032,7 +2052,7 @@ void AppendSummaryBlock(
 				? tr::lng_article_insert_pullquote(tr::now)
 				: tr::lng_menu_formatting_blockquote(tr::now)) + QChar(' '));
 		line.append(std::move(inner));
-		AppendSummaryLine(result, std::move(line));
+		AppendSummaryLine(result, std::move(line), withIcons);
 		return;
 	}
 	case BlockKind::Photo:
@@ -2042,11 +2062,12 @@ void AppendSummaryBlock(
 	case BlockKind::Map: {
 		if (!withIcons) {
 			if (!block.caption.text.empty()) {
-				AppendSummaryLine(result, block.caption);
+				AppendSummaryLine(result, block.caption, withIcons);
 			} else {
 				AppendSummaryLine(
 					result,
-					TextWithEntities::Simple(MediaSummaryFallback(block)));
+					TextWithEntities::Simple(MediaSummaryFallback(block)),
+					withIcons);
 			}
 			return;
 		}
@@ -2059,14 +2080,17 @@ void AppendSummaryBlock(
 			icon,
 			MediaSummaryFallback(block) + QChar(' '));
 		line.append(block.caption.text);
-		AppendSummaryLine(result, std::move(line));
+		AppendSummaryLine(result, std::move(line), withIcons);
 		return;
 	}
 	case BlockKind::Embed:
 		if (!block.caption.text.empty()) {
-			AppendSummaryLine(result, block.caption);
+			AppendSummaryLine(result, block.caption, withIcons);
 		} else if (!block.url.isEmpty()) {
-			AppendSummaryLine(result, TextWithEntities::Simple(block.url));
+			AppendSummaryLine(
+				result,
+				TextWithEntities::Simple(block.url),
+				withIcons);
 		}
 		return;
 	case BlockKind::EmbedPost: {
@@ -2081,57 +2105,74 @@ void AppendSummaryBlock(
 			line += DateText(block.date);
 		}
 		if (!line.isEmpty()) {
-			AppendSummaryLine(result, TextWithEntities::Simple(line));
+			AppendSummaryLine(
+				result,
+				TextWithEntities::Simple(line),
+				withIcons);
 		}
 		AppendSummaryBlocks(result, block.blocks, withIcons);
-		AppendSummaryLine(result, block.caption);
+		AppendSummaryLine(result, block.caption, withIcons);
 		return;
 	}
 	case BlockKind::Channel:
 		if (block.peer) {
 			AppendSummaryLine(
 				result,
-				TextWithEntities::Simple(block.peer->name()));
+				TextWithEntities::Simple(block.peer->name()),
+				withIcons);
 		}
 		return;
 	case BlockKind::Math:
-		AppendSummaryLine(result, TextWithEntities::Simple(block.formula));
+		if (withIcons && !block.formula.isEmpty()) {
+			AppendSummaryLine(result, Ui::Text::IconEmoji(
+				&st::ivSummaryMathIcon,
+				block.formula), withIcons);
+		} else {
+			AppendSummaryLine(
+				result,
+				TextWithEntities::Simple(block.formula),
+				withIcons);
+		}
 		return;
 	case BlockKind::Table:
 		if (withIcons) {
 			AppendSummaryLine(result, Ui::Text::IconEmoji(
 				&st::ivSummaryTableIcon,
-				tr::lng_in_dlg_table(tr::now)));
+				tr::lng_in_dlg_table(tr::now)), withIcons);
 		} else if (!block.text.text.empty()) {
-			AppendSummaryLine(result, block.text);
+			AppendSummaryLine(result, block.text, withIcons);
 		} else {
 			AppendSummaryLine(
 				result,
-				TextWithEntities::Simple(tr::lng_in_dlg_table(tr::now)));
+				TextWithEntities::Simple(tr::lng_in_dlg_table(tr::now)),
+				withIcons);
 		}
 		return;
 	case BlockKind::Details:
-		AppendSummaryLine(result, block.text);
+		AppendSummaryLine(result, block.text, withIcons);
 		AppendSummaryBlocks(result, block.blocks, withIcons);
 		return;
 	case BlockKind::RelatedArticles:
-		AppendSummaryLine(result, block.text);
+		AppendSummaryLine(result, block.text, withIcons);
 		for (const auto &article : block.relatedArticles) {
 			if (!article.title.isEmpty()) {
 				AppendSummaryLine(
 					result,
-					TextWithEntities::Simple(article.title));
+					TextWithEntities::Simple(article.title),
+					withIcons);
 			}
 			if (!article.description.isEmpty()) {
 				AppendSummaryLine(
 					result,
-					TextWithEntities::Simple(article.description));
+					TextWithEntities::Simple(article.description),
+					withIcons);
 			}
 			const auto footer = FooterText(article);
 			if (!footer.isEmpty()) {
 				AppendSummaryLine(
 					result,
-					TextWithEntities::Simple(footer));
+					TextWithEntities::Simple(footer),
+					withIcons);
 			}
 		}
 		return;
@@ -2350,7 +2391,7 @@ TextWithEntities FlattenRichPageToSimpleText(const RichPage &page) {
 			// Code blocks are allowed at the top level as a Pre entity, but
 			// their content is sent as plain text without any inline entities.
 			auto inner = block.text.text;
-			ExpandInlineTextObjects(&inner);
+			ExpandInlineTextObjects(&inner, false);
 			inner.entities.clear();
 			AppendSimpleBlock(
 				&result,
@@ -2365,9 +2406,9 @@ TextWithEntities FlattenRichPageToSimpleText(const RichPage &page) {
 			// single TextWithEntities (keeping allowed inline formatting, no
 			// nested block formatting).
 			auto inner = TextWithEntities();
-			AppendSummaryLine(&inner, block.text);
+			AppendSummaryLine(&inner, block.text, false);
 			AppendSummaryBlocks(&inner, block.blocks, false);
-			AppendSummaryLine(&inner, block.caption);
+			AppendSummaryLine(&inner, block.caption, false);
 			RemovePremiumOnlyInlineEntities(&inner);
 			AppendSimpleBlock(
 				&result,
@@ -2382,7 +2423,7 @@ TextWithEntities FlattenRichPageToSimpleText(const RichPage &page) {
 			auto piece = TextWithEntities();
 			AppendSummaryBlock(&piece, block, false);
 			RemovePremiumOnlyInlineEntities(&piece);
-			AppendSummaryLine(&result, std::move(piece));
+			AppendSummaryLine(&result, std::move(piece), false);
 			break;
 		}
 		}
