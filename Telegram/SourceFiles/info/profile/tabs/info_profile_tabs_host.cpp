@@ -747,6 +747,7 @@ void TabsHost::setVisibleRegion(int top, int bottom) {
 }
 
 int TabsHost::resizeGetHeight(int newWidth) {
+	_body->resizeToWidth(std::max(newWidth, 1));
 	if (!ranges::contains(_tabsShown, true)) {
 		return 0;
 	}
@@ -758,7 +759,6 @@ int TabsHost::resizeGetHeight(int newWidth) {
 		_stripHeight = strip->height();
 	}
 	const auto bodyTop = _stripHeight;
-	_body->resizeToWidth(std::max(newWidth, 1));
 	_body->moveToLeft(0, bodyTop);
 
 	const auto natural = bodyTop + _body->height();
