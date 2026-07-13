@@ -24,6 +24,7 @@ namespace {
 
 constexpr auto kScrollDuration = crl::time(150);
 constexpr auto kVerticalScrollGrace = crl::time(250);
+constexpr auto kVerticalScrollRest = crl::time(1000);
 
 void PaintIslandOutline(
 		QPainter &p,
@@ -55,7 +56,8 @@ void PaintIslandOutline(
 TabsStrip::TabsStrip(QWidget *parent, const style::ProfileTabsStrip &st)
 : RpWidget(parent)
 , _st(st)
-, _shadow(st::infoProfileTabsShadow) {
+, _shadow(st::infoProfileTabsShadow)
+, _lastCursorPosition(QCursor::pos()) {
 	setObjectName(u"profileTabsStrip"_q);
 	setMouseTracking(true);
 
@@ -139,8 +141,21 @@ void TabsStrip::setActiveTab(const QString &id) {
 
 void TabsStrip::trackVerticalScroll(rpl::producer<> scrolls) {
 	std::move(scrolls) | rpl::on_next([=] {
-		_verticalScrollTill = crl::now() + kVerticalScrollGrace;
+		markVerticalScroll();
 	}, lifetime());
+}
+
+void TabsStrip::markVerticalScroll() {
+	_verticalScrollAt = crl::now();
+	updatePointerAimed();
+}
+
+void TabsStrip::updatePointerAimed() {
+	const auto cursor = QCursor::pos();
+	if (cursor != _lastCursorPosition) {
+		_lastCursorPosition = cursor;
+		_pointerAimed = rect().contains(mapFromGlobal(cursor));
+	}
 }
 
 rpl::producer<QString> TabsStrip::activated() const {
@@ -264,15 +279,11 @@ int TabsStrip::resizeGetHeight(int newWidth) {
 bool TabsStrip::eventHook(QEvent *e) {
 	if (e->type() == QEvent::Leave) {
 		setSelected(-1);
-		_pointerAimed = false;
 	}
 	return RpWidget::eventHook(e);
 }
 
 void TabsStrip::mouseMoveEvent(QMouseEvent *e) {
-	if (e->source() == Qt::MouseEventNotSynthesized) {
-		_pointerAimed = true;
-	}
 	const auto mousex = e->pos().x();
 	const auto drag = QApplication::startDragDistance();
 	if (_dragx > 0) {
@@ -329,9 +340,11 @@ void TabsStrip::stopPressedRipple() {
 }
 
 bool TabsStrip::wheelScrollsTabs(Qt::ScrollPhase phase) const {
+	const auto rest = _pointerAimed
+		? kVerticalScrollGrace
+		: kVerticalScrollRest;
 	return (phase == Qt::NoScrollPhase)
-		&& _pointerAimed
-		&& (crl::now() >= _verticalScrollTill);
+		&& (crl::now() >= _verticalScrollAt + rest);
 }
 
 void TabsStrip::wheelScrollBy(float64 delta) {
@@ -343,6 +356,8 @@ void TabsStrip::wheelScrollBy(float64 delta) {
 }
 
 void TabsStrip::wheelEvent(QWheelEvent *e) {
+	updatePointerAimed();
+
 	const auto delta = Ui::ScrollDeltaF(e);
 
 	const auto phase = e->phase();
@@ -353,7 +368,7 @@ void TabsStrip::wheelEvent(QWheelEvent *e) {
 		_locked = horizontal ? Qt::Horizontal : Qt::Vertical;
 	}
 	if (_scrollMax <= 0) {
-		_verticalScrollTill = crl::now() + kVerticalScrollGrace;
+		markVerticalScroll();
 		e->ignore();
 	} else if (horizontal) {
 		if (_locked == Qt::Vertical) {
@@ -369,7 +384,7 @@ void TabsStrip::wheelEvent(QWheelEvent *e) {
 		e->accept();
 		wheelScrollBy(-delta.y());
 	} else {
-		_verticalScrollTill = crl::now() + kVerticalScrollGrace;
+		markVerticalScroll();
 		e->ignore();
 	}
 }

@@ -65,6 +65,8 @@ private:
 	void scrollTo(float64 value);
 	void addRipple(int index, QPoint position);
 	void stopPressedRipple();
+	void markVerticalScroll();
+	void updatePointerAimed();
 	void wheelScrollBy(float64 delta);
 	[[nodiscard]] bool wheelScrollsTabs(Qt::ScrollPhase phase) const;
 	[[nodiscard]] int indexAt(QPoint position) const;
@@ -88,7 +90,8 @@ private:
 	float64 _dragscroll = 0.;
 	float64 _scroll = 0.;
 	float64 _scrollTo = 0.;
-	crl::time _verticalScrollTill = 0;
+	crl::time _verticalScrollAt = 0;
+	QPoint _lastCursorPosition;
 	Ui::Animations::Simple _scrollAnimation;
 	Ui::Animations::Simple _activeAnimation;
 	QRect _activeFrom;
