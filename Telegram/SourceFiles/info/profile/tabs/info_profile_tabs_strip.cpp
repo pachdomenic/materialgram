@@ -437,7 +437,6 @@ void TabsStrip::paintEvent(QPaintEvent *e) {
 	p.setBrush(_st.bg);
 	p.setPen(Qt::NoPen);
 	p.drawRoundedRect(island, radius, radius);
-	PaintIslandOutline(p, QRectF(island), radius, _st.bg);
 
 	validateContent(island);
 
@@ -445,6 +444,9 @@ void TabsStrip::paintEvent(QPaintEvent *e) {
 	clip.addRoundedRect(QRectF(island), radius, radius);
 	p.setClipPath(clip);
 	p.drawImage(island.topLeft(), _content);
+	p.setClipping(false);
+
+	PaintIslandOutline(p, QRectF(island), radius, _st.bg);
 }
 
 void TabsStrip::validateContent(QRect island) {
