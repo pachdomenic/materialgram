@@ -3090,8 +3090,13 @@ void Session::processMessagesDeleted(
 	for (const auto &messageId : data) {
 		const auto i = list ? list->find(messageId.v) : Messages::iterator();
 		if (list && i != list->end()) {
-			const auto history = i->second->history();
-			toDestroy.push_back(i->second);
+			const auto item = i->second;
+			const auto history = item->history();
+			if (keepDeletedMessage(item)) {
+				markMessageDeleted(item);
+			} else {
+				toDestroy.push_back(item);
+			}
 			historiesToCheck.emplace(history);
 		} else if (affected) {
 			affected->unknownMessageDeleted(messageId.v);
@@ -3116,7 +3121,11 @@ void Session::processNonChannelMessagesDeleted(const QVector<MTPint> &data) {
 	for (const auto &messageId : data) {
 		if (const auto item = nonChannelMessage(messageId.v)) {
 			const auto history = item->history();
-			toDestroy.push_back(item);
+			if (keepDeletedMessage(item)) {
+				markMessageDeleted(item);
+			} else {
+				toDestroy.push_back(item);
+			}
 			historiesToCheck.emplace(history);
 		}
 	}
@@ -3131,6 +3140,31 @@ void Session::processNonChannelMessagesDeleted(const QVector<MTPint> &data) {
 			history->requestChatListMessage();
 		}
 	}
+}
+
+bool Session::keepDeletedMessage(not_null<const HistoryItem*> item) const {
+	const auto &settings = Core::App().settings();
+	if (!settings.saveDeletedMessages()) {
+		return false;
+	} else if (_deletedMessages.contains(item)) {
+		return false;
+	} else if (!item->isRegular() || !item->isHistoryEntry()) {
+		// Only keep real server messages present in the history.
+		return false;
+	} else if (item->out() && !settings.saveOwnDeletedMessages()) {
+		return false;
+	}
+	return true;
+}
+
+void Session::markMessageDeleted(not_null<HistoryItem*> item) {
+	if (_deletedMessages.emplace(item).second) {
+		requestItemViewRefresh(item);
+	}
+}
+
+bool Session::isMessageDeleted(not_null<const HistoryItem*> item) const {
+	return _deletedMessages.contains(item);
 }
 
 void Session::removeDependencyMessage(not_null<HistoryItem*> item) {
@@ -3172,6 +3206,7 @@ void Session::unregisterMessage(not_null<HistoryItem*> item) {
 		}
 	}
 	messagesListForInsert(peerId)->erase(itemId);
+	_deletedMessages.remove(item);
 
 	if (!peerIsChannel(peerId) && IsServerMsgId(itemId)) {
 		_nonChannelMessages.erase(itemId);

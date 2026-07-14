@@ -594,6 +594,11 @@ public:
 		PeerId peerId,
 		const QVector<MTPint> &data);
 
+	// materialgram: preserve deleted messages in-place with a marker.
+	void markMessageDeleted(not_null<HistoryItem*> item);
+	[[nodiscard]] bool isMessageDeleted(
+		not_null<const HistoryItem*> item) const;
+
 	void removeReactionsFromParticipant(
 		not_null<PeerData*> peer,
 		MsgId msgId,
@@ -1025,6 +1030,10 @@ private:
 
 	void suggestStartExport();
 
+	// materialgram: whether a server-deleted item should be kept in-place.
+	[[nodiscard]] bool keepDeletedMessage(
+		not_null<const HistoryItem*> item) const;
+
 	void setupMigrationViewer();
 	void setupChannelLeavingViewer();
 	void setupPeerNameViewer();
@@ -1242,6 +1251,9 @@ private:
 	base::Timer _formattedDateTimer;
 
 	std::unordered_map<MsgId, not_null<HistoryItem*>> _nonChannelMessages;
+
+	// materialgram: items the server deleted but we chose to keep.
+	base::flat_set<not_null<const HistoryItem*>> _deletedMessages;
 
 	base::flat_map<uint64, FullMsgId> _messageByRandomId;
 	base::flat_map<uint64, SentData> _sentMessagesData;

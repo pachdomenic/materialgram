@@ -1771,6 +1771,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 "lng_materialgram_info_registration" = "Registration date";
 "lng_materialgram_info_dc" = "DC";
+"lng_materialgram_settings_save_deleted" = "Keep deleted messages";
+"lng_materialgram_settings_save_deleted_own" = "Keep your own deleted messages";
 "lng_info_personal_channel_label" = "Channel";
 "lng_info_mobile_label" = "Mobile";
 "lng_info_mobile_context_menu_fragment_about" = "This number is not tied to a SIM card and was acquired on {link}.";
@@ -3060,6 +3062,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_sponsored_message_revenue_button" = "what's this?";
 "lng_recommended_message_title" = "Recommended";
 "lng_edited" = "edited";
+"lng_materialgram_deleted" = "🗑";
 "lng_commented" = "commented";
 "lng_approximate" = "appx.";
 "lng_repeated_daily" = "daily";

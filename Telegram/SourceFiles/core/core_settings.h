@@ -162,6 +162,18 @@ public:
 	void setModerateModeEnabled(bool value) {
 		_moderateModeEnabled = value;
 	}
+	[[nodiscard]] bool saveDeletedMessages() const {
+		return _saveDeletedMessages;
+	}
+	void setSaveDeletedMessages(bool value) {
+		_saveDeletedMessages = value;
+	}
+	[[nodiscard]] bool saveOwnDeletedMessages() const {
+		return _saveOwnDeletedMessages;
+	}
+	void setSaveOwnDeletedMessages(bool value) {
+		_saveOwnDeletedMessages = value;
+	}
 	[[nodiscard]] float64 songVolume() const {
 		return _songVolume.current();
 	}
@@ -1104,6 +1116,8 @@ private:
 
 	rpl::variable<bool> _adaptiveForWide = true;
 	bool _moderateModeEnabled = false;
+	bool _saveDeletedMessages = true;
+	bool _saveOwnDeletedMessages = true;
 	rpl::variable<float64> _songVolume = kDefaultVolume;
 	rpl::variable<float64> _videoVolume = kDefaultVolume;
 	bool _askDownloadPath = false;

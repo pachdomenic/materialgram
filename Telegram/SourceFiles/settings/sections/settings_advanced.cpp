@@ -1311,6 +1311,40 @@ void BuildMaterialgramSection(SectionBuilder &builder) {
 		}, gamee->lifetime());
 	}
 
+	const auto saveDeleted = builder.addButton({
+		.id = u"advanced/materialgram_save_deleted"_q,
+		.title = tr::lng_materialgram_settings_save_deleted(),
+		.st = &st::settingsButtonNoIcon,
+		.toggled = rpl::single(settings->saveDeletedMessages()),
+		.keywords = { u"materialgram"_q, u"deleted"_q, u"messages"_q },
+	});
+	if (saveDeleted) {
+		saveDeleted->toggledValue(
+		) | rpl::filter([=](bool enabled) {
+			return (enabled != settings->saveDeletedMessages());
+		}) | rpl::on_next([=](bool enabled) {
+			settings->setSaveDeletedMessages(enabled);
+			Core::App().saveSettingsDelayed();
+		}, saveDeleted->lifetime());
+	}
+
+	const auto saveOwnDeleted = builder.addButton({
+		.id = u"advanced/materialgram_save_own_deleted"_q,
+		.title = tr::lng_materialgram_settings_save_deleted_own(),
+		.st = &st::settingsButtonNoIcon,
+		.toggled = rpl::single(settings->saveOwnDeletedMessages()),
+		.keywords = { u"materialgram"_q, u"deleted"_q, u"own"_q },
+	});
+	if (saveOwnDeleted) {
+		saveOwnDeleted->toggledValue(
+		) | rpl::filter([=](bool enabled) {
+			return (enabled != settings->saveOwnDeletedMessages());
+		}) | rpl::on_next([=](bool enabled) {
+			settings->setSaveOwnDeletedMessages(enabled);
+			Core::App().saveSettingsDelayed();
+		}, saveOwnDeleted->lifetime());
+	}
+
 	builder.addSkip();
 }
 
