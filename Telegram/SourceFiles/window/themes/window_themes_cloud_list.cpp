@@ -817,29 +817,31 @@ void CloudList::showMenu(Element &element) {
 		}, &st::menuIconChangeColors);
 	}
 	const auto id = cloud.id;
-	_contextMenu->addAction(tr::lng_theme_delete(tr::now), [=] {
-		const auto remove = [=](Fn<void()> &&close) {
-			close();
-			if (Background()->themeObject().cloud.id == id
-				|| id == kFakeCloudThemeId) {
-				if (Background()->editingTheme().has_value()) {
-					Background()->clearEditingTheme(
-						ClearEditing::KeepChanges);
-					_window->window().showRightColumn(nullptr);
+	if (!IsChatTheme(cloud)) {
+		_contextMenu->addAction(tr::lng_theme_delete(tr::now), [=] {
+			const auto remove = [=](Fn<void()> &&close) {
+				close();
+				if (Background()->themeObject().cloud.id == id
+					|| id == kFakeCloudThemeId) {
+					if (Background()->editingTheme().has_value()) {
+						Background()->clearEditingTheme(
+							ClearEditing::KeepChanges);
+						_window->window().showRightColumn(nullptr);
+					}
+					ResetToSomeDefault();
+					KeepApplied();
 				}
-				ResetToSomeDefault();
-				KeepApplied();
-			}
-			if (id != kFakeCloudThemeId) {
-				_window->session().data().cloudThemes().remove(id);
-			}
-		};
-		_window->window().show(Ui::MakeConfirmBox({
-			.text = tr::lng_theme_delete_sure(),
-			.confirmed = remove,
-			.confirmText = tr::lng_theme_delete(),
-		}));
-	}, &st::menuIconDelete);
+				if (id != kFakeCloudThemeId) {
+					_window->session().data().cloudThemes().remove(id);
+				}
+			};
+			_window->window().show(Ui::MakeConfirmBox({
+				.text = tr::lng_theme_delete_sure(),
+				.confirmed = remove,
+				.confirmText = tr::lng_theme_delete(),
+			}));
+		}, &st::menuIconDelete);
+	}
 	_contextMenu->popup(QCursor::pos());
 }
 
