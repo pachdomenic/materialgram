@@ -3062,7 +3062,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_sponsored_message_revenue_button" = "what's this?";
 "lng_recommended_message_title" = "Recommended";
 "lng_edited" = "edited";
-"lng_materialgram_deleted" = "🗑";
 "lng_commented" = "commented";
 "lng_approximate" = "appx.";
 "lng_repeated_daily" = "daily";

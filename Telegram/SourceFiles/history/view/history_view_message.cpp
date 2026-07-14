@@ -1743,6 +1743,11 @@ void Message::draw(Painter &p, const PaintContext &context) const {
 		return;
 	}
 
+	auto deletedOpacity = std::optional<ScopedPainterOpacity>();
+	if (item->history()->owner().isMessageDeleted(item)) {
+		deletedOpacity.emplace(p, p.opacity() * 0.5);
+	}
+
 	const auto entry = logEntryOriginal();
 	const auto check = factcheckBlock();
 	auto mediaDisplayed = media && media->isDisplayed();

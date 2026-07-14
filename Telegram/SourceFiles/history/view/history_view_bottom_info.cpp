@@ -511,19 +511,27 @@ void BottomInfo::layoutDateText() {
 	const auto name = _authorElided
 		? st::msgDateFont->elided(author, maxWidth - afterAuthorWidth)
 		: author;
-	const auto deleted = (_data.flags & Data::Flag::Deleted)
-		? (tr::lng_materialgram_deleted(tr::now) + ' ')
-		: QString();
-	const auto full = deleted + ((_data.flags & Data::Flag::Sponsored)
+	const auto full = (_data.flags & Data::Flag::Sponsored)
 		? QString()
 		: (_data.flags & Data::Flag::Imported)
 		? (date + ' ' + tr::lng_imported(tr::now))
 		: name.isEmpty()
 		? date
-		: (name + afterAuthor));
+		: (name + afterAuthor);
 	auto helper = Ui::Text::CustomEmojiHelper(
 		Core::TextContext({ .session = &_reactionsOwner->session() }));
 	auto marked = TextWithEntities();
+	if (_data.flags & Data::Flag::Deleted) {
+		marked.append(helper.image({
+			.image = Ui::Emoji::SinglePixmap(
+				Ui::Emoji::Find(QString::fromUtf8("\xf0\x9f\x97\x91")),
+				Ui::Emoji::GetSizeNormal()).toImage().scaledToHeight(
+					st::deletedIconEmojiSize * style::DevicePixelRatio(),
+					Qt::SmoothTransformation),
+			.margin = QMargins(0, st::deletedIconEmojiTop, 0, 0),
+			.textColor = false,
+		})).append(' ');
+	}
 	if (const auto count = _data.stars) {
 		marked.append(
 			Ui::Text::IconEmoji(&st::starIconEmojiSmall)

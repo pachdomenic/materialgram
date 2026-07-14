@@ -1529,6 +1529,8 @@ stakeEmojiIcon: IconEmoji {
 }
 stakeIconEmojiSize: 12px;
 stakeIconEmojiTop: 3px;
+deletedIconEmojiSize: 11px;
+deletedIconEmojiTop: 3px;
 stakePresetButton: RoundButton(defaultLightButton) {
 	textBg: lightButtonBgOver;
 }
