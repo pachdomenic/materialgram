@@ -1768,6 +1768,12 @@ void AppendSummaryBlocks(
 			|| type == EntityType::Superscript
 			|| type == EntityType::Marked) {
 			return false;
+		} else if (type == EntityType::CustomEmoji
+			&& Markdown::ParseInlineTextObjectEntity(entity.data())) {
+			// Math formulas and inline images are stored as CustomEmoji
+			// entities over an object replacement character; a normal
+			// message can't carry them, only real custom emoji entities.
+			return false;
 		}
 	}
 	return true;
