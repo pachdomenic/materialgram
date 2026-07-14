@@ -823,8 +823,9 @@ bool Message::prepareRichPageTextRect(QRect &trect) const {
 				: st::historyPsaIconSkip1;
 			const auto fits = (forwarded->text.maxWidth()
 				<= (trect.width() - skip));
+			const auto dateLines = forwarded->dateText.isEmpty() ? 0 : 1;
 			trect.setTop(trect.top()
-				+ ((fits ? 1 : 2) * st::semiboldFont->height));
+				+ (((fits ? 1 : 2) + dateLines) * st::semiboldFont->height));
 		}
 		if (item->Has<HistoryMessageVia>()
 			&& !displayFromName()
@@ -1535,6 +1536,13 @@ QSize Message::performCountOptimalSize() {
 				}
 				accumulate_max(maxWidth, namew);
 				accumulate_max(nonTextMax, namew);
+				if (!forwarded->dateText.isEmpty()) {
+					const auto datew = st::msgPadding.left()
+						+ st::msgServiceFont->width(forwarded->dateText)
+						+ st::msgPadding.right();
+					accumulate_max(maxWidth, datew);
+					accumulate_max(nonTextMax, datew);
+				}
 			}
 			if (reply) {
 				const auto replyw = st::msgPadding.left()
@@ -2865,7 +2873,22 @@ void Message::paintForwardedInfo(
 			}
 		}
 
-		trect.setY(trect.y() + ((fits ? 1 : 2) * serviceFont->height));
+		const auto nameLines = (fits ? 1 : 2);
+		if (!forwarded->dateText.isEmpty()) {
+			p.setPen(!forwarded->psaType.isEmpty()
+				? st->boxTextFgGood()
+				: stm->msgServiceFg);
+			p.setFont(serviceFont);
+			p.drawText(
+				trect.x(),
+				trect.y()
+					+ nameLines * serviceFont->height
+					+ serviceFont->ascent,
+				forwarded->dateText);
+		}
+
+		const auto dateLines = forwarded->dateText.isEmpty() ? 0 : 1;
+		trect.setY(trect.y() + ((nameLines + dateLines) * serviceFont->height));
 	}
 }
 
@@ -4307,7 +4330,9 @@ bool Message::getStateForwardedInfo(
 		? 0
 		: st::historyPsaIconSkip2;
 	const auto fits = (forwarded->text.maxWidth() <= (trect.width() - skip1));
-	const auto fwdheight = (fits ? 1 : 2) * st::semiboldFont->height;
+	const auto dateLines = forwarded->dateText.isEmpty() ? 0 : 1;
+	const auto fwdheight = ((fits ? 1 : 2) + dateLines)
+		* st::semiboldFont->height;
 	if (point.y() >= trect.top() && point.y() < trect.top() + fwdheight) {
 		if (skip1) {
 			const auto &icon = st::historyPsaIconIn;
@@ -4660,7 +4685,8 @@ void Message::updatePressed(QPoint point) {
 			}
 			if (displayForwardedFrom()) {
 				auto forwarded = item->Get<HistoryMessageForwarded>();
-				auto fwdheight = ((forwarded->text.maxWidth() > trect.width()) ? 2 : 1) * st::semiboldFont->height;
+				auto dateLines = forwarded->dateText.isEmpty() ? 0 : 1;
+				auto fwdheight = (((forwarded->text.maxWidth() > trect.width()) ? 2 : 1) + dateLines) * st::semiboldFont->height;
 				trect.setTop(trect.top() + fwdheight);
 			}
 			if (const auto reply = Get<Reply>()) {
@@ -6540,7 +6566,8 @@ int Message::resizeContentGetHeight(int newWidth) {
 			const auto skip1 = forwarded->psaType.isEmpty()
 				? 0
 				: st::historyPsaIconSkip1;
-			const auto fwdheight = ((forwarded->text.maxWidth() > (contentWidth - st::msgPadding.left() - st::msgPadding.right() - skip1)) ? 2 : 1) * st::semiboldFont->height;
+			const auto dateLines = forwarded->dateText.isEmpty() ? 0 : 1;
+			const auto fwdheight = (((forwarded->text.maxWidth() > (contentWidth - st::msgPadding.left() - st::msgPadding.right() - skip1)) ? 2 : 1) + dateLines) * st::semiboldFont->height;
 			newHeight += fwdheight;
 		}
 

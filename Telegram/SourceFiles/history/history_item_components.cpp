@@ -10,6 +10,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "api/api_text_entities.h"
 #include "base/qt/qt_key_modifiers.h"
 #include "base/options.h"
+#include "base/unixtime.h"
 #include "lang/lang_keys.h"
 #include "ui/effects/ripple_animation.h"
 #include "ui/effects/spoiler_mess.h"
@@ -388,6 +389,15 @@ void HistoryMessageForwarded::create(
 		: HiddenSenderInfo::ForwardClickHandler());
 	if (via) {
 		text.setLink(2, via->link);
+	}
+
+	if (originalDate && !story && psaType.isEmpty()) {
+		const auto parsed = base::unixtime::parse(originalDate);
+		dateText = QLocale().toString(parsed.date(), u"dd.MM.yy"_q)
+			+ u" | "_q
+			+ QLocale().toString(parsed.time(), u"HH:mm:ss"_q);
+	} else {
+		dateText = QString();
 	}
 }
 
