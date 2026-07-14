@@ -1694,13 +1694,13 @@ Section DetailsFiller::makeInfo() {
 			st::infoProfileLabeledUsernamePadding);
 		if (Core::App().settings().birthDateEnabled()) {
 			addInfoOneLine(
-				tr::materialgram_info_registration(),
+				tr::lng_materialgram_info_registration(),
 				RegistrationValue(user),
 				tr::lng_context_copy_text(tr::now));
 		}
 		if (user->hasUserpic() && Core::App().settings().datacenterEnabled()) {
 			addInfoOneLine(
-				tr::materialgram_info_dc(),
+				tr::lng_materialgram_info_dc(),
 				DataCenterValue(_peer),
 				tr::lng_context_copy_text(tr::now));
 		}
@@ -1863,7 +1863,7 @@ Section DetailsFiller::makeInfo() {
 
 		if (_peer->hasUserpic() && Core::App().settings().datacenterEnabled()) {
 			addInfoOneLine(
-				tr::materialgram_info_dc(),
+				tr::lng_materialgram_info_dc(),
 				DataCenterValue(_peer),
 				tr::lng_context_copy_text(tr::now));
 		}
