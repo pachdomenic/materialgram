@@ -520,6 +520,12 @@ public:
 	[[nodiscard]] rpl::producer<bool> cornerReplyValue() const {
 		return _cornerReply.value();
 	}
+	void setPullToNextChannel(bool value) {
+		_pullToNextChannel = value;
+	}
+	[[nodiscard]] bool pullToNextChannel() const {
+		return _pullToNextChannel.current();
+	}
 
 	void setSpellcheckerEnabled(bool value) {
 		_spellcheckerEnabled = value;
@@ -1049,6 +1055,13 @@ public:
 		_notificationsVolume = value;
 	}
 
+	[[nodiscard]] int mediaGridZoomStep() const {
+		return _mediaGridZoomStep;
+	}
+	void setMediaGridZoomStep(int value) {
+		_mediaGridZoomStep = value;
+	}
+
 	template <typename Type, typename Other>
 	void writePref(std::string_view key, Other &&value) {
 		writePrefImpl<Type>(key, std::forward<Other>(value));
@@ -1140,6 +1153,7 @@ private:
 	bool _suggestAnimatedEmoji = true;
 	rpl::variable<bool> _cornerReply = true;
 	rpl::variable<bool> _cornerReaction = true;
+	rpl::variable<bool> _pullToNextChannel = true;
 	rpl::variable<bool> _spellcheckerEnabled = true;
 	PlaybackSpeed _videoPlaybackSpeed;
 	rpl::variable<PlaybackSpeed> _voicePlaybackSpeed;
@@ -1228,6 +1242,8 @@ private:
 		= Dialogs::Ui::QuickDialogAction::Disabled;
 
 	ushort _notificationsVolume = 100;
+
+	int _mediaGridZoomStep = 0;
 
 	QByteArray _photoEditorBrush;
 

@@ -8,6 +8,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #pragma once
 
 #include "iv/markdown/iv_markdown_article_layout_blocks.h"
+#include "iv/iv_rich_page.h"
 
 namespace Iv::Markdown {
 
@@ -40,16 +41,6 @@ struct SelectableSegment {
 	}
 };
 
-struct PaintSelectionState {
-	const std::vector<SelectableSegment> *segments = nullptr;
-	MarkdownArticleSelection selection;
-	const MarkdownArticleSelectionEndpoints *endpoints = nullptr;
-
-	[[nodiscard]] bool empty() const {
-		return !segments || selection.empty();
-	}
-};
-
 struct LogicalVisibleRange {
 	int top = 0;
 	int bottom = 0;
@@ -64,8 +55,23 @@ struct SegmentSpan {
 	}
 };
 
+struct PaintSearchSegmentRanges {
+	std::vector<TextSelection> other;
+	std::optional<TextSelection> current;
+
+	[[nodiscard]] bool empty() const {
+		return other.empty() && !current;
+	}
+};
+
 void CollectSelectableSegments(
 	std::vector<LaidOutBlock> *blocks,
+	std::vector<SelectableSegment> *segments);
+void RefreshScrollableSegmentRects(
+	const std::vector<LaidOutBlock> &blocks,
+	std::vector<SelectableSegment> *segments);
+void RefreshScrollableSegmentRects(
+	const LaidOutBlock &block,
 	std::vector<SelectableSegment> *segments);
 void CollectAnchors(
 	const std::vector<LaidOutBlock> &blocks,
@@ -74,11 +80,27 @@ void CollectAnchors(
 	const std::vector<SelectableSegment> *segments,
 	int index);
 [[nodiscard]] int SegmentLength(const SelectableSegment &segment);
+[[nodiscard]] const style::TextStyle &TextStyleForSegment(
+	const SelectableSegment &segment,
+	const style::Markdown &st);
+[[nodiscard]] style::color TextColorForSegment(
+	const SelectableSegment &segment,
+	const style::Markdown &st);
 [[nodiscard]] std::optional<TextSelection> TextSelectionForSegment(
 	const SelectableSegment &segment,
 	const PaintSelectionState &selectionState);
 [[nodiscard]] std::optional<TextSelection> TextSelectionForSegmentIndex(
 	const PaintSelectionState &selectionState,
+	int index);
+[[nodiscard]] std::optional<TextSelection> PaintTextSelectionForSegment(
+	const SelectableSegment &segment,
+	const PaintSelectionState &selectionState);
+[[nodiscard]] std::optional<TextSelection> PaintTextSelectionForSegmentIndex(
+	const PaintSelectionState &selectionState,
+	int index);
+[[nodiscard]] PaintSearchSegmentRanges PaintSearchRangesForSegmentIndex(
+	const PaintSelectionState &selectionState,
+	const PaintSearchState &searchState,
 	int index);
 [[nodiscard]] bool WholeSegmentSelected(
 	const SelectableSegment &segment,
@@ -89,12 +111,29 @@ void CollectAnchors(
 [[nodiscard]] bool TableSegmentSelected(
 	const PaintSelectionState &selectionState,
 	int tableSegmentIndex);
+[[nodiscard]] bool StructuralBlockSelected(
+	const PaintSelectionState &selectionState,
+	const PreparedEditBlockSource &source);
+[[nodiscard]] bool StructuralListItemSelected(
+	const PaintSelectionState &selectionState,
+	const PreparedEditListItemSource &source);
+[[nodiscard]] bool StructuralTableRowSelected(
+	const PaintSelectionState &selectionState,
+	const PreparedEditTableRowSource &source);
+[[nodiscard]] bool StructuralTableCellSelected(
+	const PaintSelectionState &selectionState,
+	const PreparedEditTableCellSource &source);
 [[nodiscard]] TextForMimeData TextForSegment(
 	const SelectableSegment &segment,
 	TextSelection selection = AllTextSelection);
 [[nodiscard]] TextForMimeData TextForSelectedSegments(
 	const std::vector<SelectableSegment> &segments,
 	MarkdownArticleSelection selection,
-	const MarkdownArticleSelectionEndpoints *endpoints);
+	const MarkdownArticleSelectionEndpoints *endpoints,
+	const PreparedEditSelection *structuralSelection = nullptr);
+[[nodiscard]] std::vector<RichPage::Block> RichPageBlocksForSelectedSegments(
+	const RichPage &page,
+	const std::vector<SelectableSegment> &segments,
+	MarkdownArticleSelection selection);
 
 } // namespace Iv::Markdown

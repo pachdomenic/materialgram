@@ -60,10 +60,14 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_file_origin.h"
 #include "data/data_download_manager.h"
 #include "data/data_web_page.h"
+#include "iv/iv_rich_page.h"
 #include "data/data_game.h"
 #include "data/data_poll.h"
 #include "data/data_replies_list.h"
 #include "data/data_chat_filters.h"
+#include "dialogs/dialogs_entry.h"
+#include "dialogs/dialogs_row.h"
+#include "base/options.h"
 #include "data/data_send_action.h"
 #include "data/data_message_reactions.h"
 #include "data/data_emoji_statuses.h"
@@ -91,6 +95,7 @@ namespace Data {
 namespace {
 
 constexpr auto kNextForUpgradeGiftTimeout = 5 * crl::time(1000);
+constexpr auto kMaxServiceNotificationMessageSize = 4096;
 
 using ViewElement = HistoryView::Element;
 
@@ -283,6 +288,12 @@ Session::Session(not_null<Main::Session*> session)
 		notifyUnreadBadgeChanged();
 	}, _lifetime);
 
+	base::options::lookup<bool>(
+		Dialogs::kOptionDialogsUnreadOnTop
+	).changes() | rpl::on_next([=] {
+		refreshChatListUnreadOnTop();
+	}, _lifetime);
+
 	_chatsFilters->changed(
 	) | rpl::on_next([=] {
 		const auto enabled = _chatsFilters->has();
@@ -398,6 +409,8 @@ void Session::subscribeForTopicRepliesLists() {
 }
 
 void Session::clear() {
+	_sessionDataAboutToBeCleared.fire({});
+
 	// Optimization: clear notifications before destroying items.
 	Core::App().notifications().clearFromSession(_session);
 
@@ -603,6 +616,7 @@ not_null<UserData*> Session::processUser(const MTPUser &data) {
 				info->userCreatesTopics = data.is_bot_forum_can_manage_topics();
 				info->canManageBots = data.is_bot_can_manage_bots();
 				info->supportsGuestChat = data.is_bot_guestchat();
+				info->supportsGuard = data.is_bot_guard();
 			}
 		}
 
@@ -672,6 +686,8 @@ not_null<UserData*> Session::processUser(const MTPUser &data) {
 		result->setFlags((result->flags() & ~flagsMask) | flagsSet);
 		result->setBotVerifyDetailsIcon(
 			data.vbot_verification_icon().value_or_empty());
+		result->setLinkedCommunityId(
+			data.vlinked_community_id().value_or_empty());
 		if (!minimal) {
 			if (storiesState) {
 				result->setStoriesState(storiesState->hasVideoStream
@@ -836,6 +852,10 @@ not_null<PeerData*> Session::processChat(const MTPChat &data) {
 	}, [&](const MTPDchannel &data) {
 		return peer(peerFromChannel(data.vid().v));
 	}, [&](const MTPDchannelForbidden &data) {
+		return peer(peerFromChannel(data.vid().v));
+	}, [&](const MTPDcommunity &data) {
+		return peer(peerFromChannel(data.vid().v));
+	}, [&](const MTPDcommunityForbidden &data) {
 		return peer(peerFromChannel(data.vid().v));
 	});
 	auto minimal = false;
@@ -1097,6 +1117,8 @@ not_null<PeerData*> Session::processChat(const MTPChat &data) {
 		applyMonoforumLinkedId(
 			channel,
 			data.vlinked_monoforum_id().value_or_empty());
+		channel->setLinkedCommunityId(
+			data.vlinked_community_id().value_or_empty());
 
 		if (wasInChannel != channel->amIn()) {
 			flags |= UpdateFlag::ChannelAmIn;
@@ -1159,6 +1181,84 @@ not_null<PeerData*> Session::processChat(const MTPChat &data) {
 			|| canAddMembers != channel->canAddMembers()) {
 			flags |= UpdateFlag::Rights;
 		}
+	}, [&](const MTPDcommunity &data) {
+		const auto channel = result->asChannel();
+
+		minimal = data.is_min();
+		if (minimal && !result->isLoaded()) {
+			LOG(("API Warning: not loaded minimal community applied."));
+		}
+
+		if (const auto accessHash = data.vaccess_hash()) {
+			if (!minimal || !channel->accessHash()) {
+				channel->setAccessHash(accessHash->v);
+			}
+		}
+		if (const auto rights = data.vdefault_banned_rights()) {
+			channel->setDefaultRestrictions(
+				ChatRestrictionsInfo(*rights).flags);
+		} else {
+			channel->setDefaultRestrictions(ChatRestrictions());
+		}
+		if (!minimal) {
+			const auto wasLoaded = result->isLoaded();
+			const auto hadRights = channel->hasAdminRights();
+			if (const auto rights = data.vadmin_rights()) {
+				channel->setAdminRights(ChatAdminRightsInfo(*rights).flags);
+			} else if (channel->hasAdminRights()) {
+				channel->setAdminRights(ChatAdminRights());
+			}
+			channel->date = data.vdate().v;
+			if (wasLoaded
+				&& !hadRights
+				&& channel->hasAdminRights()
+				&& !data.is_creator()) {
+				_communityAdminPromotions.fire(
+					not_null<ChannelData*>(channel));
+			}
+		}
+		channel->setName(qs(data.vtitle()), QString());
+		channel->setPhoto(data.vphoto());
+
+		using Flag = ChannelDataFlag;
+		const auto collapsed = data.is_collapsed_in_dialogs();
+		const auto flagsMask = Flag::Community
+			| Flag::Forbidden
+			| (!minimal
+				? (Flag::Left | Flag::Creator | Flag::CommunityCollapsed)
+				: Flag());
+		const auto flagsSet = Flag::Community
+			| (!minimal
+				? ((data.is_left() ? Flag::Left : Flag())
+					| (data.is_creator() ? Flag::Creator : Flag())
+					| (collapsed ? Flag::CommunityCollapsed : Flag()))
+				: Flag());
+		channel->setFlags((channel->flags() & ~flagsMask) | flagsSet);
+	}, [&](const MTPDcommunityForbidden &data) {
+		const auto channel = result->asChannel();
+
+		using Flag = ChannelDataFlag;
+		const auto flagsMask = Flag::Community
+			| Flag::CommunityCollapsed
+			| Flag::Forbidden;
+		const auto flagsSet = Flag::Community | Flag::Forbidden;
+		channel->setFlags((channel->flags() & ~flagsMask) | flagsSet);
+
+		if (channel->hasAdminRights()) {
+			channel->setAdminRights(ChatAdminRights());
+		}
+		if (channel->hasRestrictions()) {
+			channel->setRestrictions(ChatRestrictionsInfo());
+		}
+
+		channel->setName(qs(data.vtitle()), QString());
+
+		if (const auto accessHash = data.vaccess_hash()) {
+			channel->setAccessHash(accessHash->v);
+		}
+		channel->setPhoto(MTP_chatPhotoEmpty());
+		channel->date = 0;
+		channel->setMembersCount(0);
 	}, [](const MTPDchatEmpty &) {
 	});
 
@@ -2195,6 +2295,10 @@ rpl::producer<not_null<const HistoryItem*>> Session::itemRemoved(
 	});
 }
 
+rpl::producer<> Session::sessionDataAboutToBeCleared() const {
+	return _sessionDataAboutToBeCleared.events();
+}
+
 void Session::notifyItemsAboutToBeDestroyed(
 		const std::vector<not_null<HistoryItem*>> &items) {
 	_itemsAboutToBeDestroyed.fire_copy(items);
@@ -2516,6 +2620,11 @@ void Session::applyPinnedChats(
 			if (folder) {
 				LOG(("API Error: Nested folders detected."));
 			}
+		}, [&](const MTPDdialogPeerCommunity &data) {
+			const auto channelId = ChannelId(data.vcommunity_id().v);
+			if (const auto channel = channelLoaded(channelId)) {
+				this->history(channel)->clearFolder();
+			}
 		});
 	}
 	chatsList(folder)->pinned()->applyList(this, list);
@@ -2577,6 +2686,22 @@ void Session::applyDialog(
 	const auto folder = processFolder(data.vfolder());
 	folder->applyDialog(data);
 	setPinnedFromEntryList(folder, data.is_pinned());
+}
+
+void Session::applyDialog(
+		Data::Folder *requestFolder,
+		const MTPDdialogCommunity &data) {
+	const auto channelId = ChannelId(data.vcommunity_id().v);
+	const auto channel = channelLoaded(channelId);
+	if (!channel || !channel->isCommunity()) {
+		return;
+	}
+	const auto history = this->history(channel);
+	notifySettings().apply(
+		peerFromChannel(channelId),
+		data.vnotify_settings());
+	channel->ensuredCommunityInfo()->ensureRowInChatList();
+	setPinnedFromEntryList(history, data.is_pinned());
 }
 
 bool Session::pinnedCanPin(not_null<Dialogs::Entry*> entry) const {
@@ -3994,7 +4119,9 @@ not_null<WebPageData*> Session::processWebpage(
 not_null<WebPageData*> Session::webpage(
 		WebPageId id,
 		const QString &siteName,
-		const TextWithEntities &content) {
+		const TextWithEntities &content,
+		PhotoData *photo,
+		DocumentData *document) {
 	return webpage(
 		id,
 		WebPageType::Article,
@@ -4003,8 +4130,8 @@ not_null<WebPageData*> Session::webpage(
 		siteName,
 		QString(),
 		content,
-		nullptr,
-		nullptr,
+		photo,
+		document,
 		WebPageCollage(),
 		nullptr,
 		nullptr,
@@ -4227,55 +4354,25 @@ void Session::webpageApplyFields(
 			}, [](const auto &) {});
 		}
 	}
-	if (const auto page = data.vcached_page()) {
-		for (const auto &photo : page->data().vphotos().v) {
-			processPhoto(photo);
-		}
-		for (const auto &document : page->data().vdocuments().v) {
-			processDocument(document);
-		}
-		const auto process = [&](
-				const MTPPageBlock &block,
-				const auto &self) -> void {
-			block.match([&](const MTPDpageBlockChannel &data) {
-				processChat(data.vchannel());
-			}, [&](const MTPDpageBlockCover &data) {
-				self(data.vcover(), self);
-			}, [&](const MTPDpageBlockEmbedPost &data) {
-				for (const auto &block : data.vblocks().v) {
-					self(block, self);
-				}
-			}, [&](const MTPDpageBlockCollage &data) {
-				for (const auto &block : data.vitems().v) {
-					self(block, self);
-				}
-			}, [&](const MTPDpageBlockSlideshow &data) {
-				for (const auto &block : data.vitems().v) {
-					self(block, self);
-				}
-			}, [&](const MTPDpageBlockDetails &data) {
-				for (const auto &block : data.vblocks().v) {
-					self(block, self);
-				}
-			}, [](const auto &) {});
-		};
-		for (const auto &block : page->data().vblocks().v) {
-			process(block, process);
-		}
-	}
 	const auto type = story ? WebPageType::Story : ParseWebPageType(data);
-	auto iv = (data.vcached_page() && !IgnoreIv(type))
-		? std::make_unique<Iv::Data>(data, *data.vcached_page())
+	const auto cachedPage = data.vcached_page();
+	const auto ivPhoto = photo ? processPhoto(*photo).get() : nullptr;
+	const auto ivDocument = document ? processDocument(*document).get() : nullptr;
+	const auto richPage = (cachedPage && !IgnoreIv(type))
+		? Iv::ParseRichPage(_session, data)
+		: nullptr;
+	auto iv = richPage
+		? std::make_unique<Iv::Data>(data, richPage)
 		: nullptr;
 	const auto resolvedPhoto = story
 		? story->photo()
 		: photo
-		? processPhoto(*photo).get()
+		? ivPhoto
 		: nullptr;
 	const auto resolvedDocument = story
 		? story->document()
 		: document
-		? processDocument(*document).get()
+		? ivDocument
 		: lookupThemeDocument();
 	const auto photoIsVideoCover = data.is_video_cover_photo()
 		|| (resolvedDocument
@@ -5155,6 +5252,11 @@ rpl::producer<not_null<ChannelData*>> Session::channelDifferenceTooLong() const 
 	return _channelDifferenceTooLong.events();
 }
 
+auto Session::communityAdminPromotions() const
+-> rpl::producer<not_null<ChannelData*>> {
+	return _communityAdminPromotions.events();
+}
+
 void Session::registerItemView(not_null<ViewElement*> view) {
 	_views[view->data()].push_back(view);
 }
@@ -5222,6 +5324,13 @@ not_null<Dialogs::MainList*> Session::chatsListFor(
 		return topic->forum()->topicsList();
 	} else if (const auto sublist = entry->asSublist()) {
 		return sublist->parent()->chatsList();
+	} else if (const auto history = entry->asHistory()) {
+		if (const auto info = history->communityListInfo()
+			; info
+			&& info->collapsedInDialogs()
+			&& info->channel() != history->peer) {
+			return info->chatsList();
+		}
 	}
 	return chatsList(entry->folder());
 }
@@ -5310,6 +5419,22 @@ void Session::refreshChatListEntry(Dialogs::Key key) {
 	}
 }
 
+void Session::refreshChatListUnreadOnTop() {
+	auto entries = std::vector<not_null<Dialogs::Entry*>>();
+	const auto collect = [&](not_null<Dialogs::MainList*> list) {
+		for (const auto &row : list->indexed()->all()) {
+			entries.push_back(row->entry());
+		}
+	};
+	collect(&_chatsList);
+	if (const auto folder = folderLoaded(Data::Folder::kId)) {
+		collect(folder->chatsList());
+	}
+	for (const auto &entry : entries) {
+		entry->updateChatListSortPosition();
+	}
+}
+
 void Session::removeChatListEntry(Dialogs::Key key) {
 	using namespace Dialogs;
 
@@ -5393,7 +5518,8 @@ void Session::serviceNotification(
 			MTPPeerColor(), // profile_color
 			MTPint(), // bot_active_users
 			MTPlong(), // bot_verification_icon
-			MTPlong())); // send_paid_messages_stars
+			MTPlong(), // send_paid_messages_stars
+			MTPlong())); // linked_community_id
 	}
 	const auto history = this->history(PeerData::kServiceNotificationsId);
 	const auto insert = [=] {
@@ -5420,7 +5546,10 @@ void Session::insertCheckedServiceNotification(
 	const auto localFlags = MessageFlag::ClientSideUnread
 		| MessageFlag::Local;
 	auto sending = TextWithEntities(), left = message;
-	while (TextUtilities::CutPart(sending, left, MaxMessageSize)) {
+	while (TextUtilities::CutPart(
+			sending,
+			left,
+			kMaxServiceNotificationMessageSize)) {
 		const auto id = nextLocalMessageId();
 		addNewMessage(
 			id,
@@ -5458,7 +5587,8 @@ void Session::insertCheckedServiceNotification(
 				MTPlong(), // paid_message_stars
 				MTPSuggestedPost(),
 				MTPint(), // schedule_repeat_period
-				MTPstring()), // summary_from_language
+				MTPstring(), // summary_from_language
+				MTPRichMessage()),
 			localFlags,
 			NewMessageType::Unread);
 	}
@@ -5576,6 +5706,15 @@ void Session::webViewResultSent(WebViewResultSent &&sent) {
 
 auto Session::webViewResultSent() const -> rpl::producer<WebViewResultSent> {
 	return _webViewResultSent.events();
+}
+
+void Session::joinChatWebViewDecision(JoinChatWebViewDecision &&decision) {
+	return _joinChatWebViewDecision.fire(std::move(decision));
+}
+
+auto Session::joinChatWebViewDecision() const
+-> rpl::producer<JoinChatWebViewDecision> {
+	return _joinChatWebViewDecision.events();
 }
 
 rpl::producer<not_null<PeerData*>> Session::peerDecorationsUpdated() const {

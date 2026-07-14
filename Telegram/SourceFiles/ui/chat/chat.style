@@ -347,6 +347,13 @@ historyPinInSelectedIcon: icon {{ "history_pin", msgInDateFgSelected }};
 historyPinOutIcon: icon {{ "history_pin", historyOutIconFg }};
 historyPinOutSelectedIcon: icon {{ "history_pin", historyOutIconFgSelected }};
 historyPinInvertedIcon: icon {{ "history_pin", historySendingInvertedIconFg }};
+historySilentWidth: 12px;
+historySilentTop: -13px;
+historySilentInIcon: icon {{ "dialogs/dialogs_mute", msgInDateFg }};
+historySilentInSelectedIcon: icon {{ "dialogs/dialogs_mute", msgInDateFgSelected }};
+historySilentOutIcon: icon {{ "dialogs/dialogs_mute", historyOutIconFg }};
+historySilentOutSelectedIcon: icon {{ "dialogs/dialogs_mute", historyOutIconFgSelected }};
+historySilentInvertedIcon: icon {{ "dialogs/dialogs_mute", historySendingInvertedIconFg }};
 
 historyBotMenuSkip: 8px;
 historyBotMenuMaxWidth: 160px;
@@ -387,7 +394,6 @@ msgBotKbButton: BotKeyboardButton {
 
 botDescSkip: 8px;
 
-botKbDuration: 200;
 botKbStyle: TextStyle(defaultTextStyle) {
 	font: font(15px semibold);
 }
@@ -439,6 +445,21 @@ historyPsaIconSkip1: 23px;
 historyPsaIconSkip2: 23px;
 historyPsaIconPosition1: point(-5px, 0px);
 historyPsaIconPosition2: point(-5px, 0px);
+
+historyEphemeralIconIn: icon {{ "chat/ephemeral_badge", msgInServiceFg }};
+historyEphemeralIconInSelected: icon {{ "chat/ephemeral_badge", msgInServiceFgSelected }};
+historyEphemeralIconOut: icon {{ "chat/ephemeral_badge", msgOutServiceFg }};
+historyEphemeralIconOutSelected: icon {{ "chat/ephemeral_badge", msgOutServiceFgSelected }};
+historyEphemeralInvertedIcon: icon {{ "chat/ephemeral_badge", historySendingInvertedIconFg }};
+historyEphemeralIconSkip: 4px;
+historyEphemeralBadgeBottom: 2px;
+historyEphemeralStateWidth: 16px;
+historyEphemeralStateTop: -14px;
+historyEphemeralPlateStyle: TextStyle(semiboldTextStyle) {
+	font: font(12px semibold);
+	linkUnderline: kLinkUnderlineActive;
+}
+historyEphemeralIconLeftSkip: 1px;
 
 historyStatusFg: windowSubTextFg;
 historyStatusFgActive: windowActiveTextFg;
@@ -542,6 +563,11 @@ msgWaveformBar: 2px;
 msgWaveformSkip: 1px;
 msgWaveformMin: 3px;
 msgWaveformMax: 17px;
+
+msgVoicePlaybackMinorBlobMinRadius: 25px;
+msgVoicePlaybackMinorBlobMaxRadius: 28px;
+msgVoicePlaybackMajorBlobMinRadius: 26px;
+msgVoicePlaybackMajorBlobMaxRadius: 29px;
 
 historyVoiceMessageInTTL: icon {{ "chat/mini_media_once", historyFileInIconFg }};
 historyVoiceMessageInTTLSelected: icon {{ "chat/mini_media_once", historyFileInIconFgSelected }};
@@ -935,6 +961,7 @@ msgServiceStarGiftStickerTop: 24px;
 msgServiceStarGiftStickerSize: 100px;
 msgServiceGiftThemeStickerSize: 64px;
 msgServiceGiftThemeStickerPadding: margins(18px, 18px, 18px, 18px);
+msgServiceCommunityAddedPhoto: 66px; // About 2/3 of msgServicePhotoWidth.
 
 historySponsorInfoItem: FlatLabel(defaultFlatLabel) {
 	style: TextStyle(defaultTextStyle) {

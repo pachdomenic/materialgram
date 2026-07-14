@@ -11,6 +11,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "iv/markdown/iv_markdown_prepare.h"
 
 #include <memory>
+#include <vector>
 
 namespace Ui {
 class RpWidget;
@@ -29,12 +30,41 @@ namespace Iv::Markdown {
 	std::shared_ptr<MathRenderer> renderer,
 	Fn<void(Event)> callback,
 	const OpenOptions &options = {});
+bool UpdateMarkdownPreviewWidget(
+	Ui::RpWidget *preview,
+	MarkdownArticleContent content,
+	const OpenOptions &options);
+enum class MarkdownPreviewScrollMode {
+	Instant,
+	Animated,
+};
 bool ScrollMarkdownPreviewToAnchor(
 	Ui::RpWidget *preview,
-	const QString &anchorId);
-void ScrollMarkdownPreviewToY(Ui::RpWidget *preview, int top);
+	const QString &anchorId,
+	MarkdownPreviewScrollMode mode = MarkdownPreviewScrollMode::Instant);
+void ScrollMarkdownPreviewToY(
+	Ui::RpWidget *preview,
+	int top,
+	MarkdownPreviewScrollMode mode = MarkdownPreviewScrollMode::Instant);
 [[nodiscard]] int MarkdownPreviewScrollTop(Ui::RpWidget *preview);
 [[nodiscard]] rpl::producer<int> MarkdownPreviewScrollTopValue(
 	Ui::RpWidget *preview);
+
+struct MarkdownArticleSearchMatch;
+struct MarkdownArticleSearchSource;
+
+[[nodiscard]] auto MarkdownPreviewSearchSources(Ui::RpWidget *preview)
+-> std::vector<MarkdownArticleSearchSource>;
+bool ExpandMarkdownPreviewDetails(
+	Ui::RpWidget *preview,
+	const QString &anchorId);
+void ScrollMarkdownPreviewToSegment(
+	Ui::RpWidget *preview,
+	int segmentIndex,
+	int topMargin);
+void SetMarkdownPreviewSearchMatches(
+	Ui::RpWidget *preview,
+	std::vector<MarkdownArticleSearchMatch> matches,
+	int current);
 
 } // namespace Iv::Markdown

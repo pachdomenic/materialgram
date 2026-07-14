@@ -55,6 +55,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/vertical_list.h"
 #include "ui/ui_utility.h"
 #include "lottie/lottie_single_player.h"
+#include "data/components/ephemeral_messages.h"
 #include "data/data_channel.h"
 #include "data/data_document.h"
 #include "data/data_user.h"
@@ -189,6 +190,18 @@ void EditFileCaptionBox(
 		TextWithTags currentCaption,
 		Fn<bool(TextWithTags)> apply) {
 	box->setTitle(tr::lng_context_upload_edit_caption());
+	const auto window = Core::App().findWindow(box);
+	const auto controller = window ? window->sessionController() : nullptr;
+	const auto maxCaptionLength = [&] {
+		if (captionToPeer) {
+			return Data::PremiumLimits(
+				&captionToPeer->session()).captionLengthCurrent();
+		} else if (controller) {
+			return Data::PremiumLimits(
+				&controller->session()).captionLengthCurrent();
+		}
+		return kMaxMessageLength;
+	}();
 	const auto wrap = box->addRow(
 		object_ptr<Ui::RpWidget>(box),
 		st::boxRowPadding);
@@ -197,11 +210,10 @@ void EditFileCaptionBox(
 		st.files.caption,
 		Ui::InputField::Mode::MultiLine,
 		tr::lng_photo_caption());
-	field->setMaxLength(kMaxMessageLength);
+	field->setMaxLength(maxCaptionLength);
 	field->setSubmitSettings(Core::App().settings().sendSubmitWay());
 	Ui::ResizeFitChild(wrap, field);
-	if (const auto window = Core::App().findWindow(box)) {
-		const auto controller = window->sessionController();
+	if (window) {
 		const auto allow = [=](not_null<DocumentData*> emoji) {
 			return captionToPeer
 				&& Data::AllowEmojiWithoutPremium(captionToPeer, emoji);
@@ -727,6 +739,9 @@ void SendFilesBox::setReplyTo(FullReplyTo replyTo) {
 		if (_replyHeader) {
 			_replyHeader->hideAnimated();
 		}
+		if (_send) {
+			refreshButtons();
+		}
 	}, _replyHeader->lifetime());
 	_replyHeader->hideFinished(
 	) | rpl::on_next([=] {
@@ -737,6 +752,9 @@ void SendFilesBox::setReplyTo(FullReplyTo replyTo) {
 			updateControlsGeometry();
 		});
 	}, _replyHeader->lifetime());
+	if (_send) {
+		refreshButtons();
+	}
 }
 
 Fn<SendMenu::Details()> SendFilesBox::prepareSendMenuDetails(
@@ -986,7 +1004,11 @@ void SendFilesBox::refreshButtons() {
 		[=] { send({}); });
 	refreshMessagesCount();
 
-	const auto perMessage = _toPeer->starsPerMessageChecked();
+	const auto ephemeralReply = _show->session().ephemeralMessages()
+		.isEphemeralBotReply(_replyTo.messageId);
+	const auto perMessage = ephemeralReply
+		? 0
+		: _toPeer->starsPerMessageChecked();
 	if (perMessage > 0) {
 		_send->setText(PaidSendButtonText(_messagesCount.value(
 		) | rpl::map(rpl::mappers::_1 * perMessage)));
@@ -1889,7 +1911,8 @@ void SendFilesBox::setupCaption() {
 	}
 	_caption->setSubmitSettings(
 		Core::App().settings().sendSubmitWay());
-	_caption->setMaxLength(kMaxMessageLength);
+	_caption->setMaxLength(
+		Data::PremiumLimits(&_show->session()).captionLengthCurrent());
 
 	_caption->heightChanges(
 	) | rpl::on_next([=] {

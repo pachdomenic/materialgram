@@ -7,28 +7,36 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "iv/markdown/iv_markdown_view_widget.h"
 
+#include "base/qt/qt_common_adapters.h"
 #include "base/weak_ptr.h"
 #include "core/click_handler_types.h"
 #include "core/credits_amount.h"
 #include "core/file_utilities.h"
+#include "iv/editor/iv_editor_clipboard.h"
 #include "iv/markdown/iv_markdown_article_text.h"
 #include "iv/markdown/iv_markdown_prepare_native_richtext.h"
 #include "lang/lang_keys.h"
 #include "spellcheck/spellcheck_highlight_syntax.h"
 #include "ui/chat/chat_style.h"
+#include "ui/chat/chat_theme.h"
 #include "ui/layers/show.h"
 #include "ui/text/text_extended_data.h"
+#include "ui/toast/toast.h"
+#include "ui/ui_utility.h"
 #include "ui/widgets/popup_menu.h"
+#include "ui/widgets/tooltip.h"
 #include "ui/color_contrast.h"
 #include "ui/integration.h"
 
 #include "styles/palette.h"
 #include "styles/style_chat.h"
+#include "styles/style_chat_helpers.h"
 #include "styles/style_iv.h"
 #include "styles/style_layers.h"
 #include "styles/style_menu_icons.h"
 
 #include <QtCore/QElapsedTimer>
+#include <QtCore/QMimeData>
 #include <QtCore/QPointer>
 #include <QtGui/QClipboard>
 #include <QtGui/QContextMenuEvent>
@@ -37,6 +45,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtGui/QKeyEvent>
 #include <QtGui/QKeySequence>
 #include <QtGui/QMouseEvent>
+#include <QtGui/QTouchEvent>
+#include <QtGui/QWheelEvent>
 #include <QtWidgets/QApplication>
 
 #include <algorithm>
@@ -125,23 +135,57 @@ void EnsurePrePaintCache(
 }
 
 [[nodiscard]] std::vector<Ui::Text::SpecialColor> HighlightColors(
-		not_null<const style::palette*> palette) {
-	auto result = Ui::SyntaxHighlightColors(palette);
+		not_null<const Ui::ChatStyle*> style) {
+	auto result = Ui::SyntaxHighlightColors(style);
 
-	const auto &fg = palette->lightButtonFg();
-	const auto &bg = palette->lightButtonBgOver();
+	const auto &fg = style->lightButtonFg();
+	const auto &bg = style->lightButtonBgOver();
 	result.push_back({ &fg->p, &fg->p, &bg->b, &bg->b });
 
 	Ensures(result.size() == kNativeIvLinkSpecialColorIndex);
 	return result;
 }
 
+[[nodiscard]] std::unique_ptr<Ui::ChatTheme> CreateStandaloneChatTheme() {
+	const auto palette = style::main_palette::get();
+	return std::make_unique<Ui::ChatTheme>(Ui::ChatThemeDescriptor{
+		.preparePalette = [=](style::palette &copy) {
+			copy = *palette;
+		},
+		.backgroundData = {
+			.colors = { palette->windowBg()->c },
+		},
+	});
+}
+
+[[nodiscard]] QPoint LocalPosition(QWheelEvent *e) {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+	return e->position().toPoint();
+#else // Qt >= 6.0
+	return e->pos();
+#endif // Qt >= 6.0
+}
+
+[[nodiscard]] QPoint ArticlePointFromWidget(QPoint point, double scale) {
+	if (scale != 1.) {
+		point = QPoint(
+			int(std::floor(point.x() / scale)),
+			int(std::floor(point.y() / scale)));
+	}
+	return point;
+}
+
 } // namespace
 
 MarkdownDocumentWidget::MarkdownDocumentWidget(QWidget *parent)
 : Ui::RpWidget(parent)
-, _highlightColors(HighlightColors(style::main_palette::get())) {
+, _theme(CreateStandaloneChatTheme())
+, _style(std::make_unique<Ui::ChatStyle>(style::main_palette::get())) {
+	_style->apply(_theme.get());
+	_highlightColors = HighlightColors(_style.get());
+
 	setMouseTracking(true);
+	setAttribute(Qt::WA_AcceptTouchEvents);
 	setFocusPolicy(Qt::StrongFocus);
 
 	Spellchecker::HighlightReady(
@@ -169,6 +213,11 @@ void MarkdownDocumentWidget::setMediaActivationCallback(
 	_activateMedia = std::move(callback);
 }
 
+void MarkdownDocumentWidget::setZoomStepCallback(
+		std::function<void(int)> callback) {
+	_zoomStepCallback = std::move(callback);
+}
+
 void MarkdownDocumentWidget::setClickHandlerContext(
 		QVariant context,
 		std::shared_ptr<QVariant> contextRef) {
@@ -180,11 +229,18 @@ void MarkdownDocumentWidget::setArticle(
 		std::shared_ptr<MarkdownArticle> article) {
 	ClickHandler::clearActive(this);
 	applyCursor(style::cur_default);
-	if (_article && (_article->mediaBlockHost() == this)) {
-		_article->setTextRepaintCallbacks(nullptr, nullptr);
-		_article->setMediaBlockHost(nullptr);
+	auto previous = std::move(_article);
+	if (previous && (previous->mediaBlockHost() == this)) {
+		previous->setTextRepaintCallbacks(nullptr, nullptr);
+		previous->setMediaBlockHost(nullptr);
+	}
+	if (previous && article && _articlePainted) {
+		_retainedArticle = std::move(previous);
+	} else if (!article) {
+		_retainedArticle = nullptr;
 	}
 	_article = std::move(article);
+	_articlePainted = false;
 	if (_article) {
 		const auto weak = QPointer<MarkdownDocumentWidget>(this);
 		_article->setTextRepaintCallbacks(
@@ -201,9 +257,30 @@ void MarkdownDocumentWidget::setArticle(
 		_article->setMediaBlockHost(this);
 	}
 	_lastRelayoutMs = 0;
+	_mediaCreationRetried = false;
 	resetTextPaintCaches();
 	resetSelection();
 	forceRelayoutCurrentWidth();
+}
+
+void MarkdownDocumentWidget::articleContentChanged() {
+	ClickHandler::clearActive(this);
+	applyCursor(style::cur_default);
+	stopPressedPlaceholderRipple();
+	clearSelection();
+	_articlePainted = false;
+	resetTextPaintCaches();
+	_mediaCreationRetried = false;
+	forceRelayoutCurrentWidth();
+}
+
+void MarkdownDocumentWidget::setSearchMatches(
+		std::vector<MarkdownArticleSearchMatch> matches,
+		int current) {
+	if (_article) {
+		_article->setSearchMatches(std::move(matches), current);
+	}
+	update();
 }
 
 void MarkdownDocumentWidget::setZoom(int value) {
@@ -219,7 +296,9 @@ void MarkdownDocumentWidget::setZoom(int value) {
 void MarkdownDocumentWidget::refreshPalette() {
 	ClickHandler::clearActive(this);
 	applyCursor(style::cur_default);
-	_highlightColors = HighlightColors(style::main_palette::get());
+	_theme = CreateStandaloneChatTheme();
+	_style->apply(_theme.get());
+	_highlightColors = HighlightColors(_style.get());
 	resetTextPaintCaches();
 	if (_article) {
 		_article->invalidatePaletteCache();
@@ -251,6 +330,60 @@ int MarkdownDocumentWidget::anchorTop(const QString &anchorId) const {
 	return int(std::floor(top * zoomScale()));
 }
 
+auto MarkdownDocumentWidget::scrollAnchorForTop(int top) const
+-> std::optional<MarkdownArticleScrollAnchor> {
+	if (!_article) {
+		return std::nullopt;
+	}
+	return _article->scrollAnchorForTop(int(std::floor(top / zoomScale())));
+}
+
+int MarkdownDocumentWidget::scrollTopForAnchor(
+		const MarkdownArticleScrollAnchor &anchor) const {
+	const auto top = _article ? _article->scrollTopForAnchor(anchor) : -1;
+	if (top < 0) {
+		return -1;
+	}
+	return int(std::floor(top * zoomScale()));
+}
+
+bool MarkdownDocumentWidget::expandDetailsToAnchor(const QString &anchorId) {
+	if (!_article) {
+		return false;
+	}
+	const auto result = _article->expandDetailsToAnchor(anchorId);
+	if (!result.found) {
+		return false;
+	}
+	if (result.changed) {
+		clearSelection();
+		forceRelayoutCurrentWidth();
+		updateHoverAtCursor();
+	}
+	return true;
+}
+
+bool MarkdownDocumentWidget::expandDetailsBlock(const QString &anchorId) {
+	if (!_article) {
+		return false;
+	}
+	const auto result = _article->expandDetailsBlock(anchorId);
+	if (!result.found || !result.changed) {
+		return false;
+	}
+	clearSelection();
+	forceRelayoutCurrentWidth();
+	updateHoverAtCursor();
+	return true;
+}
+
+QRect MarkdownDocumentWidget::segmentRect(int segmentIndex) const {
+	const auto rect = _article
+		? _article->segmentRect(segmentIndex)
+		: QRect();
+	return rect.isEmpty() ? QRect() : articleRectToWidget(rect);
+}
+
 bool MarkdownDocumentWidget::toggleDetails(const QString &anchorId) {
 	if (!_article || !_article->toggleDetails(anchorId)) {
 		return false;
@@ -273,12 +406,14 @@ int MarkdownDocumentWidget::resizeGetHeight(int newWidth) {
 		return 1;
 	}
 	const auto scale = zoomScale();
-	const auto layoutWidth = std::max(int(std::floor(newWidth / scale)), 1);
+	const auto layoutWidth = articleLayoutWidth(newWidth);
+	_article->setMediaPixelScale(scale);
 	auto timer = QElapsedTimer();
 	timer.start();
 	const auto layoutHeight = _article->resizeGetHeight(layoutWidth);
 	syncArticleVisibleTopBottom();
 	_lastRelayoutMs = int(timer.elapsed());
+	retryMissingMediaBlocks();
 	return std::max(int(std::ceil(layoutHeight * scale)), 1);
 }
 
@@ -303,7 +438,8 @@ void MarkdownDocumentWidget::requestRelayout(QRect articleRect) {
 		_article->invalidateLayout();
 		const auto previousHeight = height();
 		const auto scale = zoomScale();
-		const auto layoutWidth = std::max(int(std::floor(width() / scale)), 1);
+		const auto layoutWidth = articleLayoutWidth(width());
+		_article->setMediaPixelScale(scale);
 		auto timer = QElapsedTimer();
 		timer.start();
 		const auto articleHeight = _article->resizeGetHeight(layoutWidth);
@@ -319,7 +455,18 @@ void MarkdownDocumentWidget::requestRelayout(QRect articleRect) {
 			update(articleRectToWidget(articleRect));
 		}
 		updateHoverAtCursor();
+		retryMissingMediaBlocks();
 	});
+}
+
+void MarkdownDocumentWidget::retryMissingMediaBlocks() {
+	if (_mediaCreationRetried
+		|| !_article
+		|| !_article->hasMissingMediaBlocks()) {
+		return;
+	}
+	_mediaCreationRetried = true;
+	requestRelayout(QRect());
 }
 
 void MarkdownDocumentWidget::setPlaceholderLoading(
@@ -363,31 +510,28 @@ void MarkdownDocumentWidget::paintEvent(QPaintEvent *e) {
 	}
 	auto p = Painter(this);
 	p.setTextPalette(st::inTextPalette);
-	const auto caches = textPaintCaches();
 	const auto scale = zoomScale();
+	const auto clip = (scale == 1.)
+		? e->rect()
+		: QRect(
+			int(std::floor(e->rect().x() / scale)),
+			int(std::floor(e->rect().y() / scale)),
+			int(std::ceil(e->rect().width() / scale)) + 1,
+			int(std::ceil(e->rect().height() / scale)) + 1);
+	auto context = textPaintContext(clip);
 	if (scale == 1.) {
-		_article->paint(
-			p,
-			e->rect(),
-			caches,
-			_selection,
-			&_selectionEndpoints);
+		_article->paint(p, context);
+		_articlePainted = true;
+		_retainedArticle = nullptr;
 		return;
 	}
-	const auto clip = QRect(
-		int(std::floor(e->rect().x() / scale)),
-		int(std::floor(e->rect().y() / scale)),
-		int(std::ceil(e->rect().width() / scale)) + 1,
-		int(std::ceil(e->rect().height() / scale)) + 1);
 	p.save();
+	p.setRenderHint(QPainter::SmoothPixmapTransform);
 	p.scale(scale, scale);
-	_article->paint(
-		p,
-		clip,
-		caches,
-		_selection,
-		&_selectionEndpoints);
+	_article->paint(p, context);
 	p.restore();
+	_articlePainted = true;
+	_retainedArticle = nullptr;
 }
 
 void MarkdownDocumentWidget::visibleTopBottomUpdated(
@@ -423,9 +567,6 @@ void MarkdownDocumentWidget::contextMenuEvent(QContextMenuEvent *e) {
 	const auto uponSelection = !selection.empty()
 		&& ((e->reason() != QContextMenuEvent::Mouse)
 			|| selectionContains(selection, state));
-	const auto contextText = uponSelection
-		? TextForMimeData()
-		: (_article ? _article->textForContext(state) : TextForMimeData());
 	const auto link = state.preparedLink;
 
 	_contextMenu = base::make_unique_q<Ui::PopupMenu>(
@@ -435,14 +576,6 @@ void MarkdownDocumentWidget::contextMenuEvent(QContextMenuEvent *e) {
 		_contextMenu->addAction(
 			Ui::Integration::Instance().phraseContextCopySelected(),
 			[=] { copySelectedText(); },
-			&st::menuIconCopy);
-	} else if (!contextText.empty()) {
-		_contextMenu->addAction(
-			tr::lng_context_copy_text(tr::now),
-			[text = contextText, this] {
-				TextUtilities::SetClipboardText(text);
-				showToast(tr::lng_text_copied(tr::now));
-			},
 			&st::menuIconCopy);
 	}
 
@@ -460,26 +593,6 @@ void MarkdownDocumentWidget::contextMenuEvent(QContextMenuEvent *e) {
 				},
 				&st::menuIconCopy);
 		}
-		switch (link->kind) {
-		case PreparedLinkKind::RejectedRelative:
-		case PreparedLinkKind::ToggleDetails:
-			break;
-		case PreparedLinkKind::External:
-		case PreparedLinkKind::InstantViewPage:
-		case PreparedLinkKind::Anchor:
-		case PreparedLinkKind::Footnote:
-		case PreparedLinkKind::FootnoteBacklink:
-		case PreparedLinkKind::LocalFile:
-			_contextMenu->addAction(
-				tr::lng_open_link(tr::now),
-				[=, prepared = *link] {
-					if (_activateLink) {
-						_activateLink(prepared, Qt::LeftButton);
-					}
-				},
-				&st::menuIconAddress);
-			break;
-		}
 	}
 
 	if (_contextMenu->empty()) {
@@ -490,12 +603,146 @@ void MarkdownDocumentWidget::contextMenuEvent(QContextMenuEvent *e) {
 	e->accept();
 }
 
+void MarkdownDocumentWidget::wheelEvent(QWheelEvent *e) {
+	if (!_article) {
+		(void)_scrollDirectionLock.update(e->phase(), {});
+		e->ignore();
+		return;
+	}
+	if (e->modifiers().testFlag(Qt::ControlModifier)) {
+		(void)_scrollDirectionLock.update(e->phase(), {});
+		const auto angle = e->angleDelta().y();
+		const auto wheel = angle ? angle : e->pixelDelta().y();
+		if (wheel) {
+			constexpr auto step = int(QWheelEvent::DefaultDeltasPerStep);
+			_wheelZoomAccumulated += wheel;
+			while (std::abs(_wheelZoomAccumulated) >= step) {
+				if (_wheelZoomAccumulated < 0) {
+					_wheelZoomAccumulated += step;
+					if (_zoomStepCallback) {
+						_zoomStepCallback(-1);
+					}
+				} else {
+					_wheelZoomAccumulated -= step;
+					if (_zoomStepCallback) {
+						_zoomStepCallback(1);
+					}
+				}
+			}
+		}
+		e->accept();
+		return;
+	}
+	const auto delta = Ui::ScrollDeltaF(e);
+	const auto locked = _scrollDirectionLock.update(e->phase(), delta);
+	const auto horizontal = locked
+		? (*locked == Qt::Horizontal)
+		: (std::abs(delta.x()) > std::abs(delta.y()));
+	const auto local = ArticlePointFromWidget(LocalPosition(e), zoomScale());
+	if (!_article->horizontalScrollHit(local).scrollable) {
+		e->ignore();
+		return;
+	}
+	if (horizontal) {
+		(void)_article->consumeHorizontalScroll(
+			local,
+			int(std::round(delta.x())));
+		e->accept();
+	} else {
+		e->ignore();
+	}
+}
+
+void MarkdownDocumentWidget::touchEvent(QTouchEvent *e) {
+	if (e->type() == QEvent::TouchCancel) {
+		_pendingTouchHorizontalScrollPoint = std::nullopt;
+		if (!_activeTouchHorizontalScroll) {
+			return;
+		}
+		_activeTouchHorizontalScroll = false;
+		if (_article) {
+			_article->endHorizontalScroll();
+		}
+		e->accept();
+		return;
+	}
+	if (!_article || e->touchPoints().isEmpty()) {
+		return;
+	}
+	const auto point = mapFromGlobal(
+		e->touchPoints().cbegin()->screenPos().toPoint());
+	const auto local = ArticlePointFromWidget(point, zoomScale());
+	switch (e->type()) {
+	case QEvent::TouchBegin: {
+		_pendingTouchHorizontalScrollPoint = std::nullopt;
+		const auto hit = _article->horizontalScrollHit(local);
+		_activeTouchHorizontalScroll = hit.overScrollbar
+			&& _article->beginHorizontalScroll(local, false);
+		if (!_activeTouchHorizontalScroll && hit.overViewport) {
+			_pendingTouchHorizontalScrollPoint = local;
+		}
+		if (_activeTouchHorizontalScroll) {
+			e->accept();
+		}
+	} break;
+	case QEvent::TouchUpdate:
+		if (_activeTouchHorizontalScroll) {
+			(void)_article->updateHorizontalScroll(local);
+			e->accept();
+		} else if (_pendingTouchHorizontalScrollPoint) {
+			const auto delta = local - *_pendingTouchHorizontalScrollPoint;
+			if (delta.manhattanLength() < QApplication::startDragDistance()) {
+				break;
+			}
+			const auto horizontal = (std::abs(delta.x()) > std::abs(delta.y()));
+			if (!horizontal) {
+				_pendingTouchHorizontalScrollPoint = std::nullopt;
+				break;
+			}
+			_activeTouchHorizontalScroll = _article->beginHorizontalScroll(
+				*_pendingTouchHorizontalScrollPoint,
+				true);
+			_pendingTouchHorizontalScrollPoint = std::nullopt;
+			if (_activeTouchHorizontalScroll) {
+				(void)_article->updateHorizontalScroll(local);
+				e->accept();
+			}
+		}
+		break;
+	case QEvent::TouchEnd:
+		_pendingTouchHorizontalScrollPoint = std::nullopt;
+		if (_activeTouchHorizontalScroll) {
+			_activeTouchHorizontalScroll = false;
+			_article->endHorizontalScroll();
+			e->accept();
+		}
+		break;
+	default:
+		break;
+	}
+}
+
 void MarkdownDocumentWidget::mouseMoveEvent(QMouseEvent *e) {
+	if (_activeHorizontalScrollDrag) {
+		if (_article) {
+			(void)_article->updateHorizontalScroll(
+				ArticlePointFromWidget(e->pos(), zoomScale()));
+		}
+		e->accept();
+		return;
+	}
 	dragActionUpdate(e->pos());
 }
 
 void MarkdownDocumentWidget::mousePressEvent(QMouseEvent *e) {
 	if (e->button() == Qt::LeftButton) {
+		if (_article && _article->beginHorizontalScroll(
+				ArticlePointFromWidget(e->pos(), zoomScale()),
+				false)) {
+			_activeHorizontalScrollDrag = true;
+			e->accept();
+			return;
+		}
 		dragActionStart(e->pos(), e->button());
 		return;
 	}
@@ -510,6 +757,27 @@ void MarkdownDocumentWidget::mousePressEvent(QMouseEvent *e) {
 
 void MarkdownDocumentWidget::mouseReleaseEvent(QMouseEvent *e) {
 	const auto weak = base::make_weak(this);
+	if (_activeHorizontalScrollDrag && e->button() == Qt::LeftButton) {
+		if (_article) {
+			(void)_article->updateHorizontalScroll(
+				ArticlePointFromWidget(e->pos(), zoomScale()));
+		}
+		_activeHorizontalScrollDrag = false;
+		if (_article) {
+			_article->endHorizontalScroll();
+		}
+		if (weak && rect().contains(e->pos())) {
+			updateHover(hitTest(
+				e->pos(),
+				Ui::Text::StateRequest::Flag::LookupLink
+					| Ui::Text::StateRequest::Flag::LookupSymbol));
+		} else if (weak) {
+			ClickHandler::clearActive(this);
+			applyCursor(style::cur_default);
+		}
+		e->accept();
+		return;
+	}
 	dragActionFinish(e->pos(), e->button());
 	if (weak && !rect().contains(e->pos())) {
 		ClickHandler::clearActive(this);
@@ -518,6 +786,10 @@ void MarkdownDocumentWidget::mouseReleaseEvent(QMouseEvent *e) {
 }
 
 void MarkdownDocumentWidget::mouseDoubleClickEvent(QMouseEvent *e) {
+	if (_article && _article->horizontalScrollHit(
+			ArticlePointFromWidget(e->pos(), zoomScale())).overScrollbar) {
+		return;
+	}
 	dragActionStart(e->pos(), e->button());
 	if (_dragAction != Selecting || _selectionType != TextSelectType::Letters) {
 		return;
@@ -548,6 +820,8 @@ void MarkdownDocumentWidget::mouseDoubleClickEvent(QMouseEvent *e) {
 			uint16(_selection.from.offset),
 			uint16(_selection.to.offset));
 	}
+	_tripleClickPoint = e->pos();
+	_tripleClickTimer.callOnce(QApplication::doubleClickInterval());
 	setFocus();
 	updateHover(state);
 	update();
@@ -578,8 +852,26 @@ void MarkdownDocumentWidget::focusInEvent(QFocusEvent *e) {
 	Ui::RpWidget::focusInEvent(e);
 }
 
+bool MarkdownDocumentWidget::eventHook(QEvent *e) {
+	if (e->type() == QEvent::TouchBegin
+		|| e->type() == QEvent::TouchUpdate
+		|| e->type() == QEvent::TouchEnd
+		|| e->type() == QEvent::TouchCancel) {
+		auto *ev = static_cast<QTouchEvent*>(e);
+		if (ev->device()->type() == base::TouchDevice::TouchScreen) {
+			const auto active = _activeTouchHorizontalScroll;
+			touchEvent(ev);
+			if (active || _activeTouchHorizontalScroll) {
+				return true;
+			}
+		}
+	}
+	return Ui::RpWidget::eventHook(e);
+}
+
 void MarkdownDocumentWidget::leaveEventHook(QEvent *e) {
 	ClickHandler::clearActive(this);
+	Ui::Tooltip::Hide();
 	applyCursor((_dragAction == Selecting)
 		? style::cur_text
 		: style::cur_default);
@@ -598,6 +890,21 @@ void MarkdownDocumentWidget::clickHandlerPressedChanged(
 	update();
 }
 
+QString MarkdownDocumentWidget::tooltipText() const {
+	if (const auto lnk = ClickHandler::getActive()) {
+		return lnk->tooltip();
+	}
+	return QString();
+}
+
+QPoint MarkdownDocumentWidget::tooltipPos() const {
+	return QCursor::pos();
+}
+
+bool MarkdownDocumentWidget::tooltipWindowActive() const {
+	return Ui::AppInFocus() && Ui::InFocusChain(window());
+}
+
 ClickHandlerPtr MarkdownDocumentWidget::linkAt(QPoint point) const {
 	return hitTest(
 		point,
@@ -611,13 +918,9 @@ MarkdownArticleHitTestResult MarkdownDocumentWidget::hitTest(
 	if (!_article) {
 		return {};
 	}
-	const auto scale = zoomScale();
-	if (scale != 1.) {
-		point = QPoint(
-			int(std::floor(point.x() / scale)),
-			int(std::floor(point.y() / scale)));
-	}
-	return _article->hitTest(point, flags);
+	return _article->hitTest(
+		ArticlePointFromWidget(point, zoomScale()),
+		flags);
 }
 
 MarkdownArticleSelection MarkdownDocumentWidget::selectionForCopy() const {
@@ -665,11 +968,19 @@ MarkdownArticleSelection MarkdownDocumentWidget::selectionFromHit(
 	if (_selectionType != TextSelectType::Letters
 		&& !_dragExpandedSelection.empty()
 		&& result.segmentIndex != _dragSegment) {
-		first = (CompareSelectionPositions(
+		const auto targetBeforeAnchor = CompareSelectionPositions(
 			MarkdownArticleSelectionPosition{ result.segmentIndex, second },
-			MarkdownArticleSelectionPosition{ _dragSegment, _dragSymbol }) < 0)
+			MarkdownArticleSelectionPosition{ _dragSegment, _dragSymbol }) < 0;
+		first = targetBeforeAnchor
 			? _dragExpandedSelection.to
 			: _dragExpandedSelection.from;
+		if (_article->segmentIsText(result.segmentIndex)) {
+			const auto expanded = _article->adjustSelection(
+				result.segmentIndex,
+				TextSelection(uint16(second), uint16(second)),
+				_selectionType);
+			second = targetBeforeAnchor ? expanded.from : expanded.to;
+		}
 	}
 	if (result.segmentIndex == _dragSegment
 		&& _article->segmentIsText(_dragSegment)) {
@@ -718,14 +1029,57 @@ QVariant MarkdownDocumentWidget::viewerToastClickHandlerContext() const {
 void MarkdownDocumentWidget::showToast(const QString &text) const {
 	const auto context = clickHandlerContext().value<ClickHandlerContext>();
 	if (context.show) {
-		context.show->showToast(text);
+		context.show->showToast({
+			.text = { text },
+			.iconLottie = u"toast/copy"_q,
+			.iconLottieSize = st::toastLottieIconSize,
+		});
 	}
 }
 
 void MarkdownDocumentWidget::copySelectedText() {
-	if (const auto text = getSelectedText(); !text.empty()) {
+	const auto text = getSelectedText();
+	if (text.empty()) {
+		return;
+	}
+	auto blocks = _article
+		? _article->richPageSliceForSelection(selectionForCopy())
+		: std::vector<RichPage::Block>();
+	if (blocks.empty()) {
 		TextUtilities::SetClipboardText(text);
-		showToast(tr::lng_text_copied(tr::now));
+	} else {
+		auto data = Editor::ClipboardBlockData();
+		data.blocks = std::move(blocks);
+		auto mimeData = Editor::MimeDataFromClipboardData(
+			Editor::ClipboardData(std::move(data)));
+		if (const auto textMimeData = TextUtilities::MimeDataFromText(text)) {
+			for (const auto &format : textMimeData->formats()) {
+				mimeData->setData(format, textMimeData->data(format));
+			}
+		}
+		QGuiApplication::clipboard()->setMimeData(mimeData.release());
+	}
+	showToast(tr::lng_text_copied(tr::now));
+}
+
+void MarkdownDocumentWidget::copyCodeBlock(
+		const MarkdownArticleHitTestResult &state) {
+	if (!_article) {
+		return;
+	}
+	auto text = _article->textForContext(state);
+	if (text.empty()) {
+		return;
+	}
+	if (!text.rich.text.endsWith('\n')) {
+		text.rich.text.append('\n');
+	}
+	if (!text.expanded.endsWith('\n')) {
+		text.expanded.append('\n');
+	}
+	if (Ui::Integration::Instance().copyPreOnClick(
+			viewerToastClickHandlerContext())) {
+		TextUtilities::SetClipboardText(std::move(text));
 	}
 }
 
@@ -748,7 +1102,8 @@ void MarkdownDocumentWidget::relayoutCurrentWidth(bool clearSelection) {
 		return;
 	}
 	const auto scale = zoomScale();
-	const auto layoutWidth = std::max(int(std::floor(width() / scale)), 1);
+	const auto layoutWidth = articleLayoutWidth(width());
+	_article->setMediaPixelScale(scale);
 	auto timer = QElapsedTimer();
 	timer.start();
 	const auto articleHeight = _article->resizeGetHeight(layoutWidth);
@@ -765,9 +1120,16 @@ void MarkdownDocumentWidget::forceRelayoutCurrentWidth() {
 void MarkdownDocumentWidget::updateHover(
 		const MarkdownArticleHitTestResult &state) {
 	const auto changed = ClickHandler::setActive(state.state.link, this);
+	if (changed) {
+		Ui::Tooltip::Hide();
+	}
+	if (state.state.link && _dragAction == NoDrag) {
+		Ui::Tooltip::Show(1000, this);
+	}
 	auto cursor = style::cur_default;
 	if (_dragAction == NoDrag) {
-		if (state.state.link
+		if (state.codeHeaderCopy
+			|| state.state.link
 			|| (state.preparedLink
 				&& state.preparedLink->kind == PreparedLinkKind::ToggleDetails)
 			|| state.mediaActivation.kind != MediaActivationKind::None) {
@@ -835,6 +1197,7 @@ void MarkdownDocumentWidget::resetSelection() {
 	_dragExpandedSelection = {};
 	_selectionClickPreparedLink = std::nullopt;
 	_dragStartHadSelection = false;
+	_tripleClickTimer.cancel();
 }
 
 void MarkdownDocumentWidget::clearSelection() {
@@ -882,8 +1245,20 @@ Ui::Text::QuotePaintCache *MarkdownDocumentWidget::ensureBlockquotePaintCache() 
 	return _blockquotePaintCache.get();
 }
 
-MarkdownArticlePaintCaches MarkdownDocumentWidget::textPaintCaches() {
-	return {
+MarkdownArticlePaintContext MarkdownDocumentWidget::textPaintContext(
+		QRect clip) {
+	const auto scale = zoomScale();
+	const auto logicalRect = QRect(QPoint(), QSize(
+		articleLayoutWidth(width()),
+		std::max(int(std::floor(height() / scale)), 1)));
+	auto context = MarkdownArticlePaintContext(_theme->preparePaintContext(
+		_style.get(),
+		logicalRect,
+		logicalRect,
+		clip,
+		!window()->isActiveWindow()));
+	context.mediaPixelScale = scale;
+	context.caches = {
 		.pre = ensurePrePaintCache(),
 		.blockquote = ensureBlockquotePaintCache(),
 		.colors = _highlightColors,
@@ -902,6 +1277,13 @@ MarkdownArticlePaintCaches MarkdownDocumentWidget::textPaintCaches() {
 			});
 		},
 	};
+	context.selectionState.selection = !_selection.empty()
+		? _selection
+		: _savedSelection;
+	context.selectionState.endpoints = !_selection.empty()
+		? &_selectionEndpoints
+		: &_savedSelectionEndpoints;
+	return context;
 }
 
 void MarkdownDocumentWidget::stopPressedPlaceholderRipple() {
@@ -921,6 +1303,13 @@ void MarkdownDocumentWidget::dragActionStart(
 			| Ui::Text::StateRequest::Flag::LookupSymbol);
 	updateHover(state);
 	if (button != Qt::LeftButton) {
+		return;
+	}
+	if (state.codeHeaderCopy) {
+		clearSelection();
+		_dragStartPosition = point;
+		_selectionClickPreparedLink = std::nullopt;
+		_dragAction = PrepareDrag;
 		return;
 	}
 	if (state.mediaActivation.kind == MediaActivationKind::Embed
@@ -963,6 +1352,23 @@ void MarkdownDocumentWidget::dragActionStart(
 	};
 	_savedSelectionEndpoints = {};
 	_dragAction = Selecting;
+	if (_tripleClickTimer.isActive()
+		&& (point - _tripleClickPoint).manhattanLength()
+			< QApplication::startDragDistance()
+		&& _article->segmentIsText(state.segmentIndex)
+		&& state.direct
+		&& state.state.uponSymbol) {
+		_selectionType = TextSelectType::Paragraphs;
+		_selection = selectionFromHit(state);
+		if (_selection.from.segment == _dragSegment
+			&& _selection.to.segment == _dragSegment) {
+			_dragExpandedSelection = TextSelection(
+				uint16(_selection.from.offset),
+				uint16(_selection.to.offset));
+		}
+		_tripleClickPoint = point;
+		_tripleClickTimer.callOnce(QApplication::doubleClickInterval());
+	}
 	update();
 }
 
@@ -987,6 +1393,8 @@ MarkdownArticleHitTestResult MarkdownDocumentWidget::dragActionFinish(
 	stopPressedPlaceholderRipple();
 	auto activated = ClickHandler::unpressed();
 	const auto dragStartHadSelection = _dragStartHadSelection;
+	const auto wasClick = (_dragAction == NoDrag)
+		|| (_dragAction == PrepareDrag);
 	const auto toggleFromDetailsClick = !dragStartHadSelection
 		&& _selection.empty()
 		&& _selectionClickPreparedLink
@@ -1009,6 +1417,12 @@ MarkdownArticleHitTestResult MarkdownDocumentWidget::dragActionFinish(
 	_selectionType = TextSelectType::Letters;
 	_dragExpandedSelection = {};
 	updateHover(state);
+	if (state.codeHeaderCopy
+		&& (button == Qt::LeftButton || button == Qt::MiddleButton)
+		&& wasClick) {
+		copyCodeBlock(state);
+		return state;
+	}
 	if (activated
 		&& (button == Qt::LeftButton || button == Qt::MiddleButton)) {
 		if (state.mediaActivation.kind != MediaActivationKind::None
@@ -1074,6 +1488,12 @@ void MarkdownDocumentWidget::applyCursor(style::cursor cursor) {
 
 double MarkdownDocumentWidget::zoomScale() const {
 	return std::max(_zoom, 1) / 100.;
+}
+
+int MarkdownDocumentWidget::articleLayoutWidth(int widgetWidth) const {
+	const auto layoutWidth = int(std::floor(widgetWidth / zoomScale()));
+	const auto limit = _article ? _article->maxWidth() : layoutWidth;
+	return std::clamp(layoutWidth, 1, std::max(limit, 1));
 }
 
 } // namespace Iv::Markdown

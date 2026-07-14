@@ -270,7 +270,9 @@ QByteArray Settings::serialize() const {
 		size += Serialize::bytearraySize(key)
 			+ Serialize::bytearraySize(value);
 	}
-	size += sizeof(qint32); // _audioPlaybackSpeed
+	size += sizeof(qint32) // _audioPlaybackSpeed
+		+ sizeof(qint32) // _mediaGridZoomStep
+		+ sizeof(qint32); // _pullToNextChannel
 
 	auto result = QByteArray();
 	result.reserve(size);
@@ -448,6 +450,8 @@ QByteArray Settings::serialize() const {
 			stream << key << value;
 		}
 		stream << qint32(SerializePlaybackSpeed(_audioPlaybackSpeed.current()));
+		stream << qint32(_mediaGridZoomStep);
+		stream << qint32(_pullToNextChannel.current() ? 1 : 0);
 	}
 
 	Ensures(result.size() == size);
@@ -554,6 +558,7 @@ void Settings::addFromSerialized(const QByteArray &serialized) {
 	qint32 suggestAnimatedEmoji = _suggestAnimatedEmoji ? 1 : 0;
 	qint32 cornerReply = _cornerReply.current() ? 1 : 0;
 	qint32 cornerReaction = _cornerReaction.current() ? 1 : 0;
+	qint32 pullToNextChannel = _pullToNextChannel.current() ? 1 : 0;
 	qint32 legacySkipTranslationForLanguage = _translateButtonEnabled ? 1 : 0;
 	qint32 skipTranslationLanguagesCount = 0;
 	std::vector<LanguageId> skipTranslationLanguages;
@@ -980,6 +985,16 @@ void Settings::addFromSerialized(const QByteArray &serialized) {
 			audioPlaybackSpeed = speed;
 		}
 	}
+	if (!stream.atEnd()) {
+		auto step = qint32();
+		stream >> step;
+		if (stream.status() == QDataStream::Ok) {
+			_mediaGridZoomStep = step;
+		}
+	}
+	if (!stream.atEnd()) {
+		stream >> pullToNextChannel;
+	}
 	if (stream.status() != QDataStream::Ok) {
 		LOG(("App Error: "
 			"Bad data for Core::Settings::constructFromSerialized()"));
@@ -1165,6 +1180,7 @@ void Settings::addFromSerialized(const QByteArray &serialized) {
 	_suggestAnimatedEmoji = (suggestAnimatedEmoji == 1);
 	_cornerReply = (cornerReply == 1);
 	_cornerReaction = (cornerReaction == 1);
+	_pullToNextChannel = (pullToNextChannel == 1);
 	{ // Parse the legacy translation setting.
 		if (legacySkipTranslationForLanguage == 0) {
 			_translateButtonEnabled = false;
@@ -1660,6 +1676,7 @@ void Settings::resetOnLastLogout() {
 	_recordVideoMessages = false;
 	_videoQuality = {};
 	_chatFiltersHorizontal = false;
+	_pullToNextChannel = true;
 	_quickDialogAction = Dialogs::Ui::QuickDialogAction::Disabled;
 	_notificationsVolume = 100;
 

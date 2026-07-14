@@ -8,6 +8,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #pragma once
 
 #include "data/data_cloud_file.h"
+#include "data/data_file_origin.h"
 #include "data/data_poll.h"
 #include "history/history_item.h"
 #include "spellcheck/spellcheck_types.h" // LanguageId.
@@ -16,10 +17,13 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/effects/ripple_animation.h"
 #include "ui/chat/message_bubble.h"
 
+#include <memory>
+
 struct WebPageData;
 struct TodoListItem;
 class DocumentData;
 class PhotoData;
+class ChannelData;
 class VoiceSeekClickHandler;
 class ReplyKeyboard;
 
@@ -27,7 +31,12 @@ namespace Ui {
 struct ChatPaintContext;
 class ChatStyle;
 struct PeerUserpicView;
+struct VoiceOnceParticles;
 } // namespace Ui
+
+namespace Ui::Paint {
+class Blobs;
+} // namespace Ui::Paint
 
 namespace Ui::Text {
 struct GeometryDescriptor;
@@ -47,6 +56,10 @@ class RoundPainter;
 namespace Images {
 struct CornersMaskRef;
 } // namespace Images
+
+namespace Iv {
+struct RichPage;
+} // namespace Iv
 
 namespace HistoryView {
 class Element;
@@ -131,9 +144,22 @@ struct HistoryMessageEdited
 
 struct HistoryMessageMediaForInstantView
 : RuntimeComponent<HistoryMessageMediaForInstantView, HistoryItem> {
+	using Item = std::variant<PhotoData*, DocumentData*>;
+
 	QString url;
 	base::flat_set<not_null<DocumentData*>> documents;
 	base::flat_set<not_null<PhotoData*>> photos;
+	std::vector<Item> items;
+	std::vector<TextWithEntities> captions;
+};
+
+struct HistoryMessageRichPageSource
+: RuntimeComponent<HistoryMessageRichPageSource, HistoryItem> {
+	std::shared_ptr<const Iv::RichPage> page;
+	std::shared_ptr<const Iv::RichPage> fullPage;
+	std::optional<Data::FileOriginCloudDraft> draftOrigin;
+	uint64 fullPageVersion = 0;
+	bool canEdit = false;
 };
 
 class HiddenSenderInfo {
@@ -413,6 +439,7 @@ private:
 struct HistoryMessageTranslation
 : RuntimeComponent<HistoryMessageTranslation, HistoryItem> {
 	TextWithEntities text;
+	std::shared_ptr<const Iv::RichPage> richPage;
 	LanguageId to;
 	bool requested = false;
 	bool failed = false;
@@ -605,20 +632,15 @@ private:
 		int j = 0;
 	};
 
-	void startAnimation(int i, int j, int direction);
 	[[nodiscard]] bool hasFastButtonMode() const;
 
 	ButtonCoords findButtonCoordsByClickHandler(const ClickHandlerPtr &p);
-
-	bool selectedAnimationCallback(crl::time now);
 
 	const not_null<const HistoryItem*> _item;
 	int _width = 0;
 
 	std::vector<std::vector<Button>> _rows;
 
-	base::flat_map<int, crl::time> _animations;
-	Ui::Animations::Basic _selectedAnimation;
 	std::unique_ptr<Style> _st;
 
 	ClickHandlerPtr _savedPressed;
@@ -798,6 +820,13 @@ struct HistoryServiceNoForwardsToggle
 : RuntimeComponent<HistoryServiceNoForwardsToggle, HistoryItem> {
 };
 
+struct HistoryServiceCommunityAdded
+: RuntimeComponent<HistoryServiceCommunityAdded, HistoryItem> {
+	ChannelId communityId = 0;
+	ChannelData *community = nullptr;
+	rpl::lifetime lifetime;
+};
+
 struct HistoryServiceGameScore
 : RuntimeComponent<HistoryServiceGameScore, HistoryItem>
 , HistoryServiceDependentData {
@@ -907,10 +936,14 @@ struct HistoryDocumentNamed
 
 struct HistoryDocumentVoicePlayback {
 	HistoryDocumentVoicePlayback(const HistoryView::Document *that);
+	~HistoryDocumentVoicePlayback();
 
 	int32 position = 0;
 	anim::value progress;
 	Ui::Animations::Basic progressAnimation;
+
+	std::unique_ptr<Ui::Paint::Blobs> blobs;
+	crl::time blobsLastUpdate = 0;
 };
 
 class HistoryDocumentVoice
@@ -937,6 +970,8 @@ public:
 	std::unique_ptr<HistoryView::TranscribeButton> transcribe;
 	Ui::Text::String transcribeText;
 	std::unique_ptr<Media::Player::RoundPainter> round;
+
+	mutable std::unique_ptr<Ui::VoiceOnceParticles> once;
 
 private:
 	bool _seeking = false;
