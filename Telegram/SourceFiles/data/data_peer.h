@@ -197,7 +197,7 @@ struct PeerBarDetails {
 	TimeId nameChangeDate = 0;
 	TimeId photoChangeDate = 0;
 	QString requestChatTitle;
-	TimeId requestChatDate;
+	TimeId requestChatDate = 0;
 	UserData *businessBot = nullptr;
 	QString businessBotManageUrl;
 	int paysPerMessage = 0;
@@ -332,6 +332,7 @@ public:
 	[[nodiscard]] int slowmodeSecondsLeft() const;
 	[[nodiscard]] bool canManageGroupCall() const;
 	[[nodiscard]] bool canManageRanks() const;
+	[[nodiscard]] bool canManageWelcomeMessages() const;
 	[[nodiscard]] bool amMonoforumAdmin() const;
 
 	[[nodiscard]] int starsPerMessage() const;

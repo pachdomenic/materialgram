@@ -128,6 +128,9 @@ void TabsHost::syncBodyNow() {
 	const auto widget = active->widget();
 	if (!widget->isHidden() && _body->height() != widget->height()) {
 		_body->resize(_body->width(), widget->height());
+		// setVisibleTopBottom clamps to the page height, so a page that
+		// grew after the last push keeps a stale short visible bottom.
+		pushViewportToActive();
 	}
 }
 
@@ -146,6 +149,42 @@ void TabsHost::scheduleHeightSync() {
 void TabsHost::syncHeightNow() {
 	_heightSyncQueued = false;
 	resizeToWidth(width());
+}
+
+void TabsHost::scheduleVisibilitySync() {
+	if (_visibilitySyncQueued) {
+		return;
+	}
+	_visibilitySyncQueued = true;
+	InvokeQueued(this, [=] {
+		if (_visibilitySyncQueued) {
+			syncVisibilityNow();
+		}
+	});
+}
+
+void TabsHost::syncStripVisibility() {
+	if (_syncedTabsShown == _tabsShown) {
+		return;
+	}
+	refreshOrder();
+	syncStripTitles();
+}
+
+void TabsHost::syncVisibilityNow() {
+	_visibilitySyncQueued = false;
+	scheduleHeightSync();
+	syncStripVisibility();
+	if (!_pendingRestoreId.isEmpty()) {
+		const auto i = ranges::find(
+			_tabs,
+			_pendingRestoreId,
+			&MediaTabDescriptor::id);
+		if (i != end(_tabs) && _tabsShown[i - begin(_tabs)]) {
+			restoreActiveTab(base::take(_pendingRestoreId));
+		}
+	}
+	ensureActiveVisible();
 }
 
 TabsHost::~TabsHost() {
@@ -174,15 +213,7 @@ void TabsHost::wireTabsVisibility() {
 		) | rpl::on_next([this, i](bool shown) {
 			if (_tabsShown[i] != shown) {
 				_tabsShown[i] = shown;
-				refreshOrder();
-				syncStripTitles();
-				if (shown
-					&& !_pendingRestoreId.isEmpty()
-					&& (_tabs[i].id == _pendingRestoreId)) {
-					restoreActiveTab(base::take(_pendingRestoreId));
-				}
-				ensureActiveVisible();
-				scheduleHeightSync();
+				scheduleVisibilitySync();
 			}
 		}, lifetime());
 	}
@@ -392,6 +423,7 @@ void TabsHost::setMainTab(Data::ProfileTab tab) {
 }
 
 void TabsHost::syncStripTitles() {
+	_syncedTabsShown = _tabsShown;
 	auto stripTabs = std::vector<StripTab>();
 	stripTabs.reserve(_tabs.size());
 	for (const auto i : _order) {
@@ -435,6 +467,8 @@ void TabsHost::ensureActiveVisible() {
 			return;
 		} else if (mediaSplitSwitching()) {
 			return;
+		} else if (_userChosenTab) {
+			_pendingRestoreId = _activeId;
 		}
 	}
 	if (firstVisible >= 0) {
@@ -502,6 +536,9 @@ Fn<void()> TabsHost::prepareSwitch(bool toNextTab) {
 }
 
 void TabsHost::activateTab(const QString &id, bool animated) {
+	// Visibility changes reach the strip through a queued sync, so it may
+	// not know yet about a tab that is already marked as shown.
+	syncStripVisibility();
 	if (_activeId == id) {
 		_strip->setActiveTab(id);
 		return;
@@ -571,12 +608,6 @@ void TabsHost::activateTab(const QString &id, bool animated) {
 		if (raw->parentWidget() != _body) {
 			raw->setParent(_body);
 		}
-		_body->widthValue(
-		) | rpl::on_next([raw](int newWidth) {
-			if (!raw->isHidden()) {
-				raw->resizeToWidth(newWidth);
-			}
-		}, raw->lifetime());
 		raw->heightValue(
 		) | rpl::on_next([this, raw](int) {
 			if (!raw->isHidden()) {
@@ -585,7 +616,7 @@ void TabsHost::activateTab(const QString &id, bool animated) {
 		}, raw->lifetime());
 	}
 	raw->show();
-	raw->resizeToWidth(_body->width());
+	active->resizeToWidth(_body->width());
 	_body->resize(_body->width(), raw->height());
 
 	_activeTab = active;
@@ -671,10 +702,22 @@ void TabsHost::startSlideAnimation(
 }
 
 void TabsHost::paintEvent(QPaintEvent *e) {
+	auto p = QPainter(this);
+	if (const auto active = _activeTab.current()) {
+		const auto widget = active->widget();
+		const auto bottom = _body->y() + _body->height();
+		const auto filler = QRect(0, bottom, width(), height() - bottom);
+		if (!filler.isEmpty() && filler.intersects(e->rect())) {
+			p.setClipRect(filler);
+			p.translate(_body->pos() + widget->pos());
+			active->paintOverflow(p);
+			p.resetTransform();
+			p.setClipping(false);
+		}
+	}
 	if (!_slideAnimation) {
 		return;
 	}
-	auto p = QPainter(this);
 	p.fillRect(_slideRect, st::windowBg);
 	_slideAnimation->paintFrame(
 		p,
@@ -684,12 +727,19 @@ void TabsHost::paintEvent(QPaintEvent *e) {
 }
 
 void TabsHost::pushViewportToActive() {
-	if (const auto active = _activeTab.current()) {
-		active->setTopOverlay((_visibleTop >= 0) ? _stripHeight : 0);
-		active->setVisibleRegion(
-			_visibleTop - _stripHeight,
-			_visibleBottom - _stripHeight);
+	const auto active = _activeTab.current();
+	if (!active) {
+		return;
 	}
+	if (_body->width() < st::infoMediaTabsMinBodyWidth) {
+		_viewportPushPending = true;
+		return;
+	}
+	_viewportPushPending = false;
+	active->setTopOverlay((_visibleTop >= 0) ? _stripHeight : 0);
+	active->setVisibleRegion(
+		_visibleTop - _stripHeight,
+		_visibleBottom - _stripHeight);
 }
 
 rpl::producer<MediaTabContent*> TabsHost::activeTabValue() const {
@@ -700,11 +750,28 @@ rpl::producer<Ui::ScrollToRequest> TabsHost::scrollToRequests() const {
 	return _scrollToRequests.events();
 }
 
-rpl::producer<TabTopBarBindings> TabsHost::activeTabBindings() const {
+rpl::producer<TabTopBarBindings> TabsHost::activeTabBindings() {
 	return _activeTab.value(
-	) | rpl::map([](MediaTabContent *tab) {
-		return tab ? tab->topBarBindings() : TabTopBarBindings();
+	) | rpl::map([=](MediaTabContent *tab) {
+		_searching = false;
+		auto result = tab ? tab->topBarBindings() : TabTopBarBindings();
+		if (auto apply = base::take(result.applySearchQuery)) {
+			result.applySearchQuery = crl::guard(this, [=](QString query) {
+				_searching = !query.isEmpty();
+				apply(query);
+				if (_searching) {
+					scrollToBodyTop();
+				}
+			});
+		}
+		return result;
 	});
+}
+
+void TabsHost::scrollToBodyTop() {
+	if (_visibleTop >= 0) {
+		_scrollToRequests.fire({ 0, -1 });
+	}
 }
 
 not_null<Ui::RpWidget*> TabsHost::stripWidget() const {
@@ -751,25 +818,45 @@ void TabsHost::setScrolledToTop(bool scrolledToTop) {
 
 int TabsHost::resizeGetHeight(int newWidth) {
 	_body->resizeToWidth(std::max(newWidth, 1));
+	if (const auto active = _activeTab.current()) {
+		active->resizeToWidth(_body->width());
+		syncBodyNow();
+	}
+	if (_viewportPushPending && _body->width() >= st::infoMediaTabsMinBodyWidth) {
+		_viewportPushPending = false;
+		InvokeQueued(this, [this] { pushViewportToActive(); });
+	}
 	if (!ranges::contains(_tabsShown, true)) {
 		return 0;
 	}
-	if (const auto strip = _stripWeak.get()
-		; strip && strip->parentWidget() == this) {
-		const auto stripWidth = std::min(strip->naturalWidth(), newWidth);
-		strip->resizeToWidth(stripWidth);
-		strip->moveToLeft((newWidth - stripWidth) / 2, 0);
+	if (const auto strip = _stripWeak.get()) {
+		if (strip->parentWidget() == this) {
+			const auto stripWidth = std::min(
+				strip->naturalWidth(),
+				newWidth);
+			strip->resizeToWidth(stripWidth);
+			strip->moveToLeft((newWidth - stripWidth) / 2, 0);
+		}
+		// The saved messages page floats the strip from birth, so the
+		// reserved height must follow a lent out strip as well.
 		_stripHeight = strip->height();
 	}
 	const auto bodyTop = _stripHeight;
 	_body->moveToLeft(0, bodyTop);
 
 	const auto natural = bodyTop + _body->height();
-	if (_keepMinHeight
-		&& ((natural >= _keepMinHeight)
-			|| (natural >= _visibleBottom)
-			|| _scrolledToTop)) {
-		_keepMinHeight = 0;
+	const auto span = _visibleBottom - _visibleTop;
+	_searchContentFits = _searching && !_scrolledToTop && (natural < span);
+	if (_searchContentFits) {
+		_keepMinHeight = span;
+	} else if (_keepMinHeight) {
+		// Growing filler would add scroll room on every scroll to bottom.
+		_keepMinHeight = std::min(
+			_keepMinHeight,
+			std::max(_visibleBottom, 0));
+		if ((natural >= _keepMinHeight) || _scrolledToTop) {
+			_keepMinHeight = 0;
+		}
 	}
 	return std::max(natural, _keepMinHeight);
 }
