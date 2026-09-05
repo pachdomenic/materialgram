@@ -97,38 +97,10 @@ settingsUpdate: SettingsButton(infoMainButton, settingsButtonNoIcon) {
 }
 settingsUpdateStatePosition: point(22px, 29px);
 
-settingsIconChat: icon {{ "settings/chat", windowFgActive }};
 settingsIconInterfaceScale: icon {{ "settings/interface_scale", settingsIconFg }};
-settingsIconStickers: icon {{ "settings/stickers", windowFgActive }};
-settingsIconEmoji: icon {{ "settings/emoji", windowFgActive }};
 
-settingsPremiumIconWallpapers: icon {{ "settings/photo", windowFgActive }};
-settingsPremiumIconStories: icon {{ "settings/stories", windowFgActive }};
-settingsPremiumIconChannelsOff: icon {{ "settings/premium/channels_off", windowFgActive }};
 settingsPremiumIconDouble: icon {{ "settings/premium/double", windowFgActive }};
-settingsPremiumIconStatus: icon {{ "settings/premium/status", windowFgActive }};
-settingsPremiumIconLike: icon {{ "settings/premium/like", windowFgActive }};
-settingsPremiumIconPlay: icon {{ "settings/premium/play", windowFgActive }};
-settingsPremiumIconSpeed: icon {{ "settings/premium/speed", windowFgActive }};
-settingsPremiumIconStar: icon {{ "settings/premium/star", windowFgActive }};
-settingsPremiumIconVoice: icon {{ "settings/premium/voice", windowFgActive }};
-settingsPremiumIconFiles: icon {{ "settings/premium/files", windowFgActive }};
-settingsPremiumIconTranslations: icon {{ "settings/premium/translations", windowFgActive }};
 settingsPremiumIconTags: icon {{ "settings/premium/tags", windowFgActive }};
-settingsPremiumIconLastSeen: icon {{ "settings/premium/lastseen", windowFgActive }};
-settingsPremiumIconPrivacy: icon {{ "settings/premium/privacy", windowFgActive }};
-settingsPremiumIconBusiness: icon {{ "settings/premium/market", windowFgActive }};
-settingsPremiumIconEffects: icon {{ "settings/premium/effects", windowFgActive }};
-settingsPremiumIconChecklist: icon {{ "settings/premium/checklist", windowFgActive }};
-settingsPremiumIconPeerColors: icon {{ "settings/premium/peer_colors-24x24", windowFgActive }};
-settingsPremiumIconNoForwards: icon {{ "menu/share_off-24x24", windowFgActive }};
-settingsPremiumIconAiCompose: icon{
-	{ size(24px, 24px), transparent },
-	{ "chat/ai_letters-20x20", windowFgActive, point(2px, 2px) },
-	{ "chat/ai_star1-20x20", windowFgActive, point(2px, 2px) },
-	{ "chat/ai_star2-20x20", windowFgActive, point(2px, 2px) },
-};
-settingsPremiumIconRich: icon {{ "settings/premium/rich", settingsIconFg }};
 
 settingsIconChatAutomation: icon {
 	{ size(24px, 24px), transparent },
@@ -388,19 +360,9 @@ sessionTerminate: IconButton {
 }
 sessionIconiPhone: icon{{ "settings/devices/device_phone_ios", historyPeerUserpicFg }};
 sessionIconAndroid: icon{{ "settings/devices/device_phone_android", historyPeerUserpicFg }};
-sessionIconWeb: icon{{ "settings/devices/device_web_other", historyPeerUserpicFg }};
-sessionIconChrome: icon{{ "settings/devices/device_web_chrome", historyPeerUserpicFg }};
-sessionIconEdge: icon{{ "settings/devices/device_web_edge", historyPeerUserpicFg }};
-sessionIconFirefox: icon{{ "settings/devices/device_web_firefox", historyPeerUserpicFg }};
-sessionIconSafari: icon{{ "settings/devices/device_web_safari", historyPeerUserpicFg }};
-sessionIconOther: icon{{ "settings/devices/device_other", historyPeerUserpicFg }};
 sessionIconMaterialgram: icon{{ "settings/devices/device_materialgram", historyPeerUserpicFg }};
 sessionIconOctogram: icon{{ "settings/devices/device_octogram", historyPeerUserpicFg }};
 sessionIconSwiftgram: icon{{ "settings/devices/device_swiftgram", historyPeerUserpicFg }};
-sessionBigUserpicSize: 70px;
-sessionBigLottieSize: 52px;
-sessionBigIconOther: icon{{ "settings/devices/device_other_large", historyPeerUserpicFg }};
-sessionBigIconWeb: icon{{ "settings/devices/device_web_other_large", historyPeerUserpicFg }};
 sessionBigIconMaterialgram: icon{{ "settings/devices/device_materialgram_large", historyPeerUserpicFg }};
 sessionBigIconOctogram: icon{{ "settings/devices/device_octogram_large", historyPeerUserpicFg }};
 sessionBigIconSwiftgram: icon{{ "settings/devices/device_swiftgram_large", historyPeerUserpicFg }};

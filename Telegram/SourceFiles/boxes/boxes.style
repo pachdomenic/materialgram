@@ -225,16 +225,6 @@ defaultCalendarSizes: CalendarSizes {
 	cellInner: 34px;
 	padding: margins(14px, 0px, 14px, 0px);
 }
-calendarDaysFont: normalFont;
-calendarDaysFontOver: semiboldFont;
-calendarDaysFg: boxTitleAdditionalFg;
-calendarScroll: ScrollArea(defaultSolidScroll) {
-	deltat: 3px;
-	deltab: 3px;
-	width: 9px;
-	deltax: 3px;
-	hiding: 1000;
-}
 CalendarColors {
 	dayTextColor: color;
 	dayTextGrayedOutColor: color;

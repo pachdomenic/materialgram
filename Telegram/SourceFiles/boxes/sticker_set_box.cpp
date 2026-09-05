@@ -305,9 +305,7 @@ public:
 	[[nodiscard]] int count() const {
 		return int(_pack.size());
 	}
-	[[nodiscard]] int setCount() const {
-		return count();
-	}
+	[[nodiscard]] int setCount() const;
 
 	// Hit testing yields an index into _elements, which skips the premium
 	// stickers an account that cannot get premium must not see. _pack keeps

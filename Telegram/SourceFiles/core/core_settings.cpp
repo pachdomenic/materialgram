@@ -310,6 +310,7 @@ QByteArray Settings::serialize() const {
 		size += Serialize::stringSize(id);
 	}
 	size += sizeof(qint32) // _trayIconMonochrome
+		+ sizeof(qint32) // _birthDateEnabled
 		+ sizeof(qint32) // _ttlVoiceClickTooltipHidden
 		+ Serialize::stringSize(_playbackDeviceId.current())
 		+ Serialize::stringSize(_captureDeviceId.current())
@@ -319,6 +320,7 @@ QByteArray Settings::serialize() const {
 		+ Serialize::stringSize(noWarningExtensions)
 		+ Serialize::stringSize(_customFontFamily)
 		+ sizeof(qint32) // _dialogsNoChatWidthRatio
+		+ sizeof(qint32) // _datacenterEnabled
 		+ sizeof(qint32) // _systemUnlockEnabled
 		+ sizeof(qint32) // _weatherInCelsius
 		+ Serialize::bytearraySize(_tonsiteStorageToken)
@@ -329,6 +331,7 @@ QByteArray Settings::serialize() const {
 		+ sizeof(qint32) // _videoQuality
 		+ sizeof(qint32) // _ivZoom
 		+ sizeof(qint32) // _systemDarkModeEnabled
+		+ sizeof(qint32) // _gameeEnabled
 		+ sizeof(qint32) // _quickDialogAction
 		+ sizeof(ushort) // _notificationsVolume
 		+ sizeof(qint32) // _notificationsDisplayChecksum

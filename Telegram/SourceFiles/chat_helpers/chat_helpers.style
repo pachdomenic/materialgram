@@ -488,13 +488,6 @@ stickersAddCellBgRadius: 28px;
 emojiSetAddCellPlusSize: 13px;
 emojiSetAddCellBgRadius: 16px;
 
-stickersEmojiPickerExpandedRadius: 20px;
-stickersEmojiPickerBg: emojiPanBg;
-stickersEmojiPickerPadding: margins(12px, 8px, 12px, 0px);
-stickersEmojiPickerItemSize: 30px;
-stickersEmojiPickerItemSkip: 4px;
-stickersEmojiPickerStripHeight: 40px;
-stickersEmojiPickerExpandedHeight: 220px;
 stickersEmojiPickerSelectedBg: windowBgActive;
 
 emojiStatusDefault: icon {{ "emoji/stickers_premium", emojiIconFg }};
@@ -1433,11 +1426,7 @@ historyRecordLockBottomShadow: icon {{ "voice_lock/record_lock_bottom_shadow", h
 historyRecordLockBottom: icon {{ "voice_lock/record_lock_bottom", sideBarBg }};
 historyRecordLockBodyShadow: icon {{ "voice_lock/record_lock_body_shadow", historyToDownShadow }};
 historyRecordLockBody: icon {{ "voice_lock/record_lock_body", sideBarBg }};
-historyRecordLockMargin: margins(4px, 4px, 4px, 4px);
 historyRecordLockArrow: icon {{ "voice_lock/voice_arrow", windowBgActive }};
-historyRecordLockInput: icon {{ "voice_lock/input_mic_s", windowBgActive }};
-historyRecordLockRound: icon {{ "voice_lock/input_round_s", windowBgActive }};
-historyRecordLockRippleMargin: margins(6px, 6px, 6px, 6px);
 
 historyRecordDelete: IconButton(historyAttach) {
 	icon: icon {{ "voice_lock/recorded_delete", historyComposeIconFg }};
