@@ -87,7 +87,6 @@ PRIVATE
     desktop-app::lib_webview
     desktop-app::lib_ffmpeg
     desktop-app::lib_stripe
-    desktop-app::external_rlottie
     desktop-app::external_zlib
     desktop-app::external_minizip
     desktop-app::external_kcoreaddons
@@ -478,6 +477,8 @@ PRIVATE
     calls/calls_panel.h
     calls/calls_panel_background.cpp
     calls/calls_panel_background.h
+    calls/calls_rate_call.cpp
+    calls/calls_rate_call.h
     calls/calls_signal_bars.cpp
     calls/calls_signal_bars.h
     calls/calls_top_bar.cpp
@@ -1933,6 +1934,8 @@ PRIVATE
     storage/storage_domain.h
     storage/storage_facade.cpp
     storage/storage_facade.h
+    storage/storage_folder_archive.cpp
+    storage/storage_folder_archive.h
     storage/storage_media_prepare.cpp
     storage/storage_media_prepare.h
     storage/storage_shared_media.cpp

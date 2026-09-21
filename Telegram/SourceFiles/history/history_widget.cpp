@@ -167,6 +167,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "storage/localimageloader.h"
 #include "storage/storage_account.h"
 #include "storage/file_upload.h"
+#include "storage/storage_folder_archive.h"
 #include "storage/storage_media_prepare.h"
 #include "media/audio/media_audio.h"
 #include "media/audio/media_audio_capture.h"
@@ -694,13 +695,25 @@ HistoryWidget::HistoryWidget(
 				: Data::CanSendAnyOf(_peer, Data::FilesSendRestrictions());
 		}),
 		crl::guard(this, [=](bool f) { _field->setAcceptDrops(f); }),
-		crl::guard(this, [=] { updateControlsGeometry(); }));
+		crl::guard(this, [=] { updateControlsGeometry(); }),
+		nullptr,
+		crl::guard(this, [=] { return (_editMsgId != 0); }));
 	_attachDragAreas.document->setDroppedCallback([=](const QMimeData *data) {
 		confirmSendingFiles(data, false);
 		Window::ActivateWindow(controller);
 	});
 	_attachDragAreas.photo->setDroppedCallback([=](const QMimeData *data) {
 		confirmSendingFiles(data, true);
+		Window::ActivateWindow(controller);
+	});
+	_attachDragAreas.photo->setArchiveDroppedCallback([=](
+			const QMimeData *data) {
+		const auto urls = Core::ReadMimeUrls(data);
+		if (!urls.isEmpty()) {
+			auto list = Ui::PreparedList();
+			list.files.push_back(Storage::PrepareFilesArchive(urls));
+			confirmSendingFiles(std::move(list), QString());
+		}
 		Window::ActivateWindow(controller);
 	});
 
@@ -1855,8 +1868,8 @@ void HistoryWidget::scrollToAnimationCallback(
 	if (itemTop < 0) {
 		_scrollToAnimation.stop();
 	} else {
-		synteticScrollToY(qRound(_scrollToAnimation.value(relativeTo))
-			+ itemTop);
+		const auto value = _scrollToAnimation.value(relativeTo);
+		synteticScrollToY(int(base::SafeRound(value)) + itemTop);
 	}
 	if (!_scrollToAnimation.animating()) {
 		preloadHistoryByScroll();
@@ -2475,7 +2488,14 @@ void HistoryWidget::fileChosen(ChatHelpers::FileChosen &&data) {
 				sendMenuDetails(),
 				crl::guard(this, [=](
 						Api::SendOptions options,
-						TextWithTags caption) {
+						TextWithTags caption,
+						Ui::PreparedList &&edited) {
+					if (!edited.files.empty()) {
+						sendingFilesConfirmed(
+							Ui::MakeSingleFileBundle(std::move(edited)),
+							options);
+						return;
+					}
 					controller()->sendingAnimation().appendSending(from);
 					auto messageToSend = Api::MessageToSend(
 						prepareSendAction(options));
@@ -7038,7 +7058,7 @@ void HistoryWidget::toggleKeyboard(bool manual) {
 		_kbShown = true;
 
 		const auto maxheight = computeMaxFieldHeight();
-		const auto kbheight = qMin(
+		const auto kbheight = std::min(
 			_keyboard->height(),
 			maxheight - (maxheight / 2));
 		_field->setMaxHeight(maxheight - kbheight);
@@ -7383,7 +7403,7 @@ void HistoryWidget::moveFieldControls() {
 	auto maxKeyboardHeight = computeMaxFieldHeight() - fieldHeight();
 	_keyboard->resizeToWidth(width(), maxKeyboardHeight);
 	if (_kbShown) {
-		keyboardHeight = qMin(_keyboard->height(), maxKeyboardHeight);
+		keyboardHeight = std::min(_keyboard->height(), maxKeyboardHeight);
 		bottom -= keyboardHeight;
 		_kbScroll->setGeometryToLeft(0, bottom, width(), keyboardHeight);
 	}
@@ -7937,6 +7957,32 @@ bool HistoryWidget::confirmSendingFiles(
 	const auto premium = controller()->session().user()->isPremium();
 
 	if (const auto urls = Core::ReadMimeUrls(data); !urls.empty()) {
+		const auto folder = Storage::SingleFolderPath(urls);
+		if (!folder.isEmpty()) {
+			if (overrideSendImagesAsPhotos == false && !_editMsgId) {
+				const auto files = Storage::FolderFilesForSending(folder);
+				if (!files.isEmpty()) {
+					auto list = Storage::PrepareMediaList(
+						files,
+						st::sendMediaPreviewSize,
+						premium);
+					confirmSendingFiles(std::move(list), QString());
+				}
+			} else {
+				auto list = Ui::PreparedList();
+				list.files.push_back(Storage::PrepareFolderArchive(folder));
+				confirmSendingFiles(std::move(list), QString());
+			}
+			return true;
+		}
+		if (overrideSendImagesAsPhotos == true
+			&& (Storage::ComputeMimeDataState(data)
+				== Storage::MimeDataState::FilesArchive)) {
+			auto list = Ui::PreparedList();
+			list.files.push_back(Storage::PrepareFilesArchive(urls));
+			confirmSendingFiles(std::move(list), QString());
+			return true;
+		}
 		auto list = Storage::PrepareMediaList(
 			urls,
 			st::sendMediaPreviewSize,
@@ -8765,7 +8811,7 @@ void HistoryWidget::updateBotKeyboard(History *h, bool force) {
 			}
 			const auto maxheight = computeMaxFieldHeight();
 			const auto kbheight = hasMarkup
-				? qMin(_keyboard->height(), maxheight - (maxheight / 2))
+				? std::min(_keyboard->height(), maxheight - (maxheight / 2))
 				: 0;
 			_field->setMaxHeight(maxheight - kbheight);
 			_kbShown = hasMarkup;
@@ -11309,7 +11355,7 @@ void HistoryWidget::paintEditHeader(
 	if (editTimeLeft < 2) {
 		editTimeLeftText = u"0:00"_q;
 	} else if (editTimeLeft > kDisplayEditTimeWarningMs) {
-		updateIn = static_cast<int>(qMin(
+		updateIn = static_cast<int>(std::min(
 			editTimeLeft - kDisplayEditTimeWarningMs,
 			qint64(kFullDayInMs)));
 	} else {

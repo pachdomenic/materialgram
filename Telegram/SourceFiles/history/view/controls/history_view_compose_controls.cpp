@@ -2057,7 +2057,7 @@ void ComposeControls::setupStarsEffectsCanvas() {
 			const auto scale = kStarEffectScaleMin
 				+ (kStarEffectScaleMax - kStarEffectScaleMin) * opacity;
 
-			const auto rotation = qSin(-M_PI_2
+			const auto rotation = std::sin(-M_PI_2
 				+ M_PI * (animation->shift + animation->progress)
 			) * kStarEffectRotationMax;
 			const auto target = QRect(
@@ -3914,7 +3914,16 @@ void ComposeControls::initTabbedSelector() {
 				sendMenuDetails(),
 				crl::guard(_field, [=](
 						Api::SendOptions options,
-						TextWithTags caption) {
+						TextWithTags caption,
+						Ui::PreparedList &&edited) {
+					if (!edited.files.empty()) {
+						if (_sendAsFileConfirmed) {
+							_sendAsFileConfirmed(
+								Ui::MakeSingleFileBundle(std::move(edited)),
+								options);
+						}
+						return;
+					}
 					_fileChosen.fire({
 						.document = document,
 						.options = options,
