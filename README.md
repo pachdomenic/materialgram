@@ -97,6 +97,8 @@ sudo sh -c "curl -s https://raw.githubusercontent.com/materialgram/arch/x86_64/i
 * **CMake** ([New BSD License](https://github.com/Kitware/CMake/blob/master/Copyright.txt))
 * **Hunspell** ([LGPL](https://github.com/hunspell/hunspell/blob/master/COPYING.LESSER))
 * **Ada** ([Apache License 2.0](https://github.com/ada-url/ada/blob/main/LICENSE-APACHE))
+* **zxcvbn-c** ([MIT License](https://github.com/tsyrogit/zxcvbn-c/blob/master/LICENSE.txt))
+* **FrequencyWords by Hermit Dave** ([Creative Commons Attribution-ShareAlike 4.0](https://creativecommons.org/licenses/by-sa/4.0/))
 
 [//]: # (LINKS)
 [telegram_api]: https://core.telegram.org

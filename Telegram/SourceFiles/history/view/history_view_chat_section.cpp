@@ -12,6 +12,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/view/controls/history_view_bottom_controls.h"
 #include "history/view/controls/history_view_compose_controls.h"
 #include "history/view/controls/history_view_compose_search.h"
+#include "history/view/controls/history_view_compose_stash.h"
 #include "history/view/controls/history_view_draft_options.h"
 #include "history/view/controls/history_view_suggest_options.h"
 #include "history/view/history_view_about_view.h"
@@ -107,6 +108,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_replies_list.h"
 #include "data/data_peer_values.h"
 #include "data/data_changes.h"
+#include "data/data_compose_stash.h"
 #include "data/data_drafts.h"
 #include "data/data_shared_media.h"
 #include "data/data_send_action.h"
@@ -163,27 +165,6 @@ constexpr auto kPsaAboutPrefix = "cloud_lng_about_psa_";
 			: Data::CanSendAnyOf(peer, Data::FilesSendRestrictions());
 	}
 	return false;
-}
-
-[[nodiscard]] std::optional<MsgId> ShowAtMsgIdFromPosition(
-		not_null<History*> history,
-		Data::MessagePosition position) {
-	const auto migrated = history->migrateFrom();
-	if (position == Data::UnreadMessagePosition) {
-		return ShowAtUnreadMsgId;
-	} else if (position == Data::MaxMessagePosition) {
-		return ShowAtTheEndMsgId;
-	}
-	const auto fullId = position.fullId;
-	if ((fullId.peer == history->peer->id)
-		&& (IsServerMsgId(fullId.msg) || IsClientMsgId(fullId.msg))) {
-		return fullId.msg;
-	} else if (migrated
-		&& (fullId.peer == migrated->peer->id)
-		&& IsServerMsgId(fullId.msg)) {
-		return -fullId.msg;
-	}
-	return std::nullopt;
 }
 
 [[nodiscard]] bool IsSpecialShowAtMsgId(MsgId id) {
@@ -254,7 +235,6 @@ void ChatMemento::setFromTopic(not_null<Data::ForumTopic*> topic) {
 
 void ChatMemento::setFromHistory(not_null<History*> history) {
 	const auto migrated = history->migrateFrom();
-	const auto showAtMsgId = history->showAtMsgId;
 	const auto scrollTopState = [&]() -> std::optional<ListMemento::ScrollTopState> {
 		if (history->listScrollTopItemId) {
 			return ListMemento::ScrollTopState{
@@ -278,26 +258,11 @@ void ChatMemento::setFromHistory(not_null<History*> history) {
 	if (scrollTopState) {
 		_list.setAroundPosition(scrollTopState->item);
 		_list.setScrollTopState(*scrollTopState);
-	} else if (showAtMsgId == ShowAtUnreadMsgId) {
-		if (history->session().supportMode()) {
-			_list.setAroundPosition(Data::MaxMessagePosition);
-		} else if (!history->trackUnreadMessages()) {
-			_list.setAroundPosition(Data::MaxMessagePosition);
-		} else {
-			_list.setAroundPosition(Data::UnreadMessagePosition);
-		}
-	} else if (showAtMsgId == ShowAtTheEndMsgId) {
+	} else if (history->session().supportMode()
+		|| !history->trackUnreadMessages()) {
 		_list.setAroundPosition(Data::MaxMessagePosition);
-	} else if (IsServerMsgId(showAtMsgId) || IsClientMsgId(showAtMsgId)) {
-		_list.setAroundPosition({
-			.fullId = FullMsgId(history->peer->id, showAtMsgId),
-			.date = TimeId(0),
-		});
-	} else if (migrated && IsServerMsgId(-showAtMsgId)) {
-		_list.setAroundPosition({
-			.fullId = FullMsgId(migrated->peer->id, -showAtMsgId),
-			.date = TimeId(0),
-		});
+	} else {
+		_list.setAroundPosition(Data::UnreadMessagePosition);
 	}
 }
 
@@ -516,7 +481,6 @@ ChatWidget::ChatWidget(
 	}, lifetime());
 
 	setupRoot();
-	setupShortcuts();
 
 	_peer->updateFull();
 	if (const auto channel = _peer->asMegagroup()) {
@@ -852,6 +816,8 @@ ChatWidget::ChatWidget(
 
 	setupTopicViewer();
 	setupComposeControls();
+	setupComposeStash();
+	setupShortcuts();
 	setupSwipeReplyAndBack();
 
 	if (mode() != Mode::Sublist) {
@@ -1318,6 +1284,35 @@ void ChatWidget::closeCurrent() {
 		controller()->showBackFromStack(Window::SectionShow(
 			anim::type::normal,
 			anim::activation::background));
+	}
+}
+
+void ChatWidget::sublistDestroyed() {
+	const auto window = &controller()->window();
+	const auto id = controller()->windowId();
+	if (id.chat() == _sublist || id.sublist() == _sublist) {
+		Core::App().closeWindow(window);
+		return;
+	}
+	const auto weak = base::make_weak(this);
+	const auto showing = Core::App().windowForShowingHistory(_peer);
+	if (HistoryView::SubsectionTabs::UsedFor(_history)
+		&& (!showing || showing == window)) {
+		auto params = Window::SectionShow(
+			Window::SectionShow::Way::ClearStack,
+			anim::type::instant,
+			anim::activation::background);
+		params.preferCurrentWindow = true;
+
+		// Switch now: the sublist is freed right after this event.
+		controller()->showThread(_history, ShowAtUnreadMsgId, params);
+		if (!weak) {
+			return;
+		}
+	}
+	closeCurrent();
+	if (weak && !id.hasChatsList()) {
+		Core::App().closeWindow(window);
 	}
 }
 
@@ -1802,6 +1797,9 @@ void ChatWidget::setupComposeControls() {
 	) | rpl::on_next([=] {
 		_cornerButtons.updateJumpDownVisibility();
 		_cornerButtons.updateUnreadThingsVisibility();
+		if (_stash) {
+			_stash->updateButton();
+		}
 	}, lifetime());
 
 	_composeControls->viewportEvents(
@@ -1890,7 +1888,8 @@ void ChatWidget::setupSwipeReplyAndBack() {
 				&& (!view->data()->isEphemeral()
 					|| view->data()->out()))
 			|| view->data()->showSimilarChannels()
-			|| view->data()->isService()) {
+			|| (view->data()->isService()
+				&& !ServiceAllowsSwipeReply(view->data()))) {
 			return result;
 		}
 		const auto item = _inner->lookupItemByPoint(
@@ -2075,6 +2074,7 @@ bool ChatWidget::confirmSendingFiles(
 		Api::SendType::Normal,
 		sendMenuDetails());
 	box->setReplyTo(_composeControls->replyingToMessage());
+	_sendFilesBox = box.data();
 
 	box->setConfirmedCallback(crl::guard(this, [=](
 			std::shared_ptr<Ui::PreparedBundle> bundle,
@@ -2086,6 +2086,11 @@ bool ChatWidget::confirmSendingFiles(
 		}
 		sendingFilesConfirmed(std::move(bundle), options);
 	}));
+	box->setStashCallbacks(
+		crl::guard(this, [=] { return _stash->canTakeFromBox(); }),
+		crl::guard(this, [=](SendFilesStashed &&stashed) {
+			_stash->takeFromBox(std::move(stashed));
+		}));
 	box->setCancelledCallback(_composeControls->restoreTextCallback(
 		insertTextOnCancel));
 	box->takeTextWithTagsRequests() | rpl::on_next([=](TextWithTags &&text) {
@@ -2155,7 +2160,7 @@ void ChatWidget::sendingFilesConfirmed(
 		_composeControls->cancelReplyMessage();
 		refreshTopBarActiveChat();
 	}
-	finishSending();
+	finishSending(options);
 }
 
 bool ChatWidget::confirmSendingFiles(
@@ -2358,7 +2363,7 @@ void ChatWidget::sendVoice(const ComposeControls::VoiceToSend &data) {
 
 	_composeControls->cancelReplyMessage();
 	_composeControls->clearListenState();
-	finishSending();
+	finishSending(data.options);
 }
 
 void ChatWidget::send(Api::SendOptions options) {
@@ -2524,7 +2529,7 @@ void ChatWidget::sendRichDraft(
 		_repliesRootId,
 		Api::SendProgressType::Typing,
 		-1);
-	finishSending();
+	finishSending(options);
 }
 
 void ChatWidget::sendRichDraftWithoutFormatting(
@@ -2632,7 +2637,7 @@ void ChatWidget::sendTextWithTags(
 	//_saveDraftStart = crl::now();
 	//onDraftSave();
 
-	finishSending();
+	finishSending(options);
 	if (done) {
 		done();
 	}
@@ -3083,6 +3088,9 @@ void ChatWidget::updateControlsVisibility() {
 		}
 	});
 	_bottom->updateControlsVisibility();
+	if (_stash) {
+		_stash->updateButton();
+	}
 	const auto active = _bottom->isButtonActive();
 	const auto choosingTheme = isChoosingTheme();
 	const auto hasSublistReplacement = _bottom->hasOpenChatButton()
@@ -3149,6 +3157,7 @@ bool ChatWidget::sendExistingDocument(
 		}
 	}
 
+	const auto options = messageToSend.action.options;
 	Api::SendExistingDocument(
 		std::move(messageToSend),
 		document,
@@ -3156,7 +3165,7 @@ bool ChatWidget::sendExistingDocument(
 
 	_composeControls->clearFieldAfterStickerSend();
 	_composeControls->cancelReplyMessage();
-	finishSending();
+	finishSending(options);
 	return true;
 }
 
@@ -3200,7 +3209,7 @@ bool ChatWidget::sendExistingPhoto(
 		photo);
 
 	_composeControls->cancelReplyMessage();
-	finishSending();
+	finishSending(options);
 	return true;
 }
 
@@ -3262,7 +3271,7 @@ void ChatWidget::sendInlineResult(
 	//onDraftSave();
 
 	bot->session().recentInlineBots().bump(bot);
-	finishSending();
+	finishSending(options);
 }
 
 SendMenu::Details ChatWidget::sendMenuDetails() const {
@@ -3757,11 +3766,13 @@ void ChatWidget::showAtEnd() {
 	showAtPosition(Data::MaxMessagePosition);
 }
 
-void ChatWidget::finishSending() {
+void ChatWidget::finishSending(const Api::SendOptions &options) {
 	_composeControls->hidePanelsAnimated();
 	//if (_previewData && _previewData->pendingTill) previewCancel();
 	doSetInnerFocus();
-	showAtEnd();
+	if (!options.scheduled) {
+		showAtEnd();
+	}
 	refreshTopBarActiveChat();
 	if (_keyboard
 			&& !_keyboard->hasMarkup()
@@ -3781,6 +3792,9 @@ void ChatWidget::showAtPosition(
 		Data::MessagePosition position,
 		FullMsgId originItemId,
 		const Window::SectionShow &params) {
+	if (mode() == Mode::History) {
+		_inner->overrideInitialScroll(nullptr);
+	}
 	_lastShownAt = position.fullId;
 	controller()->setActiveChatEntry(activeChat());
 	const auto ignore = _repliesRootId
@@ -4078,21 +4092,7 @@ void ChatWidget::saveHistoryScrollState(const ListMemento &state) {
 		return;
 	}
 	const auto migrated = _history->migrateFrom();
-	const auto aroundPosition = state.aroundPosition();
 	const auto scrollTopState = state.scrollTopState();
-	const auto useAroundPosition = scrollTopState.item
-		|| (aroundPosition == Data::UnreadMessagePosition)
-		|| (aroundPosition == Data::MaxMessagePosition);
-	_history->showAtMsgId = (useAroundPosition
-		? ShowAtMsgIdFromPosition(_history, aroundPosition)
-		: std::nullopt).value_or((_lastShownAt
-		&& migrated
-		&& (_lastShownAt.peer == migrated->peer->id)
-		&& IsServerMsgId(_lastShownAt.msg))
-		? -_lastShownAt.msg
-		: _lastShownAt
-		? _lastShownAt.msg
-		: ShowAtUnreadMsgId);
 	const auto atBottom = (_scroll->scrollTop() >= _scroll->scrollTopMax())
 		&& _inner->loadedAtBottomKnown()
 		&& _inner->loadedAtBottom();
@@ -4225,7 +4225,7 @@ void ChatWidget::subscribeToSublist() {
 
 	_sublist->destroyed(
 	) | rpl::on_next([=] {
-		closeCurrent();
+		sublistDestroyed();
 	}, lifetime());
 
 	unreadCountUpdated();
@@ -4270,6 +4270,9 @@ void ChatWidget::unreadCountUpdated() {
 }
 
 void ChatWidget::restoreState(not_null<ChatMemento*> memento) {
+	if (mode() == Mode::History) {
+		_inner->overrideInitialScroll(nullptr);
+	}
 	if (auto replies = memento->getReplies()) {
 		setReplies(std::move(replies));
 	} else if (!_replies && _repliesRootId) {
@@ -4293,6 +4296,15 @@ void ChatWidget::restoreState(not_null<ChatMemento*> memento) {
 			}
 			const auto top = std::max(view->y() - st::topBarHeight, 0);
 			listScrollTo(top);
+			return true;
+		});
+	}
+	if (mode() == Mode::History
+		&& !memento->highlightId()
+		&& (memento->list()->aroundPosition() == Data::MaxMessagePosition)
+		&& !memento->list()->scrollTopState().item) {
+		_inner->overrideInitialScroll([=] {
+			listScrollTo(_scroll->scrollTopMax());
 			return true;
 		});
 	}
@@ -5228,21 +5240,34 @@ MessagesBarData ChatWidget::listMessagesBar(
 	const auto migrated = (_replies || _sublist)
 		? nullptr
 		: _history->migrateFrom();
-	const auto migratedTill = (migrated && migrated->unreadCount() > 0)
-		? migrated->inboxReadTillId()
-		: 0;
-	const auto historyTill = (_replies
-		|| _sublist
-		|| !_history->unreadCount()
-		|| _history->amMonoforumAdmin())
-		? 0
-		: _history->inboxReadTillId();
-	if (!_replies && !_sublist && !migratedTill && !historyTill) {
+	const auto migratedUnread = migrated
+		&& (migrated->unreadCount() > 0)
+		&& migrated->inboxReadTillKnown();
+	const auto migratedTill = migrated ? migrated->inboxReadTillId() : MsgId();
+	const auto historyUnread = !_replies
+		&& !_sublist
+		&& (_history->unreadCount() > 0)
+		&& !_history->amMonoforumAdmin()
+		&& _history->inboxReadTillKnown();
+	const auto historyTill = _history->inboxReadTillId();
+	if (!_replies && !_sublist && !migratedUnread && !historyUnread) {
 		return {};
 	}
 	const auto hidden = (_replies && (repliesTill < 2))
 		|| (_sublist && (sublistTill < 2));
-	auto skippedReadIncoming = false;
+	const auto boundaryHistory = migratedUnread
+		? migrated
+		: historyUnread
+		? _history.get()
+		: nullptr;
+	const auto boundaryTill = migratedUnread ? migratedTill : historyTill;
+	const auto boundaryIndex = boundaryHistory
+		? boundaryHistory->maybeMessages()
+		: nullptr;
+	const auto boundaryIds = boundaryIndex
+		? boundaryIndex->snapshot({ boundaryTill + 1, 0, 0 }).messageIds
+		: base::flat_set<MsgId>();
+	auto readBoundaryLoaded = _inner->loadedAtTop();
 	for (auto i = 0, count = int(elements.size()); i != count; ++i) {
 		const auto item = elements[i]->data();
 		if (!item->isRegular()
@@ -5253,8 +5278,8 @@ MessagesBarData ChatWidget::listMessagesBar(
 		const auto inHistory = (item->history() == _history);
 		const auto unread = (_replies && item->id > repliesTill)
 			|| (_sublist && item->id > sublistTill)
-			|| (migratedTill && (inHistory || item->id > migratedTill))
-			|| (historyTill && inHistory && item->id > historyTill);
+			|| (migratedUnread && (inHistory || item->id > migratedTill))
+			|| (historyUnread && inHistory && item->id > historyTill);
 		if (unread
 			&& (_replies || _sublist)
 			&& (markLastAsRead
@@ -5273,13 +5298,12 @@ MessagesBarData ChatWidget::listMessagesBar(
 			}
 			continue;
 		}
-		if (!item->out() && !unread) {
-			skippedReadIncoming = true;
+		if (!unread
+			|| ((item->history() == boundaryHistory)
+				&& boundaryIds.contains(item->id))) {
+			readBoundaryLoaded = true;
 		}
-		if (item->out()) {
-			continue;
-		}
-		if (!unread) {
+		if (!unread || item->out()) {
 			continue;
 		}
 		if (markLastAsRead) {
@@ -5289,7 +5313,7 @@ MessagesBarData ChatWidget::listMessagesBar(
 			listMarkReadTill(item);
 			continue;
 		}
-		if (!skippedReadIncoming && !_replies && !_sublist) {
+		if (!readBoundaryLoaded && !_replies && !_sublist) {
 			return {};
 		}
 		return {
@@ -5437,7 +5461,7 @@ void ChatWidget::sendBotCommand(
 			markKeyboardUsed();
 		}
 	}
-	finishSending();
+	finishSending(options);
 }
 
 void ChatWidget::updateBotKeyboard(History *h, bool force) {
@@ -6089,6 +6113,13 @@ void ChatWidget::setupShortcuts() {
 				return true;
 			});
 		}
+		_stash
+			&& _stash->canExchange()
+			&& request->check(Command::StashMessage, 1)
+			&& request->handle([=] {
+				_stash->exchange();
+				return true;
+			});
 		if ((mode() == Mode::History) && session().supportMode()) {
 			request->check(Command::SupportToggleMuted)
 				&& request->handle([=] {
@@ -6096,6 +6127,57 @@ void ChatWidget::setupShortcuts() {
 					return true;
 				});
 		}
+	}, lifetime());
+}
+
+void ChatWidget::setupComposeStash() {
+	using namespace HistoryView::Controls;
+	_stash = std::make_unique<StashManager>(StashManagerDescriptor{
+		.session = &session(),
+		.buttons = &_cornerButtons,
+		.show = controller()->uiShow(),
+		.history = [=] { return _history.get(); },
+		.key = [=] { return _composeControls->composeStashKey(); },
+		.allowed = [=] { return _composeControls->canUseComposeStash(); },
+		.hasContent = [=] {
+			return _composeControls->hasStashableContent();
+		},
+		.canSendTexts = [=] { return _composeControls->canSendTexts(); },
+		.take = [=] {
+			auto result = _composeControls->takeComposeStash();
+			if (result) {
+				cancelSuggestPost();
+			}
+			return result;
+		},
+		.apply = [=](Data::ComposeStash &&stash) {
+			_composeControls->applyComposeStash(std::move(stash));
+			refreshSuggestFromDraft();
+		},
+		.suggest = [=] { return suggestOptions(); },
+		.clearComposer = [=] {
+			_composeControls->cancelReplyMessage();
+			cancelSuggestPost();
+			_composeControls->updateForwarding();
+		},
+		.openFiles = [=](Ui::PreparedList &list) -> SendFilesBox* {
+			if (showSendingFilesError(list)) {
+				return nullptr;
+			}
+			return confirmSendingFiles(std::move(list), QString())
+				? _sendFilesBox.data()
+				: nullptr;
+		},
+		.filesError = [=](const Ui::PreparedList &list) {
+			return showSendingFilesError(list);
+		},
+		.menuDetails = [=] { return sendMenuDetails(); },
+		.send = [=](Api::SendOptions options) { send(options); },
+	});
+
+	_composeControls->recordingActiveValue(
+	) | rpl::skip(1) | rpl::on_next([=] {
+		_stash->updateButton();
 	}, lifetime());
 }
 

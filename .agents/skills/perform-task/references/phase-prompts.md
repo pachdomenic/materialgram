@@ -41,7 +41,8 @@ every applicable placeholder: `<TASK>`, `<TASK_ID>`, `<WORK_DIR>`,
 - Give each phase a unique lowercase/digit/underscore task name and tell the phase it is a leaf that must not delegate.
 - For Phase 1, Phase 3, Phase 4, and Phase 6, if delegated retries still fail,
   report a recoverable hard stop to the caller instead of rerunning locally.
-- Never use `codex exec`, background shell child processes, or JSONL child-session logging from this skill.
+- On a Codex host, delegate only through native subagents; never shell out to `codex exec` or start background shell child processes there.
+- On Claude Code, reviews and assessments run as Codex CLI leaves unless the invocation opted out, per the Claude adapter's review and assessment provider and [Codex CLI leaves](../../../shared/codex-cli-leaves.md). Their transcripts stay in `TASK_DIR/.local/codex/`, never in tracked artifacts.
 
 ### Claude Code: synchronous delegation
 
@@ -55,6 +56,11 @@ every applicable placeholder: `<TASK>`, `<TASK_ID>`, `<WORK_DIR>`,
 - If a returned leaf fails its completion check, retry that disposable phase
   once in a fresh Agent with more specific instructions before stopping to
   ask the user.
+- With the `codex` review provider, Phase 3, every Phase 6 review and the
+  convergence and campaign-cap assessments run as Codex CLI leaves instead:
+  start the leaves of one step together, block on `codex_leaf.py wait`, then
+  validate the same completion checks. The general reviewer's pass-2
+  synthesis resumes its pass-1 leaf with `--resume`.
 
 ### Grok Build: blocking spawn, depth one
 
@@ -503,6 +509,10 @@ review for another material risk.
 
 For the initial implementation:
 
+0. From the source checkout run
+   `python3 .agents/skills/code-health/scripts/health.py check --base refs/ai-tasks/<TASK_ID>/base`
+   and save its complete output as `<WORK_DIR>/health-check.md`. It is tool
+   output, not a review, so every reviewer may read it.
 1. Launch the general reviewer and all five standard lens reviewers together
    when capacity permits. Under a slot limit, queue every lens and start the
    next as a slot opens; none is selected away.
@@ -555,6 +565,7 @@ non-applicability.
 
 When applicable, also read:
 - <WORK_DIR>/context.md and plan.md
+- <WORK_DIR>/health-check.md
 - AGENTS.md and REVIEW.md
 - every relevant changed file in full
 - adjacent callers, owners, consumers, or repository precedents needed for this
@@ -699,6 +710,22 @@ Read:
 Independently review correctness, completeness, edge/error paths, unintended
 regressions, integration, proportionality, repository conventions, and the
 evidence design. Do not defer anything to a specialist.
+
+Read <WORK_DIR>/health-check.md on pass 1. Its errors (an include into a
+CMake target the including target does not link, where no such include
+existed before; a new file over the size limit) are blocking
+repository-rule findings unless the task explicitly owns that boundary.
+Confirm each warning against the code. Growing an oversized file by more
+than a small fix is a maintenance defect: the fix is to put the new code in
+a new file, never to split the old file inside this task. Repeating existing
+code, or making a widely included header materially heavier, is a
+maintenance defect worth changing. A removed definition still mentioned
+elsewhere is a stale declaration or a break on the platform that compiles
+the mention, and a removed last use leaves a definition to delete in the
+same task. One more include across an already crossed target pair blocks
+only when a clean alternative exists.
+Where the nearest directory `AGENTS.md` area map exists, judge placement
+against it rather than against the surrounding code.
 
 On pass 1 the five standard lenses are running independently. Complete your own
 review without predicting or selecting their verdicts. Name any extra domain
@@ -1064,6 +1091,14 @@ For review iterations, include the iteration and lens in the file name, for exam
    small shell summaries and the completion checks above.
 4. Write the result log from the validated outcome and the compact reply block.
 
+For a review or assessment phase under the `codex` review provider, replace
+step 2 with one `codex_leaf.py start` per leaf — working directory
+`WORK_DIR`, `workspace-write` sandbox, `--no-project-doc`, the selected
+`--effort`, `--model` where the effort policy's lens models pin one, and the
+Codex CLI leaves preamble before the prompt — followed by
+foreground `codex_leaf.py wait` calls until they all finish. Steps 3 and 4 are
+unchanged; the compact reply is the leaf's `<name>.last.md`.
+
 ## Subagent Pattern (Grok Build)
 
 1. Write the phase prompt file(s).
@@ -1089,7 +1124,8 @@ Use this pattern conceptually for delegated phases:
 2. Spawn a fresh leaf subagent with a unique tool-valid task name and
    `fork_turns: "none"` unless a small recent-turn fork is required. Pass
    the selected `reasoning_effort` when supported, per the shared phase
-   effort policy; omit `model` to inherit the parent model.
+   effort policy; omit `model` to inherit the parent model, except where
+   the policy's lens models pin one.
 3. Wait for the child's final result under the shared Codex completion and
    recovery contract. Keep heartbeat and progress checks out of the parent.
 4. Validate the expected artifacts or code changes after completion with small

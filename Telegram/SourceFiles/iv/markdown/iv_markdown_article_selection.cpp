@@ -921,7 +921,7 @@ void CollectSelectableSegments(
 			segment.textRect = block.textRect;
 			segment.textWidth = block.textWidth;
 			segment.align = block.flowTextAlign;
-			segment.length = block.leaf.length();
+			segment.length = block.leaf.length() - block.skipBlockLength;
 			block.segmentIndex = AddSelectableSegment(
 				segments,
 				std::move(segment));
@@ -1373,15 +1373,6 @@ std::optional<TextSelection> TextSelectionForSegment(
 		false);
 }
 
-std::optional<TextSelection> TextSelectionForSegmentIndex(
-		const PaintSelectionState &selectionState,
-		int index) {
-	const auto segment = FindSegment(selectionState.segments, index);
-	return segment
-		? TextSelectionForSegment(*segment, selectionState)
-		: std::nullopt;
-}
-
 std::optional<TextSelection> PaintTextSelectionForSegment(
 		const SelectableSegment &segment,
 		const PaintSelectionState &selectionState) {
@@ -1468,7 +1459,9 @@ TextForMimeData TextForSegment(
 	switch (segment.kind) {
 	case SelectableSegmentKind::TextLeaf:
 		return segment.leaf
-			? segment.leaf->toTextForMimeData(selection)
+			? segment.leaf->toTextForMimeData(TextSelection(
+				selection.from,
+				uint16(std::min(int(selection.to), SegmentLength(segment)))))
 			: TextForMimeData();
 	case SelectableSegmentKind::CodeBlock:
 		return segment.block

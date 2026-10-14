@@ -18,6 +18,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/view/controls/history_view_forward_panel.h"
 #include "history/view/controls/history_view_draft_options.h"
 #include "history/view/controls/history_view_suggest_options.h"
+#include "history/view/media/history_view_gram_transfer.h"
 #include "history/view/media/history_view_save_document_action.h"
 #include "history/view/media/history_view_sticker.h"
 #include "history/view/media/history_view_web_page.h"
@@ -31,6 +32,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/view/history_view_cursor_state.h"
 #include "history/view/history_view_reply_button.h"
 #include "history/view/history_view_context_menu.h"
+#include "history/view/history_view_copy_selection.h"
 #include "history/view/history_view_reaction_preview.h"
 #include "history/view/history_view_quick_action.h"
 #include "history/view/history_view_add_poll_option.h"
@@ -73,7 +75,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "boxes/moderate_messages_box.h"
 #include "boxes/report_messages_box.h"
 #include "boxes/send_gif_with_caption_box.h"
-#include "boxes/star_gift_box.h" // ShowStarGiftBox
 #include "boxes/sticker_set_box.h"
 #include "boxes/translate_box.h"
 #include "chat_helpers/message_field.h"
@@ -351,6 +352,10 @@ public:
 
 	bool elementHideTopicButton(not_null<const Element*> view) override {
 		return false;
+	}
+
+	HistoryView::GramReadLine *elementGramReadLine() override {
+		return _widget ? _widget->elementGramReadLine() : nullptr;
 	}
 
 	not_null<HistoryView::ElementDelegate*> delegate() override {
@@ -743,7 +748,9 @@ void HistoryInner::setupSwipeReplyAndBack() {
 					&& (!view->data()->isEphemeral()
 						|| view->data()->out()))
 				|| view->data()->showSimilarChannels()
-				|| view->data()->isService()) {
+				|| (view->data()->isService()
+					&& !HistoryView::ServiceAllowsSwipeReply(
+						view->data()))) {
 				return true;
 			}
 			const auto item = lookupItemByPoint(
@@ -3624,37 +3631,26 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 						_menu->addAction(tr::lng_profile_copy_phone(tr::now), [=] {
 							QGuiApplication::clipboard()->setText(phone);
 						}, &st::menuIconCopy);
-					} else if (const auto gift = media->gift()) {
-						const auto peer = item->history()->peer;
-						const auto user = peer->asUser();
-						if (!user
-							|| (!user->isInaccessible()
-								&& !user->isNotificationsUser())) {
-							const auto controller = _controller;
-							const auto starGiftUpgrade = gift->upgrade
-								&& (gift->type == Data::GiftType::StarGift);
-							const auto isGift = gift->slug.isEmpty()
-								|| !gift->channel;
-							const auto out = item->out();
-							const auto outgoingGift = isGift
-								&& (starGiftUpgrade ? !out : out);
-							if (outgoingGift
-								&& gift->type
-									!= Data::GiftType::BirthdaySuggest) {
-								_menu->addAction(
-									tr::lng_context_gift_send(tr::now),
-									[=] {
-										Ui::ShowStarGiftBox(controller, peer);
-									},
-									&st::menuIconGiftPremium);
-							}
-						}
+					} else if (media->gift()) {
+						HistoryView::AddGiftMessageAction(
+							_menu,
+							item,
+							controller);
 					} else if (!rateTranscriptionItem && media->document()) {
 						if ((media->document()->isVoiceMessage()
 								|| media->document()->isVideoMessage())
 							&& Menu::HasRateTranscribeItem(item)) {
 							rateTranscriptionItem = item;
 						}
+					}
+				}
+				if (item->isRegular()
+					&& item->Has<HistoryServiceGramTransfer>()) {
+					if (const auto user = item->history()->peer->asUser()) {
+						Window::AddSendMoneyAction(
+							controller,
+							user,
+							Ui::Menu::CreateAddActionCallback(_menu));
 					}
 				}
 				if (!item->isService() && view && actionText.isEmpty()) {
@@ -3974,18 +3970,24 @@ bool HistoryInner::showCopyRestrictionForSelected() {
 		&& showCopyRestriction(_selectedTextItem);
 }
 
-void HistoryInner::copySelectedText() {
+void HistoryInner::copySelectedText(bool withImageText) {
 	if (showCopyRestrictionForSelected()) {
 		return;
 	}
-	const auto text = getSelectedText();
-	if (text.empty()) {
+	auto text = getSelectedTextParts();
+	if (text.empty() && (!withImageText || text.images.empty())) {
 		return;
 	}
-	Iv::SetRichBlocksClipboard(
-		text,
-		getSelectedRichBlocks(),
-		&session());
+	HistoryView::CopySelection({
+		.show = _controller->uiShow(),
+		.session = &session(),
+		.text = std::move(text),
+		.blocks = getSelectedRichBlocks(),
+		.withImageText = withImageText,
+	});
+	if (hasSelectedItems()) {
+		clearSelected();
+	}
 }
 
 void HistoryInner::editCaptionUploadLayer(not_null<HistoryItem*> item) {
@@ -4103,6 +4105,10 @@ void HistoryInner::resizeEvent(QResizeEvent *e) {
 }
 
 TextForMimeData HistoryInner::getSelectedText() const {
+	return getSelectedTextParts().composed();
+}
+
+HistorySelectedTextParts HistoryInner::getSelectedTextParts() const {
 	auto selected = _selected;
 
 	if (_mouseAction == MouseAction::Selecting && _dragSelFrom && _dragSelTo) {
@@ -4111,9 +4117,9 @@ TextForMimeData HistoryInner::getSelectedText() const {
 
 	if (selected.empty()) {
 		if (const auto view = viewByItem(_selectedTextItem)) {
-			return view->selectedText(_selectedTextSelection);
+			return { .texts = { view->selectedText(_selectedTextSelection) } };
 		}
-		return _selectedText;
+		return { .texts = { _selectedText } };
 	}
 
 	const auto richContext = (selected.size() > 1);
@@ -4156,19 +4162,12 @@ TextForMimeData HistoryInner::getSelectedText() const {
 			addItem(item);
 		}
 	}
-	if (!richContext && texts.size() == 1) {
-		const auto &part = texts.front().second;
-		if (part.group) {
-			return HistoryGroupText(not_null<const Data::Group*>{ part.group });
-		}
-		return HistoryItemText(part.item);
-	}
 	auto entries = std::vector<HistorySelectedTextEntry>();
 	entries.reserve(texts.size());
 	for (const auto &entry : texts) {
 		entries.push_back(entry.second);
 	}
-	return HistorySelectedItemsText(entries, richContext);
+	return HistorySelectedItemsTextParts(entries, richContext);
 }
 
 Iv::RichPageBlocksSlice HistoryInner::getSelectedRichBlocks() const {
@@ -4376,6 +4375,9 @@ void HistoryInner::keyPressEvent(QKeyEvent *e) {
 	} else if (e == QKeySequence::Copy
 		&& canCopySelected()) {
 		copySelectedText();
+	} else if (HistoryView::IsCopyWithImageTextShortcut(e, &session())
+		&& canCopySelected()) {
+		copySelectedText(true);
 #ifdef Q_OS_MAC
 	} else if (e->key() == Qt::Key_E
 		&& e->modifiers().testFlag(Qt::ControlModifier)
@@ -5245,6 +5247,15 @@ void HistoryInner::elementStartEffect(
 		not_null<const Element*> view,
 		Element *replacing) {
 	_emojiInteractions->playEffect(view);
+}
+
+HistoryView::GramReadLine *HistoryInner::elementGramReadLine() {
+	if (!_gramReadLine) {
+		_gramReadLine = std::make_unique<HistoryView::GramReadLine>([=] {
+			update();
+		});
+	}
+	return _gramReadLine.get();
 }
 
 auto HistoryInner::getSelectionState() const

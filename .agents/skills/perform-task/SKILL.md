@@ -24,6 +24,9 @@ Read these files completely before phase work:
   mappings before assigning phase workers;
 - On Codex, [child completion and recovery](../../shared/codex-delegation.md)
   for result-driven waits and recovery of stopped agents;
+- On Claude Code, unless the invocation opted out of Codex reviews,
+  [Codex CLI leaves](../../shared/codex-cli-leaves.md) for the review and
+  assessment phases;
 - `references/pipeline.md` for the authoritative end-to-end runner contract;
 - `references/phase-prompts.md` for exact leaf prompts and retry rules;
 - `.agents/shared/test-loop.md` for the implementation/test state machine;
@@ -35,6 +38,12 @@ Read these files completely before phase work:
 The pipeline reference adapts conflicting generic test-loop mechanics for the
 external AI worktree and exact-path safety. Its named adapter wins at those
 points; retain every other test-loop rule.
+
+A task whose `task.md` has a `## Code health` section with class Q0, Q1 or
+Q2 runs the [mechanical lane](references/mechanical-lane.md) instead. For it,
+read that file and, from `pipeline.md`, the Contract, Preflight, Telegram
+commits and Final AI state sections; skip the test-loop and Computer Use
+references.
 
 ## Resolve the workspace and task
 
