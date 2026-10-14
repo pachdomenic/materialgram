@@ -31,6 +31,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "storage/storage_facade.h"
 #include "data/components/credits.h"
 #include "data/components/ephemeral_messages.h"
+#include "data/components/edit_history.h"
 #include "data/components/factchecks.h"
 #include "data/components/gift_auctions.h"
 #include "data/components/location_pickers.h"
@@ -135,6 +136,7 @@ Session::Session(
 	Data::TopPeerType::BotGuestChat))
 , _recentInlineBots(std::make_unique<Data::RecentInlineBots>(this))
 , _factchecks(std::make_unique<Data::Factchecks>(this))
+, _editHistory(std::make_unique<Data::EditHistory>(this))
 , _locationPickers(std::make_unique<Data::LocationPickers>())
 , _credits(std::make_unique<Data::Credits>(this))
 , _wallet(std::make_unique<Wallet::Session>(this))

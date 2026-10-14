@@ -1485,6 +1485,28 @@ void BuildMaterialgramSection(SectionBuilder &builder) {
 		}, ttlRead->lifetime());
 	}
 
+	const auto editHistory = builder.addButton({
+		.id = u"advanced/materialgram_edit_history"_q,
+		.title = tr::lng_materialgram_settings_edit_history(),
+		.st = &st::settingsButtonNoIcon,
+		.toggled = rpl::single(settings->saveEditHistory()),
+		.keywords = {
+			u"materialgram"_q,
+			u"edit"_q,
+			u"history"_q,
+			u"edited"_q,
+		},
+	});
+	if (editHistory) {
+		editHistory->toggledValue(
+		) | rpl::filter([=](bool enabled) {
+			return (enabled != settings->saveEditHistory());
+		}) | rpl::on_next([=](bool enabled) {
+			settings->setSaveEditHistory(enabled);
+			Core::App().saveSettingsDelayed();
+		}, editHistory->lifetime());
+	}
+
 	builder.addSkip();
 }
 

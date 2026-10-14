@@ -8,6 +8,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/history_item.h"
 
 #include "api/api_forward_protected.h"
+#include "data/components/edit_history.h"
 #include "api/api_premium.h"
 #include "api/api_sensitive_content.h"
 #include "api/api_transcribes.h"
@@ -2434,6 +2435,9 @@ void HistoryItem::applyEdition(HistoryMessageEdition &&edition) {
 
 	const auto wasGrouped = !updatingSavedLocalEdit
 		&& history()->owner().groups().isGrouped(this);
+	const auto wasText = originalText();
+	const auto wasEdited = Get<HistoryMessageEdited>();
+	const auto wasDate = wasEdited ? wasEdited->date : date();
 
 	if (edition.isEditHide) {
 		_flags |= MessageFlag::HideEdited;
@@ -2519,6 +2523,12 @@ void HistoryItem::applyEdition(HistoryMessageEdition &&edition) {
 		setServiceText(std::move(serviceText));
 		addToSharedMediaIndex();
 	} else {
+		if (!isService() && wasText != updatedText) {
+			_history->session().editHistory().remember(
+				this,
+				wasText,
+				wasDate);
+		}
 		setText(std::move(updatedText));
 		addToSharedMediaIndex();
 	}

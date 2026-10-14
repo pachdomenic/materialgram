@@ -639,6 +639,8 @@ PRIVATE
     data/components/credits.h
     data/components/ephemeral_messages.cpp
     data/components/ephemeral_messages.h
+    data/components/edit_history.cpp
+    data/components/edit_history.h
     data/components/factchecks.cpp
     data/components/factchecks.h
     data/components/gift_auctions.cpp
@@ -1131,6 +1133,8 @@ PRIVATE
     history/view/history_view_add_poll_option.h
     history/view/history_view_element_overlay.cpp
     history/view/history_view_element_overlay.h
+    history/view/history_view_edit_history.cpp
+    history/view/history_view_edit_history.h
     history/view/history_view_element.cpp
     history/view/history_view_element.h
     history/view/history_view_emoji_interactions.cpp

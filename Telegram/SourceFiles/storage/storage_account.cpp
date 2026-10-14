@@ -1251,6 +1251,27 @@ void Account::writeMtpConfig() {
 	file.writeEncrypted(data, _localKey);
 }
 
+void Account::writeEditHistory(const QByteArray &serialized) {
+	Expects(_localKey != nullptr);
+
+	FileWriteDescriptor file(u"edits"_q, _basePath);
+	EncryptedDescriptor data(Serialize::bytearraySize(serialized));
+	data.stream << serialized;
+	file.writeEncrypted(data, _localKey);
+}
+
+QByteArray Account::readEditHistory() {
+	Expects(_localKey != nullptr);
+
+	FileReadDescriptor file;
+	if (!ReadEncryptedFile(file, "edits", _basePath, _localKey)) {
+		return QByteArray();
+	}
+	auto serialized = QByteArray();
+	file.stream >> serialized;
+	return CheckStreamStatus(file.stream) ? serialized : QByteArray();
+}
+
 std::unique_ptr<MTP::Config> Account::readMtpConfig() {
 	Expects(_localKey != nullptr);
 

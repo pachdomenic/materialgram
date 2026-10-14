@@ -45,6 +45,8 @@ inline constexpr auto kKeepSelfDestructingMediaKey
 	= "keep-self-destructing-media"_cs;
 inline constexpr auto kSelfDestructingNoReadKey
 	= "self-destructing-no-read"_cs;
+inline constexpr auto kEditHistoryDisabledKey
+	= "edit-history-disabled"_cs;
 
 struct WindowPosition {
 	int32 moncrc = 0;
@@ -193,6 +195,10 @@ public:
 		return _markSelfDestructingRead;
 	}
 	void setMarkSelfDestructingRead(bool value);
+	[[nodiscard]] bool saveEditHistory() const {
+		return _saveEditHistory;
+	}
+	void setSaveEditHistory(bool value);
 	[[nodiscard]] float64 songVolume() const {
 		return _songVolume.current();
 	}
@@ -1145,6 +1151,7 @@ private:
 	bool _forwardProtectedMessages = false;
 	bool _keepSelfDestructingMedia = false;
 	bool _markSelfDestructingRead = true;
+	bool _saveEditHistory = true;
 	rpl::variable<float64> _songVolume = kDefaultVolume;
 	rpl::variable<float64> _videoVolume = kDefaultVolume;
 	bool _askDownloadPath = false;

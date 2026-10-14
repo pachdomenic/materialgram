@@ -1309,6 +1309,7 @@ void Settings::addFromSerialized(const QByteArray &serialized) {
 	_forwardProtectedMessages = readPref<bool>(kForwardProtectedMessagesKey);
 	_keepSelfDestructingMedia = readPref<bool>(kKeepSelfDestructingMediaKey);
 	_markSelfDestructingRead = !readPref<bool>(kSelfDestructingNoReadKey);
+	_saveEditHistory = !readPref<bool>(kEditHistoryDisabledKey);
 	{ // Parse the legacy translation setting.
 		if (legacySkipTranslationForLanguage == 0) {
 			_translateButtonEnabled = false;
@@ -1388,6 +1389,11 @@ void Settings::setKeepSelfDestructingMedia(bool value) {
 void Settings::setMarkSelfDestructingRead(bool value) {
 	_markSelfDestructingRead = value;
 	writePref<bool>(kSelfDestructingNoReadKey, !value);
+}
+
+void Settings::setSaveEditHistory(bool value) {
+	_saveEditHistory = value;
+	writePref<bool>(kEditHistoryDisabledKey, !value);
 }
 
 void Settings::writePrefGeneric(
@@ -1839,6 +1845,7 @@ void Settings::resetOnLastLogout() {
 	_forwardProtectedMessages = false;
 	_keepSelfDestructingMedia = false;
 	_markSelfDestructingRead = true;
+	_saveEditHistory = true;
 	_quickDialogAction = Dialogs::Ui::QuickDialogAction::Disabled;
 	_notificationsVolume = 100;
 

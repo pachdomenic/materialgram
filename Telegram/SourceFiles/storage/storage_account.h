@@ -97,6 +97,8 @@ public:
 	void writeSessionSettings();
 	void writeMtpData();
 	void writeMtpConfig();
+	void writeEditHistory(const QByteArray &serialized);
+	[[nodiscard]] QByteArray readEditHistory();
 
 	void registerDraftSource(
 		not_null<History*> history,
