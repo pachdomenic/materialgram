@@ -45,8 +45,7 @@ int BubbleRadiusLarge() {
 
 int BubbleCornerRadius(BubbleCornerRounding corner) {
 	switch (corner) {
-	case BubbleCornerRounding::None:
-	case BubbleCornerRounding::Tail: return 0;
+	case BubbleCornerRounding::None: return 0;
 	case BubbleCornerRounding::Small: return BubbleRadiusSmall();
 	case BubbleCornerRounding::Large: return BubbleRadiusLarge();
 	}
