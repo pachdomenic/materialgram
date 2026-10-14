@@ -107,6 +107,16 @@ template <typename T>
 	return PreparedServiceText();
 };
 
+[[nodiscard]] bool IsExpiredTtlMedia(const MTPMessageMedia &media) {
+	return media.match([](const MTPDmessageMediaPhoto &data) {
+		return data.vttl_seconds().has_value() && !data.vphoto();
+	}, [](const MTPDmessageMediaDocument &data) {
+		return data.vttl_seconds().has_value() && !data.vdocument();
+	}, [](const auto &) {
+		return false;
+	});
+}
+
 [[nodiscard]] bool ShowTtlMediaAsExpired(
 		not_null<HistoryItem*> item,
 		const MTPMessageMedia &media) {
@@ -2396,6 +2406,14 @@ void HistoryItem::clearMainView() {
 }
 
 void HistoryItem::applyEdition(HistoryMessageEdition &&edition) {
+	if (edition.mtpMedia
+		&& _media
+		&& _media->ttlSeconds()
+		&& IsExpiredTtlMedia(*edition.mtpMedia)
+		&& Core::App().settings().keepSelfDestructingMedia()) {
+		clearMediaAsExpired();
+		return;
+	}
 	history()->session().ephemeralMessages().revertAnchored(this);
 
 	int keyboardTop = -1;
@@ -3049,6 +3067,12 @@ void HistoryItem::clearMediaAsExpired() {
 	const auto media = this->media();
 	if (!media || !media->ttlSeconds()) {
 		return;
+	} else if (Core::App().settings().keepSelfDestructingMedia()) {
+		unarmMediaDestroy();
+		RemoveComponents(HistoryServiceSelfDestruct::Bit());
+		SaveSelfDestructingCopy(this);
+		_history->owner().requestItemRepaint(this);
+		return;
 	}
 	unarmMediaDestroy();
 	auto &owner = _history->owner();
@@ -3450,7 +3474,9 @@ bool HistoryItem::forbidsForward() const {
 bool HistoryItem::forbidsSaving() const {
 	if (forbidsForward()) {
 		return true;
-	} else if (_media && _media->ttlSeconds()) {
+	} else if (_media
+		&& _media->ttlSeconds()
+		&& !Core::App().settings().keepSelfDestructingMedia()) {
 		return true;
 	} else if (const auto invoice = _media ? _media->invoice() : nullptr) {
 		return HasExtendedMedia(*invoice);

@@ -1843,6 +1843,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_materialgram_settings_forward_protected" = "Forward from protected chats";
 "lng_materialgram_forward_protected_loading" = "Downloading media to forward from a protected chat…";
 "lng_materialgram_forward_protected_failed" = "Some media could not be downloaded and was skipped.";
+"lng_materialgram_settings_keep_ttl" = "Keep self-destructing media";
+"lng_materialgram_settings_ttl_read" = "Mark self-destructing media as viewed";
 "lng_info_personal_channel_label" = "Channel";
 "lng_info_mobile_label" = "Mobile";
 "lng_info_mobile_context_menu_fragment_about" = "This number is not tied to a SIM card and was acquired on {link}.";

@@ -1441,6 +1441,50 @@ void BuildMaterialgramSection(SectionBuilder &builder) {
 		}, forwardProtected->lifetime());
 	}
 
+	const auto keepTtl = builder.addButton({
+		.id = u"advanced/materialgram_keep_ttl"_q,
+		.title = tr::lng_materialgram_settings_keep_ttl(),
+		.st = &st::settingsButtonNoIcon,
+		.toggled = rpl::single(settings->keepSelfDestructingMedia()),
+		.keywords = {
+			u"materialgram"_q,
+			u"self-destructing"_q,
+			u"view once"_q,
+			u"timer"_q,
+		},
+	});
+	if (keepTtl) {
+		keepTtl->toggledValue(
+		) | rpl::filter([=](bool enabled) {
+			return (enabled != settings->keepSelfDestructingMedia());
+		}) | rpl::on_next([=](bool enabled) {
+			settings->setKeepSelfDestructingMedia(enabled);
+			Core::App().saveSettingsDelayed();
+		}, keepTtl->lifetime());
+	}
+
+	const auto ttlRead = builder.addButton({
+		.id = u"advanced/materialgram_ttl_read"_q,
+		.title = tr::lng_materialgram_settings_ttl_read(),
+		.st = &st::settingsButtonNoIcon,
+		.toggled = rpl::single(settings->markSelfDestructingRead()),
+		.keywords = {
+			u"materialgram"_q,
+			u"self-destructing"_q,
+			u"viewed"_q,
+			u"read"_q,
+		},
+	});
+	if (ttlRead) {
+		ttlRead->toggledValue(
+		) | rpl::filter([=](bool enabled) {
+			return (enabled != settings->markSelfDestructingRead());
+		}) | rpl::on_next([=](bool enabled) {
+			settings->setMarkSelfDestructingRead(enabled);
+			Core::App().saveSettingsDelayed();
+		}, ttlRead->lifetime());
+	}
+
 	builder.addSkip();
 }
 

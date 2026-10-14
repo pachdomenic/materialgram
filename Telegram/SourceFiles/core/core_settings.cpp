@@ -1307,6 +1307,8 @@ void Settings::addFromSerialized(const QByteArray &serialized) {
 	_saveDeletedMessages = (saveDeletedMessages == 1);
 	_saveOwnDeletedMessages = (saveOwnDeletedMessages == 1);
 	_forwardProtectedMessages = readPref<bool>(kForwardProtectedMessagesKey);
+	_keepSelfDestructingMedia = readPref<bool>(kKeepSelfDestructingMediaKey);
+	_markSelfDestructingRead = !readPref<bool>(kSelfDestructingNoReadKey);
 	{ // Parse the legacy translation setting.
 		if (legacySkipTranslationForLanguage == 0) {
 			_translateButtonEnabled = false;
@@ -1376,6 +1378,16 @@ void Settings::clearPref(std::string_view key) {
 void Settings::setForwardProtectedMessages(bool value) {
 	_forwardProtectedMessages = value;
 	writePref<bool>(kForwardProtectedMessagesKey, value);
+}
+
+void Settings::setKeepSelfDestructingMedia(bool value) {
+	_keepSelfDestructingMedia = value;
+	writePref<bool>(kKeepSelfDestructingMediaKey, value);
+}
+
+void Settings::setMarkSelfDestructingRead(bool value) {
+	_markSelfDestructingRead = value;
+	writePref<bool>(kSelfDestructingNoReadKey, !value);
 }
 
 void Settings::writePrefGeneric(
@@ -1825,6 +1837,8 @@ void Settings::resetOnLastLogout() {
 	_saveDeletedMessages = true;
 	_saveOwnDeletedMessages = true;
 	_forwardProtectedMessages = false;
+	_keepSelfDestructingMedia = false;
+	_markSelfDestructingRead = true;
 	_quickDialogAction = Dialogs::Ui::QuickDialogAction::Disabled;
 	_notificationsVolume = 100;
 

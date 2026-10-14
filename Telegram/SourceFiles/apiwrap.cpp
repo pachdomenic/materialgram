@@ -1435,6 +1435,14 @@ void ApiWrap::migrateFail(not_null<PeerData*> peer, const QString &error) {
 	}
 }
 
+bool ApiWrap::skipContentsRead(not_null<HistoryItem*> item) const {
+	const auto media = item->media();
+	return media
+		&& media->ttlSeconds()
+		&& item->isIncomingUnreadMedia()
+		&& !Core::App().settings().markSelfDestructingRead();
+}
+
 void ApiWrap::markContentsRead(
 		const base::flat_set<not_null<HistoryItem*>> &items) {
 	auto markedIds = QVector<MTPint>();
@@ -1443,7 +1451,9 @@ void ApiWrap::markContentsRead(
 		QVector<MTPint>>();
 	markedIds.reserve(items.size());
 	for (const auto &item : items) {
-		if (!item->markContentsRead(true) || !item->isRegular()) {
+		if (skipContentsRead(item)
+			|| !item->markContentsRead(true)
+			|| !item->isRegular()) {
 			continue;
 		}
 		if (const auto channel = item->history()->peer->asChannel()) {
@@ -1468,7 +1478,9 @@ void ApiWrap::markContentsRead(
 }
 
 void ApiWrap::markContentsRead(not_null<HistoryItem*> item) {
-	if (!item->markContentsRead(true) || !item->isRegular()) {
+	if (skipContentsRead(item)
+		|| !item->markContentsRead(true)
+		|| !item->isRegular()) {
 		return;
 	}
 	const auto ids = MTP_vector<MTPint>(1, MTP_int(item->id));

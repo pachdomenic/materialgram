@@ -168,6 +168,8 @@ void StripQuoteOnlyReply(
 [[nodiscard]] TextWithEntities TakeQuoteOnlyReply(
 	not_null<History*> history,
 	FullReplyTo &replyTo);
+// materialgram: keeps a file copy when self-destructing media would burn.
+void SaveSelfDestructingCopy(not_null<HistoryItem*> item);
 void ConfirmDeleteSelectedEphemeral(
 	std::shared_ptr<ChatHelpers::Show> show,
 	std::vector<not_null<HistoryItem*>> items,

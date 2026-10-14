@@ -77,6 +77,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "main/main_session_settings.h"
 #include "calls/calls_instance.h"
 #include "core/application.h"
+#include "core/core_settings.h"
 #include "core/click_handler_types.h" // ClickHandlerContext
 #include "lang/lang_keys.h"
 #include "storage/file_upload.h"
@@ -1096,7 +1097,8 @@ MediaFile::MediaFile(
 , _spoiler(args.spoiler) {
 	parent->history()->owner().registerDocumentItem(_document, parent);
 
-	if (_ttlSeconds) {
+	if (_ttlSeconds
+		&& !Core::App().settings().keepSelfDestructingMedia()) {
 		_document->setForbidsFileSave();
 	}
 

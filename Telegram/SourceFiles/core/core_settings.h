@@ -41,6 +41,10 @@ inline constexpr auto kScreenReaderModeDisabledKey
 	= "screen-reader-mode-disabled"_cs;
 inline constexpr auto kForwardProtectedMessagesKey
 	= "forward-protected-messages"_cs;
+inline constexpr auto kKeepSelfDestructingMediaKey
+	= "keep-self-destructing-media"_cs;
+inline constexpr auto kSelfDestructingNoReadKey
+	= "self-destructing-no-read"_cs;
 
 struct WindowPosition {
 	int32 moncrc = 0;
@@ -181,6 +185,14 @@ public:
 		return _forwardProtectedMessages;
 	}
 	void setForwardProtectedMessages(bool value);
+	[[nodiscard]] bool keepSelfDestructingMedia() const {
+		return _keepSelfDestructingMedia;
+	}
+	void setKeepSelfDestructingMedia(bool value);
+	[[nodiscard]] bool markSelfDestructingRead() const {
+		return _markSelfDestructingRead;
+	}
+	void setMarkSelfDestructingRead(bool value);
 	[[nodiscard]] float64 songVolume() const {
 		return _songVolume.current();
 	}
@@ -1131,6 +1143,8 @@ private:
 	bool _saveDeletedMessages = true;
 	bool _saveOwnDeletedMessages = true;
 	bool _forwardProtectedMessages = false;
+	bool _keepSelfDestructingMedia = false;
+	bool _markSelfDestructingRead = true;
 	rpl::variable<float64> _songVolume = kDefaultVolume;
 	rpl::variable<float64> _videoVolume = kDefaultVolume;
 	bool _askDownloadPath = false;

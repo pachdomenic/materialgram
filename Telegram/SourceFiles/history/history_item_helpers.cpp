@@ -20,6 +20,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_chat.h"
 #include "data/data_changes.h"
 #include "data/data_document.h"
+#include "data/data_photo.h"
+#include "data/data_photo_media.h"
 #include "data/data_group_call.h"
 #include "data/data_forum.h"
 #include "data/data_forum_topic.h"
@@ -47,6 +49,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "apiwrap.h"
 #include "base/unixtime.h"
 #include "core/application.h"
+#include "core/core_settings.h"
+#include "core/file_utilities.h"
 #include "core/click_handler_types.h" // ClickHandlerContext.
 #include "settings/settings_credits_graphics.h"
 #include "storage/storage_account.h"
@@ -788,6 +792,44 @@ TextWithEntities TakeQuoteOnlyReply(
 			length,
 			(length > kCollapseLength) ? u"1"_q : QString()));
 	return DropDisallowedCustomEmoji(history->peer, std::move(result));
+}
+
+void SaveSelfDestructingCopy(not_null<HistoryItem*> item) {
+	const auto media = item->media();
+	if (!media) {
+		return;
+	}
+	const auto session = &item->history()->session();
+	auto root = Core::App().settings().downloadPath();
+	if (root.isEmpty()) {
+		root = File::DefaultDownloadPath(session);
+	} else if (root == FileDialog::Tmp()) {
+		root = session->local().tempDirectory();
+	}
+	const auto folder = QDir(root).filePath(u"self-destructing"_q);
+	if (!QDir().mkpath(folder)) {
+		return;
+	}
+	const auto base = QDir(folder).filePath(
+		QString::number(item->history()->peer->id.value)
+		+ '_'
+		+ QString::number(item->id.bare));
+	if (const auto photo = media->photo()) {
+		const auto path = base + u".jpg"_q;
+		const auto view = photo->activeMediaView();
+		if (view && view->loaded() && !QFile::exists(path)) {
+			view->saveToFile(path);
+		}
+	} else if (const auto document = media->document()) {
+		auto suffix = QFileInfo(document->filename()).suffix();
+		if (suffix.isEmpty()) {
+			suffix = document->isVoiceMessage() ? u"ogg"_q : u"mp4"_q;
+		}
+		const auto path = base + '.' + suffix;
+		if (!QFile::exists(path)) {
+			document->save(item->fullId(), path);
+		}
+	}
 }
 
 void ConfirmDeleteSelectedEphemeral(
