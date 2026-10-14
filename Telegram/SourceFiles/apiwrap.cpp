@@ -15,6 +15,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "api/api_chat_participants.h"
 #include "api/api_cloud_password.h"
 #include "api/api_communities.h"
+#include "api/api_forward_protected.h"
 #include "api/api_hash.h"
 #include "api/api_invite_links.h"
 #include "api/api_media.h"
@@ -3897,6 +3898,17 @@ void ApiWrap::forwardMessages(
 		FnMut<void()> &&successCallback) {
 	Expects(!draft.items.empty());
 
+	const auto needsResend = [](not_null<HistoryItem*> item) {
+		return Api::NeedsProtectedResend(item);
+	};
+	if (ranges::any_of(draft.items, needsResend)) {
+		Api::ForwardWithProtected(
+			std::move(draft),
+			action,
+			std::move(successCallback));
+		return;
+	}
+
 	auto &histories = _session->data().histories();
 
 	for (auto i = begin(draft.items); i != end(draft.items);) {
@@ -4257,8 +4269,8 @@ void ApiWrap::sendVoiceMessage(
 		VoiceWaveform waveform,
 		crl::time duration,
 		bool video,
-		const SendAction &action) {
-	const auto caption = TextWithTags();
+		const SendAction &action,
+		TextWithTags caption) {
 	const auto to = FileLoadTaskOptions(action);
 	_fileLoader->addTask(
 		std::make_unique<FileLoadTask>(FileLoadTask::VoiceArgs{
@@ -4350,7 +4362,7 @@ void ApiWrap::sendFiles(
 		&& ranges::any_of(list.files, &Ui::PreparedFile::ttlSeconds)) {
 		album = nullptr;
 	}
-	auto deletedReplyQuote = TakeDeletedReplyQuote(
+	auto deletedReplyQuote = TakeQuoteOnlyReply(
 		action.history,
 		action.replyTo);
 	if (!deletedReplyQuote.empty() && !list.files.empty()) {
@@ -4793,7 +4805,7 @@ void ApiWrap::sendMessage(
 
 	auto action = message.action;
 	action.generateLocal = true;
-	auto deletedReplyQuote = TakeDeletedReplyQuote(history, action.replyTo);
+	auto deletedReplyQuote = TakeQuoteOnlyReply(history, action.replyTo);
 	sendAction(action);
 
 	const auto clearCloudDraft = action.clearDraft;

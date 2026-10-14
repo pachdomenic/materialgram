@@ -1419,6 +1419,28 @@ void BuildMaterialgramSection(SectionBuilder &builder) {
 		}, saveOwnDeleted->lifetime());
 	}
 
+	const auto forwardProtected = builder.addButton({
+		.id = u"advanced/materialgram_forward_protected"_q,
+		.title = tr::lng_materialgram_settings_forward_protected(),
+		.st = &st::settingsButtonNoIcon,
+		.toggled = rpl::single(settings->forwardProtectedMessages()),
+		.keywords = {
+			u"materialgram"_q,
+			u"forward"_q,
+			u"protected"_q,
+			u"restricted"_q,
+		},
+	});
+	if (forwardProtected) {
+		forwardProtected->toggledValue(
+		) | rpl::filter([=](bool enabled) {
+			return (enabled != settings->forwardProtectedMessages());
+		}) | rpl::on_next([=](bool enabled) {
+			settings->setForwardProtectedMessages(enabled);
+			Core::App().saveSettingsDelayed();
+		}, forwardProtected->lifetime());
+	}
+
 	builder.addSkip();
 }
 

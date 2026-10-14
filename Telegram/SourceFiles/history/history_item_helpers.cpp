@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "history/history_item_helpers.h"
 
+#include "api/api_forward_protected.h"
 #include "api/api_reactions_notify_settings.h"
 #include "api/api_text_entities.h"
 #include "boxes/premium_preview_box.h"
@@ -723,18 +724,25 @@ void StripEphemeralReply(
 	}
 }
 
-HistoryItem *LookupDeletedReplyTo(
-		not_null<Main::Session*> session,
+HistoryItem *LookupQuoteOnlyReplyTo(
+		not_null<History*> history,
 		FullMsgId replyToId) {
-	const auto owner = &session->data();
+	const auto owner = &history->owner();
 	const auto item = replyToId ? owner->message(replyToId) : nullptr;
-	return (item && owner->isMessageDeleted(item)) ? item : nullptr;
+	if (!item) {
+		return nullptr;
+	} else if (owner->isMessageDeleted(item)) {
+		return item;
+	}
+	return (item->history() != history && Api::NeedsProtectedResend(item))
+		? item
+		: nullptr;
 }
 
-void StripDeletedReply(
-		not_null<Main::Session*> session,
+void StripQuoteOnlyReply(
+		not_null<History*> history,
 		FullReplyTo &replyTo) {
-	if (LookupDeletedReplyTo(session, replyTo.messageId)) {
+	if (LookupQuoteOnlyReplyTo(history, replyTo.messageId)) {
 		replyTo.messageId = FullMsgId();
 		replyTo.quote = {};
 		replyTo.quoteOffset = 0;
@@ -743,12 +751,10 @@ void StripDeletedReply(
 	}
 }
 
-TextWithEntities TakeDeletedReplyQuote(
+TextWithEntities TakeQuoteOnlyReply(
 		not_null<History*> history,
 		FullReplyTo &replyTo) {
-	const auto item = LookupDeletedReplyTo(
-		&history->session(),
-		replyTo.messageId);
+	const auto item = LookupQuoteOnlyReplyTo(history, replyTo.messageId);
 	if (!item) {
 		return {};
 	}
@@ -758,7 +764,7 @@ TextWithEntities TakeDeletedReplyQuote(
 		: (media && !media->webpage())
 		? item->inReplyText()
 		: item->originalText();
-	StripDeletedReply(&history->session(), replyTo);
+	StripQuoteOnlyReply(history, replyTo);
 
 	body.entities.erase(
 		ranges::remove_if(body.entities, [](const EntityInText &entity) {

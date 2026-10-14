@@ -371,7 +371,8 @@ public:
 		VoiceWaveform waveform,
 		crl::time duration,
 		bool video,
-		const SendAction &action);
+		const SendAction &action,
+		TextWithTags caption = TextWithTags());
 	void sendFiles(
 		Ui::PreparedList &&list,
 		SendMediaType type,

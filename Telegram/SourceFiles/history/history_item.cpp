@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "history/history_item.h"
 
+#include "api/api_forward_protected.h"
 #include "api/api_premium.h"
 #include "api/api_sensitive_content.h"
 #include "api/api_transcribes.h"
@@ -3372,8 +3373,8 @@ bool HistoryItem::allowsReschedule() const {
 bool HistoryItem::allowsForward() const {
 	return !isService()
 		&& (isRegular() || isEphemeral())
-		&& !forbidsForward()
-		&& history()->peer->allowsForwarding()
+		&& ((!forbidsForward() && history()->peer->allowsForwarding())
+			|| Api::CanForwardProtected(this))
 		&& (!_media || _media->allowsForward());
 }
 

@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "boxes/share_box.h"
 
+#include "api/api_forward_protected.h"
 #include "api/api_premium.h"
 #include "base/call_delayed.h"
 #include "base/random.h"
@@ -1856,6 +1857,30 @@ ShareBox::SubmitCallback ShareBox::DefaultForwardCallback(
 			show->showBox(MakeSendErrorBox(error, result.size() > 1));
 			return;
 		} else if (!checkPaid()) {
+			return;
+		}
+		const auto needsResend = [](not_null<HistoryItem*> item) {
+			return Api::NeedsProtectedResend(item);
+		};
+		if (ranges::any_of(items, needsResend)) {
+			auto &api = history->session().api();
+			for (const auto &thread : result) {
+				auto action = Api::SendAction(thread, options);
+				action.clearDraft = false;
+				if (!comment.text.isEmpty()) {
+					auto message = Api::MessageToSend(action);
+					message.textWithTags = comment;
+					api.sendMessage(std::move(message));
+				}
+				api.forwardMessages(
+					{ .items = items, .options = forwardOptions },
+					std::move(action));
+			}
+			show->hideLayer();
+			ShowForwardedMessageToast(
+				show,
+				&history->session(),
+				CreateForwardedMessagePhraseArgs(result, msgIds));
 			return;
 		}
 

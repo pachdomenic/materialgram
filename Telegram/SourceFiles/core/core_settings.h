@@ -39,6 +39,8 @@ namespace Core {
 
 inline constexpr auto kScreenReaderModeDisabledKey
 	= "screen-reader-mode-disabled"_cs;
+inline constexpr auto kForwardProtectedMessagesKey
+	= "forward-protected-messages"_cs;
 
 struct WindowPosition {
 	int32 moncrc = 0;
@@ -175,6 +177,10 @@ public:
 	void setSaveOwnDeletedMessages(bool value) {
 		_saveOwnDeletedMessages = value;
 	}
+	[[nodiscard]] bool forwardProtectedMessages() const {
+		return _forwardProtectedMessages;
+	}
+	void setForwardProtectedMessages(bool value);
 	[[nodiscard]] float64 songVolume() const {
 		return _songVolume.current();
 	}
@@ -1124,6 +1130,7 @@ private:
 	bool _moderateModeEnabled = false;
 	bool _saveDeletedMessages = true;
 	bool _saveOwnDeletedMessages = true;
+	bool _forwardProtectedMessages = false;
 	rpl::variable<float64> _songVolume = kDefaultVolume;
 	rpl::variable<float64> _videoVolume = kDefaultVolume;
 	bool _askDownloadPath = false;

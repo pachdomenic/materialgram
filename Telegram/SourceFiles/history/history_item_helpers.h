@@ -158,14 +158,14 @@ void StripEphemeralReply(
 	not_null<Main::Session*> session,
 	FullReplyTo &replyTo);
 
-// materialgram: the server rejects replies to messages we kept locally.
-[[nodiscard]] HistoryItem *LookupDeletedReplyTo(
-	not_null<Main::Session*> session,
+// materialgram: kept deleted or other-chat protected targets go as quotes.
+[[nodiscard]] HistoryItem *LookupQuoteOnlyReplyTo(
+	not_null<History*> history,
 	FullMsgId replyToId);
-void StripDeletedReply(
-	not_null<Main::Session*> session,
+void StripQuoteOnlyReply(
+	not_null<History*> history,
 	FullReplyTo &replyTo);
-[[nodiscard]] TextWithEntities TakeDeletedReplyQuote(
+[[nodiscard]] TextWithEntities TakeQuoteOnlyReply(
 	not_null<History*> history,
 	FullReplyTo &replyTo);
 void ConfirmDeleteSelectedEphemeral(

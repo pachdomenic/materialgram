@@ -161,6 +161,8 @@ PRIVATE
     api/api_filter_updates.h
     api/api_global_privacy.cpp
     api/api_global_privacy.h
+    api/api_forward_protected.cpp
+    api/api_forward_protected.h
     api/api_hash.cpp
     api/api_hash.h
     api/api_invite_links.cpp

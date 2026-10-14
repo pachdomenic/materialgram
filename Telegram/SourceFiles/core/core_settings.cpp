@@ -1306,6 +1306,7 @@ void Settings::addFromSerialized(const QByteArray &serialized) {
 	}
 	_saveDeletedMessages = (saveDeletedMessages == 1);
 	_saveOwnDeletedMessages = (saveOwnDeletedMessages == 1);
+	_forwardProtectedMessages = readPref<bool>(kForwardProtectedMessagesKey);
 	{ // Parse the legacy translation setting.
 		if (legacySkipTranslationForLanguage == 0) {
 			_translateButtonEnabled = false;
@@ -1370,6 +1371,11 @@ void Settings::clearPref(std::string_view key) {
 	}
 	_prefs.erase(i);
 	_saveDelayed.fire({});
+}
+
+void Settings::setForwardProtectedMessages(bool value) {
+	_forwardProtectedMessages = value;
+	writePref<bool>(kForwardProtectedMessagesKey, value);
 }
 
 void Settings::writePrefGeneric(
@@ -1818,6 +1824,7 @@ void Settings::resetOnLastLogout() {
 	_pullToNextChannel = true;
 	_saveDeletedMessages = true;
 	_saveOwnDeletedMessages = true;
+	_forwardProtectedMessages = false;
 	_quickDialogAction = Dialogs::Ui::QuickDialogAction::Disabled;
 	_notificationsVolume = 100;
 
