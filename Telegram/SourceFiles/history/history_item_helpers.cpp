@@ -24,6 +24,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_forum_topic.h"
 #include "data/data_message_reactions.h"
 #include "data/data_messages.h"
+#include "data/data_media_types.h"
 #include "data/data_poll.h"
 #include "data/data_premium_limits.h"
 #include "data/data_session.h"
@@ -720,6 +721,67 @@ void StripEphemeralReply(
 	if (item && item->isEphemeral()) {
 		replyTo.messageId = FullMsgId();
 	}
+}
+
+HistoryItem *LookupDeletedReplyTo(
+		not_null<Main::Session*> session,
+		FullMsgId replyToId) {
+	const auto owner = &session->data();
+	const auto item = replyToId ? owner->message(replyToId) : nullptr;
+	return (item && owner->isMessageDeleted(item)) ? item : nullptr;
+}
+
+void StripDeletedReply(
+		not_null<Main::Session*> session,
+		FullReplyTo &replyTo) {
+	if (LookupDeletedReplyTo(session, replyTo.messageId)) {
+		replyTo.messageId = FullMsgId();
+		replyTo.quote = {};
+		replyTo.quoteOffset = 0;
+		replyTo.todoItemId = 0;
+		replyTo.pollOption = {};
+	}
+}
+
+TextWithEntities TakeDeletedReplyQuote(
+		not_null<History*> history,
+		FullReplyTo &replyTo) {
+	const auto item = LookupDeletedReplyTo(
+		&history->session(),
+		replyTo.messageId);
+	if (!item) {
+		return {};
+	}
+	const auto media = item->media();
+	auto body = !replyTo.quote.empty()
+		? replyTo.quote
+		: (media && !media->webpage())
+		? item->inReplyText()
+		: item->originalText();
+	StripDeletedReply(&history->session(), replyTo);
+
+	body.entities.erase(
+		ranges::remove_if(body.entities, [](const EntityInText &entity) {
+			return (entity.type() == EntityType::Blockquote)
+				|| (entity.type() == EntityType::Colorized);
+		}),
+		body.entities.end());
+	TextUtilities::Trim(body);
+
+	auto result = Ui::Text::Bold(item->from()->name());
+	if (!body.empty()) {
+		result.append('\n').append(std::move(body));
+	}
+	constexpr auto kCollapseLength = 200;
+	const auto length = int(result.text.size());
+	result.entities.insert(
+		result.entities.begin(),
+		EntityInText(
+			EntityType::Blockquote,
+			0,
+			length,
+			(length > kCollapseLength) ? u"1"_q : QString()));
+	return DropDisallowedCustomEmoji(history->peer, std::move(result));
 }
 
 void ConfirmDeleteSelectedEphemeral(

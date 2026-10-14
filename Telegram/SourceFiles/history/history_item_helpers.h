@@ -157,6 +157,17 @@ struct ForwardRange {
 void StripEphemeralReply(
 	not_null<Main::Session*> session,
 	FullReplyTo &replyTo);
+
+// materialgram: the server rejects replies to messages we kept locally.
+[[nodiscard]] HistoryItem *LookupDeletedReplyTo(
+	not_null<Main::Session*> session,
+	FullMsgId replyToId);
+void StripDeletedReply(
+	not_null<Main::Session*> session,
+	FullReplyTo &replyTo);
+[[nodiscard]] TextWithEntities TakeDeletedReplyQuote(
+	not_null<History*> history,
+	FullReplyTo &replyTo);
 void ConfirmDeleteSelectedEphemeral(
 	std::shared_ptr<ChatHelpers::Show> show,
 	std::vector<not_null<HistoryItem*>> items,

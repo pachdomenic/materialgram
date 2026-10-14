@@ -46,6 +46,7 @@ MTPInputReplyTo ReplyToForMTP(
 		not_null<History*> history,
 		FullReplyTo replyTo) {
 	const auto owner = &history->owner();
+	StripDeletedReply(&history->session(), replyTo);
 	if (replyTo.storyId) {
 		if (const auto peer = owner->peerLoaded(replyTo.storyId.peer)) {
 			return MTP_inputReplyToStory(

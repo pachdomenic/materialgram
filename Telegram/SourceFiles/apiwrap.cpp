@@ -4350,6 +4350,35 @@ void ApiWrap::sendFiles(
 		&& ranges::any_of(list.files, &Ui::PreparedFile::ttlSeconds)) {
 		album = nullptr;
 	}
+	auto deletedReplyQuote = TakeDeletedReplyQuote(
+		action.history,
+		action.replyTo);
+	if (!deletedReplyQuote.empty() && !list.files.empty()) {
+		const auto captioned = ranges::find_if(
+			list.files,
+			[](const Ui::PreparedFile &file) {
+				return !file.caption.text.isEmpty();
+			});
+		auto &caption = ((captioned != end(list.files))
+			? *captioned
+			: list.files.front()).caption;
+		const auto separator = caption.text.isEmpty() ? 0 : 1;
+		const auto shift = int(deletedReplyQuote.text.size()) + separator;
+		const auto limit = Data::PremiumLimits(
+			_session).captionLengthCurrent();
+		if (shift + int(caption.text.size()) <= limit) {
+			auto tags = TextUtilities::ConvertEntitiesToTextTags(
+				deletedReplyQuote.entities);
+			for (auto &tag : caption.tags) {
+				tag.offset += shift;
+				tags.push_back(std::move(tag));
+			}
+			caption.text = deletedReplyQuote.text
+				+ (separator ? u"\n"_q : QString())
+				+ caption.text;
+			caption.tags = std::move(tags);
+		}
+	}
 	const auto to = FileLoadTaskOptions(action);
 	const auto animationAsGif = !Data::RestrictionError(
 		action.history->peer,
@@ -4764,6 +4793,7 @@ void ApiWrap::sendMessage(
 
 	auto action = message.action;
 	action.generateLocal = true;
+	auto deletedReplyQuote = TakeDeletedReplyQuote(history, action.replyTo);
 	sendAction(action);
 
 	const auto clearCloudDraft = action.clearDraft;
@@ -4802,6 +4832,10 @@ void ApiWrap::sendMessage(
 		history,
 		_session->user()).flags;
 	TextUtilities::PrepareForSending(left, prepareFlags);
+	if (!deletedReplyQuote.empty()) {
+		deletedReplyQuote.append('\n').append(std::move(left));
+		left = std::move(deletedReplyQuote);
+	}
 
 	HistoryItem *lastMessage = nullptr;
 
