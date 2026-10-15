@@ -91,8 +91,10 @@ bool IsUnreadThread(not_null<Data::Thread*> thread) {
 void MarkAsReadThread(
 		not_null<Data::Thread*> thread,
 		MarkAsReadMuted muted) {
+	auto &histories = thread->owner().histories();
 	const auto readHistory = [&](not_null<History*> history) {
-		history->owner().histories().readInbox(history);
+		histories.allowGhostRead(history);
+		histories.readInbox(history);
 	};
 	if (!IsUnreadThread(thread)
 		|| ((muted == MarkAsReadMuted::Skip) && SkipMutedThread(thread))) {
@@ -107,8 +109,10 @@ void MarkAsReadThread(
 			readHistory(migrated);
 		}
 	} else if (const auto topic = thread->asTopic()) {
+		histories.allowGhostRead(topic->replies().get());
 		topic->readTillEnd();
 	} else if (const auto sublist = thread->asSublist()) {
+		histories.allowGhostRead(sublist);
 		sublist->readTillEnd();
 	}
 }

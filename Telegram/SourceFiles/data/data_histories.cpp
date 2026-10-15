@@ -8,6 +8,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_histories.h"
 
 #include "api/api_text_entities.h"
+#include "api/api_updates.h"
 #include "data/business/data_shortcut_messages.h"
 #include "data/components/deleted_messages.h"
 #include "data/components/ephemeral_messages.h"
@@ -33,12 +34,14 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/history_item_helpers.h"
 #include "history/view/history_view_element.h"
 #include "core/application.h"
+#include "core/core_settings.h"
 #include "apiwrap.h"
 
 namespace Data {
 namespace {
 
 constexpr auto kReadRequestTimeout = 3 * crl::time(1000);
+constexpr auto kGhostReadAllowTimeout = 10 * crl::time(1000);
 constexpr auto kReportDeliveriesPerRequest = 50;
 
 } // namespace
@@ -709,6 +712,47 @@ void Histories::reportPendingDeliveries() {
 	}
 }
 
+void Histories::allowGhostRead(const void *thread) {
+	_ghostReadAllowed[thread] = crl::now() + kGhostReadAllowTimeout;
+}
+
+bool Histories::takeGhostReadAllowed(const void *thread) {
+	const auto &settings = Core::App().settings();
+	if (!settings.ghostOption(Core::GhostOption::HideReads)) {
+		return true;
+	}
+	const auto i = _ghostReadAllowed.find(thread);
+	if (i == end(_ghostReadAllowed)) {
+		return false;
+	}
+	const auto allowed = (i->second > crl::now());
+	_ghostReadAllowed.erase(i);
+	return allowed;
+}
+
+void Histories::afterGhostSend(
+		not_null<History*> history,
+		MsgId topicRootId) {
+	const auto &settings = Core::App().settings();
+	if (settings.ghostOption(Core::GhostOption::OfflineAfterSend)) {
+		session().updates().sendOfflineNow();
+	}
+	if (!settings.ghostOption(Core::GhostOption::HideReads)
+		|| !settings.ghostOption(Core::GhostOption::ReadAfterSend)) {
+		return;
+	}
+	const auto topic = topicRootId
+		? history->peer->forumTopicFor(topicRootId)
+		: nullptr;
+	if (topic) {
+		allowGhostRead(topic->replies().get());
+		topic->readTillEnd();
+	} else {
+		allowGhostRead(history);
+		readInbox(history);
+	}
+}
+
 void Histories::sendReadRequests() {
 	DEBUG_LOG(("Reading: send requests with count %1.").arg(_states.size()));
 	if (_states.empty()) {
@@ -739,6 +783,11 @@ void Histories::sendReadRequests() {
 void Histories::sendReadRequest(not_null<History*> history, State &state) {
 	Expects(state.willReadTill > state.sentReadTill);
 
+	if (!takeGhostReadAllowed(history)) {
+		state.willReadTill = 0;
+		state.willReadWhen = 0;
+		return;
+	}
 	const auto tillId = state.sentReadTill = base::take(state.willReadTill);
 	state.willReadWhen = 0;
 	state.sentReadDone = false;
@@ -1216,6 +1265,7 @@ int Histories::sendPreparedMessage(
 					const MTP::Response &response) {
 				api->applyUpdates(result, randomId);
 				done(result, response);
+				afterGhostSend(history, replyTo.topicRootId);
 				finish();
 			}).fail([=](
 					const MTP::Error &error,

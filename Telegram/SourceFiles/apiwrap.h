@@ -248,6 +248,7 @@ public:
 	void markContentsRead(
 		const base::flat_set<not_null<HistoryItem*>> &items);
 	void markContentsRead(not_null<HistoryItem*> item);
+	[[nodiscard]] bool hideContentsRead() const;
 	[[nodiscard]] bool skipContentsRead(not_null<HistoryItem*> item) const;
 
 	void deleteAllFromParticipant(

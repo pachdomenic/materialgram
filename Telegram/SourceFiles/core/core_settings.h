@@ -54,6 +54,16 @@ inline constexpr auto kMessageSecondsKey = "message-seconds"_cs;
 inline constexpr auto kMessageWidthKey = "message-width"_cs;
 inline constexpr auto kVideoMessageSizeKey = "video-message-size"_cs;
 
+enum class GhostOption : uchar {
+	HideReads,
+	HideStoryViews,
+	HideOnline,
+	HideTyping,
+	OfflineAfterSend,
+	ReadAfterSend,
+};
+inline constexpr auto kGhostOptionCount = 6;
+
 struct WindowPosition {
 	int32 moncrc = 0;
 	int maximized = 0;
@@ -239,6 +249,15 @@ public:
 	void setVideoMessageSizePercent(int value);
 	[[nodiscard]] rpl::producer<> messageLayoutChanges() const {
 		return _messageLayoutChanges.events();
+	}
+	[[nodiscard]] bool ghostOption(GhostOption option) const {
+		return _ghostOptions[size_t(option)];
+	}
+	void setGhostOption(GhostOption option, bool value);
+	[[nodiscard]] bool ghostMode() const;
+	void setGhostMode(bool enabled);
+	[[nodiscard]] rpl::producer<> ghostModeChanges() const {
+		return _ghostModeChanges.events();
 	}
 	[[nodiscard]] float64 songVolume() const {
 		return _songVolume.current();
@@ -1201,6 +1220,8 @@ private:
 	int _messageWidthPercent = 100;
 	int _videoMessageSizePercent = 100;
 	rpl::event_stream<> _messageLayoutChanges;
+	std::array<bool, kGhostOptionCount> _ghostOptions = {};
+	rpl::event_stream<> _ghostModeChanges;
 	rpl::variable<float64> _songVolume = kDefaultVolume;
 	rpl::variable<float64> _videoVolume = kDefaultVolume;
 	bool _askDownloadPath = false;

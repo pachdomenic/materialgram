@@ -8,6 +8,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "chat_helpers/emoji_interactions.h"
 
 #include "chat_helpers/stickers_emoji_pack.h"
+#include "core/application.h"
+#include "core/core_settings.h"
 #include "history/history_item.h"
 #include "history/history.h"
 #include "history/view/history_view_element.h"
@@ -318,6 +320,11 @@ void EmojiInteractions::sendAccumulatedOutgoing(
 	if (bunch.interactions.empty()) {
 		return;
 	}
+	const auto &settings = Core::App().settings();
+	if (settings.ghostOption(Core::GhostOption::HideTyping)) {
+		animations.erase(from, till);
+		return;
+	}
 	const auto peer = item->history()->peer;
 	const auto emoji = from->emoji;
 	const auto requestId = _session->api().request(MTPmessages_SetTyping(
@@ -475,6 +482,10 @@ void EmojiInteractions::playStarted(not_null<PeerData*> peer, QString emoji) {
 	const auto i = map.find(emoji);
 	const auto now = crl::now();
 	if (i != end(map) && now - i->second < kAccumulateSeenRequests) {
+		return;
+	}
+	const auto &settings = Core::App().settings();
+	if (settings.ghostOption(Core::GhostOption::HideReads)) {
 		return;
 	}
 	_session->api().request(MTPmessages_SetTyping(

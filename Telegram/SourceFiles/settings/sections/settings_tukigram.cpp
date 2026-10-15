@@ -268,6 +268,7 @@ enum class CategoryId {
 	Media,
 	Profile,
 	Appearance,
+	Ghost,
 };
 
 [[nodiscard]] const tr::phrase<> &CategoryTitle(CategoryId id);
@@ -511,6 +512,115 @@ void BuildProfileCategory(SectionBuilder &builder) {
 	builder.addSkip();
 }
 
+void AddGhostToggle(
+		SectionBuilder &builder,
+		QString id,
+		rpl::producer<QString> title,
+		Fn<bool()> value,
+		Fn<void(bool)> apply,
+		QStringList keywords) {
+	const auto settings = &Core::App().settings();
+	const auto button = builder.addButton({
+		.id = std::move(id),
+		.title = std::move(title),
+		.st = &st::settingsButtonNoIcon,
+		.toggled = rpl::single(
+			rpl::empty
+		) | rpl::then(
+			settings->ghostModeChanges()
+		) | rpl::map(value),
+		.keywords = std::move(keywords),
+	});
+	if (button) {
+		button->toggledValue(
+		) | rpl::filter([=](bool enabled) {
+			return (enabled != value());
+		}) | rpl::on_next([=](bool enabled) {
+			apply(enabled);
+			Core::App().saveSettingsDelayed();
+		}, button->lifetime());
+	}
+}
+
+void AddGhostOption(
+		SectionBuilder &builder,
+		QString id,
+		rpl::producer<QString> title,
+		Core::GhostOption option,
+		QStringList keywords) {
+	const auto settings = &Core::App().settings();
+	AddGhostToggle(
+		builder,
+		std::move(id),
+		std::move(title),
+		[=] { return settings->ghostOption(option); },
+		[=](bool value) { settings->setGhostOption(option, value); },
+		std::move(keywords));
+}
+
+void BuildGhostCategory(SectionBuilder &builder) {
+	using Option = Core::GhostOption;
+	const auto settings = &Core::App().settings();
+	builder.addSkip();
+
+	AddGhostToggle(
+		builder,
+		u"tukigram/ghost"_q,
+		tr::lng_tukigram_ghost_enable(),
+		[=] { return settings->ghostMode(); },
+		[=](bool value) { settings->setGhostMode(value); },
+		{ u"tukigram"_q, u"ghost"_q, u"stealth"_q, u"invisible"_q });
+	builder.addSkip();
+	builder.addDividerText(tr::lng_tukigram_ghost_about());
+	builder.addSkip();
+
+	builder.addSubsectionTitle(tr::lng_tukigram_ghost_options());
+	AddGhostOption(
+		builder,
+		u"tukigram/ghost_reads"_q,
+		tr::lng_tukigram_ghost_reads(),
+		Option::HideReads,
+		{ u"ghost"_q, u"read"_q, u"receipts"_q });
+	AddGhostOption(
+		builder,
+		u"tukigram/ghost_stories"_q,
+		tr::lng_tukigram_ghost_story_views(),
+		Option::HideStoryViews,
+		{ u"ghost"_q, u"stories"_q, u"views"_q });
+	AddGhostOption(
+		builder,
+		u"tukigram/ghost_online"_q,
+		tr::lng_tukigram_ghost_online(),
+		Option::HideOnline,
+		{ u"ghost"_q, u"online"_q, u"last seen"_q });
+	AddGhostOption(
+		builder,
+		u"tukigram/ghost_typing"_q,
+		tr::lng_tukigram_ghost_typing(),
+		Option::HideTyping,
+		{ u"ghost"_q, u"typing"_q, u"upload"_q });
+	AddGhostOption(
+		builder,
+		u"tukigram/ghost_offline_after_send"_q,
+		tr::lng_tukigram_ghost_offline_after_send(),
+		Option::OfflineAfterSend,
+		{ u"ghost"_q, u"offline"_q, u"send"_q });
+	builder.addSkip();
+	builder.addDivider();
+	builder.addSkip();
+
+	builder.addSubsectionTitle(tr::lng_tukigram_ghost_exceptions());
+	AddGhostOption(
+		builder,
+		u"tukigram/ghost_read_after_send"_q,
+		tr::lng_tukigram_ghost_read_after_send(),
+		Option::ReadAfterSend,
+		{ u"ghost"_q, u"read"_q, u"send"_q });
+	builder.addSkip();
+	builder.addDividerText(tr::lng_tukigram_ghost_exceptions_about());
+	builder.addSkip();
+}
+
 void BuildAppearanceCategory(SectionBuilder &builder) {
 	const auto settings = &Core::App().settings();
 	const auto controller = builder.controller();
@@ -645,6 +755,12 @@ void BuildTukiGramSection(SectionBuilder &builder) {
 	builder.addSkip();
 	builder.addSubsectionTitle(tr::lng_tukigram_categories());
 	builder.addSectionButton({
+		.title = tr::lng_tukigram_ghost_title(),
+		.targetSection = Category<CategoryId::Ghost>::Id(),
+		.icon = { &st::menuIconStealth },
+		.keywords = { u"tukigram"_q, u"ghost"_q, u"stealth"_q },
+	});
+	builder.addSectionButton({
 		.title = tr::lng_tukigram_deleted_title(),
 		.targetSection = Category<CategoryId::Deleted>::Id(),
 		.icon = { &st::menuIconDelete },
@@ -735,6 +851,13 @@ const auto kAppearanceMeta = BuildHelper({
 	.icon = &st::menuIconPalette,
 }, BuildAppearanceCategory);
 
+const auto kGhostMeta = BuildHelper({
+	.id = Category<CategoryId::Ghost>::Id(),
+	.parentId = TukiGram::Id(),
+	.title = &tr::lng_tukigram_ghost_title,
+	.icon = &st::menuIconStealth,
+}, BuildGhostCategory);
+
 const tr::phrase<> &CategoryTitle(CategoryId id) {
 	switch (id) {
 	case CategoryId::Deleted: return tr::lng_tukigram_deleted_title;
@@ -742,6 +865,7 @@ const tr::phrase<> &CategoryTitle(CategoryId id) {
 	case CategoryId::Media: return tr::lng_tukigram_media_title;
 	case CategoryId::Profile: return tr::lng_tukigram_profile_title;
 	case CategoryId::Appearance: return tr::lng_tukigram_appearance_title;
+	case CategoryId::Ghost: return tr::lng_tukigram_ghost_title;
 	}
 	Unexpected("Category in CategoryTitle.");
 }
@@ -753,6 +877,7 @@ SectionBuildMethod CategoryBuildMethod(CategoryId id) {
 	case CategoryId::Media: return kMediaMeta.build;
 	case CategoryId::Profile: return kProfileMeta.build;
 	case CategoryId::Appearance: return kAppearanceMeta.build;
+	case CategoryId::Ghost: return kGhostMeta.build;
 	}
 	Unexpected("Category in CategoryBuildMethod.");
 }

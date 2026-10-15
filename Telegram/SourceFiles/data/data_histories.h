@@ -66,6 +66,9 @@ public:
 	void sendPendingReadInbox(not_null<History*> history);
 	void reportDelivery(not_null<HistoryItem*> item);
 
+	void allowGhostRead(const void *thread);
+	[[nodiscard]] bool takeGhostReadAllowed(const void *thread);
+
 	struct ShownRead {
 		not_null<HistoryItem*> shown;
 		MsgId wasReadTill = 0;
@@ -210,6 +213,7 @@ private:
 		bool force);
 	void sendReadRequests();
 	void sendReadRequest(not_null<History*> history, State &state);
+	void afterGhostSend(not_null<History*> history, MsgId topicRootId);
 	[[nodiscard]] State *lookup(not_null<History*> history);
 	void checkEmptyState(not_null<History*> history);
 	void checkPostponed(not_null<History*> history, int id);
@@ -238,6 +242,7 @@ private:
 	base::flat_map<int, not_null<History*>> _historyByRequest;
 	int _requestAutoincrement = 0;
 	base::Timer _readRequestsTimer;
+	base::flat_map<const void*, crl::time> _ghostReadAllowed;
 
 	base::flat_set<not_null<Data::Folder*>> _dialogFolderRequests;
 	base::flat_map<

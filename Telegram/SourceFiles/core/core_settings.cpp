@@ -27,6 +27,26 @@ constexpr auto kInitialVideoQuality = 480; // Start with SD.
 constexpr auto kMinIvZoom = 25;
 constexpr auto kMaxIvZoom = 400;
 
+constexpr auto kGhostModeOptions = std::array{
+	GhostOption::HideReads,
+	GhostOption::HideStoryViews,
+	GhostOption::HideOnline,
+	GhostOption::HideTyping,
+	GhostOption::OfflineAfterSend,
+};
+
+[[nodiscard]] std::string_view GhostOptionKey(GhostOption option) {
+	switch (option) {
+	case GhostOption::HideReads: return "ghost-hide-reads";
+	case GhostOption::HideStoryViews: return "ghost-hide-story-views";
+	case GhostOption::HideOnline: return "ghost-hide-online";
+	case GhostOption::HideTyping: return "ghost-hide-typing";
+	case GhostOption::OfflineAfterSend: return "ghost-offline-after-send";
+	case GhostOption::ReadAfterSend: return "ghost-read-after-send";
+	}
+	Unexpected("Option in GhostOptionKey.");
+}
+
 [[nodiscard]] int DefaultIvZoom() {
 	const auto exact = cScale() * 100 / cScreenScale();
 	const auto snap10 = ((exact + 5) / 10) * 10;
@@ -1325,6 +1345,9 @@ void Settings::addFromSerialized(const QByteArray &serialized) {
 		readPref<int>(kVideoMessageSizeKey, 100),
 		kVideoMessageSizeMin,
 		kVideoMessageSizeMax);
+	for (auto i = 0; i != kGhostOptionCount; ++i) {
+		_ghostOptions[i] = readPref<bool>(GhostOptionKey(GhostOption(i)));
+	}
 	{ // Parse the legacy translation setting.
 		if (legacySkipTranslationForLanguage == 0) {
 			_translateButtonEnabled = false;
@@ -1463,6 +1486,28 @@ void Settings::setVideoMessageSizePercent(int value) {
 	_videoMessageSizePercent = value;
 	writePref<int>(kVideoMessageSizeKey, value);
 	_messageLayoutChanges.fire({});
+}
+
+void Settings::setGhostOption(GhostOption option, bool value) {
+	auto &now = _ghostOptions[size_t(option)];
+	if (now == value) {
+		return;
+	}
+	now = value;
+	writePref<bool>(GhostOptionKey(option), value);
+	_ghostModeChanges.fire({});
+}
+
+bool Settings::ghostMode() const {
+	return ranges::all_of(kGhostModeOptions, [&](GhostOption option) {
+		return ghostOption(option);
+	});
+}
+
+void Settings::setGhostMode(bool enabled) {
+	for (const auto option : kGhostModeOptions) {
+		setGhostOption(option, enabled);
+	}
 }
 
 void Settings::writePrefGeneric(

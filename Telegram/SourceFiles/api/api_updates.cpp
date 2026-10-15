@@ -61,6 +61,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/history_streamed_drafts.h"
 #include "history/history_unread_things.h"
 #include "core/application.h"
+#include "core/core_settings.h"
 #include "storage/storage_account.h"
 #include "storage/storage_facade.h"
 #include "storage/storage_user_photos.h"
@@ -251,6 +252,11 @@ Updates::Updates(not_null<Main::Session*> session)
 	session->account().mtpNewSessionCreated(
 	) | rpl::on_next([=] {
 		mtpNewSessionCreated();
+	}, _lifetime);
+
+	Core::App().settings().ghostModeChanges(
+	) | rpl::on_next([=] {
+		updateOnline();
 	}, _lifetime);
 
 	api().request(MTPupdates_GetState(
@@ -982,6 +988,15 @@ void Updates::updateOnline(crl::time lastNonIdleTime) {
 	updateOnline(lastNonIdleTime, false);
 }
 
+void Updates::sendOfflineNow() {
+	api().request(base::take(_onlineRequest)).cancel();
+	_lastWasOnline = false;
+	_lastSetOnline = crl::now();
+	_onlineRequest = api().request(MTPaccount_UpdateStatus(
+		MTP_bool(true)
+	)).send();
+}
+
 bool Updates::isIdle() const {
 	return _isIdle.current();
 }
@@ -1016,6 +1031,10 @@ void Updates::updateOnline(crl::time lastNonIdleTime, bool gotOtherOffline) {
 				int(config.offlineIdleTimeout - idle));
 			Assert(updateIn >= 0);
 		}
+	}
+	const auto &settings = Core::App().settings();
+	if (isOnline && settings.ghostOption(Core::GhostOption::HideOnline)) {
+		isOnline = false;
 	}
 	auto ms = crl::now();
 	if (isOnline != _lastWasOnline

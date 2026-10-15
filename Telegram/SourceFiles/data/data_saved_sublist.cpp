@@ -704,6 +704,9 @@ void SavedSublist::sendReadTillRequest() {
 	if (_readRequestTimer.isActive()) {
 		_readRequestTimer.cancel();
 	}
+	if (!owner().histories().takeGhostReadAllowed(this)) {
+		return;
+	}
 	const auto api = &_parent->session().api();
 	api->request(base::take(_readRequestId)).cancel();
 

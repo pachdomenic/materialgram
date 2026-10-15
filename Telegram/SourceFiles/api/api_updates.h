@@ -45,6 +45,7 @@ public:
 	[[nodiscard]] int32 pts() const;
 
 	void updateOnline(crl::time lastNonIdleTime = 0);
+	void sendOfflineNow();
 	[[nodiscard]] bool isIdle() const;
 	[[nodiscard]] rpl::producer<bool> isIdleValue() const;
 	void checkIdleFinish(crl::time lastNonIdleTime = 0);

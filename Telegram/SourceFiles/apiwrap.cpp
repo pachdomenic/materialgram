@@ -1435,6 +1435,10 @@ void ApiWrap::migrateFail(not_null<PeerData*> peer, const QString &error) {
 	}
 }
 
+bool ApiWrap::hideContentsRead() const {
+	return Core::App().settings().ghostOption(Core::GhostOption::HideReads);
+}
+
 bool ApiWrap::skipContentsRead(not_null<HistoryItem*> item) const {
 	const auto media = item->media();
 	return media
@@ -1462,6 +1466,9 @@ void ApiWrap::markContentsRead(
 			markedIds.push_back(MTP_int(item->id));
 		}
 	}
+	if (hideContentsRead()) {
+		return;
+	}
 	if (!markedIds.isEmpty()) {
 		request(MTPmessages_ReadMessageContents(
 			MTP_vector<MTPint>(markedIds)
@@ -1480,7 +1487,8 @@ void ApiWrap::markContentsRead(
 void ApiWrap::markContentsRead(not_null<HistoryItem*> item) {
 	if (skipContentsRead(item)
 		|| !item->markContentsRead(true)
-		|| !item->isRegular()) {
+		|| !item->isRegular()
+		|| hideContentsRead()) {
 		return;
 	}
 	const auto ids = MTP_vector<MTPint>(1, MTP_int(item->id));

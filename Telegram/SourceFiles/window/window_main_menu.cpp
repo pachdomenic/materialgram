@@ -774,6 +774,24 @@ void MainMenu::setupMenu() {
 		controller->showSettings();
 	});
 
+	const auto ghost = &Core::App().settings();
+	addAction(
+		tr::lng_tukigram_ghost_title(),
+		{ &st::menuIconStealth }
+	)->toggleOn(rpl::single(
+		rpl::empty
+	) | rpl::then(
+		ghost->ghostModeChanges()
+	) | rpl::map([=] {
+		return ghost->ghostMode();
+	}))->toggledChanges(
+	) | rpl::filter([=](bool enabled) {
+		return (enabled != ghost->ghostMode());
+	}) | rpl::on_next([=](bool enabled) {
+		ghost->setGhostMode(enabled);
+		Core::App().saveSettingsDelayed();
+	}, _menu->lifetime());
+
 	_nightThemeToggle = addAction(
 		tr::lng_menu_night_mode(),
 		{ &st::menuIconNightMode }

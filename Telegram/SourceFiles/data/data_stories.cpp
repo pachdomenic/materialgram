@@ -10,6 +10,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/unixtime.h"
 #include "apiwrap.h"
 #include "core/application.h"
+#include "core/core_settings.h"
 #include "data/components/top_peers.h"
 #include "data/data_changes.h"
 #include "data/data_channel.h"
@@ -1241,6 +1242,11 @@ void Stories::markAsRead(FullStoryId id, bool viewed) {
 		return;
 	}
 	const auto story = *maybeStory;
+	const auto &settings = Core::App().settings();
+	if (settings.ghostOption(Core::GhostOption::HideStoryViews)) {
+		bumpReadTill(id.peer, id.story);
+		return;
+	}
 	if (story->expired() && story->inProfile()) {
 		_incrementViewsPending[id.peer].emplace(id.story);
 		if (!_incrementViewsTimer.isActive()) {

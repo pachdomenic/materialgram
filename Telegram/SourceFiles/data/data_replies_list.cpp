@@ -1002,6 +1002,9 @@ void RepliesList::sendReadTillRequest() {
 	if (_readRequestTimer.isActive()) {
 		_readRequestTimer.cancel();
 	}
+	if (!_history->owner().histories().takeGhostReadAllowed(this)) {
+		return;
+	}
 	const auto api = &_history->session().api();
 	api->request(base::take(_readRequestId)).cancel();
 
