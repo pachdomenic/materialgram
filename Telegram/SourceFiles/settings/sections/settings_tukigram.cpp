@@ -23,7 +23,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "settings/sections/settings_chat.h"
 #include "settings/sections/settings_main.h"
 #include "settings/settings_builder.h"
+#include "storage/localstorage.h"
 #include "ui/basic_click_handlers.h"
+#include "ui/boxes/confirm_box.h"
 #include "ui/chat/chat_style.h"
 #include "ui/chat/chat_theme.h"
 #include "ui/effects/path_shift_gradient.h"
@@ -373,6 +375,17 @@ void AddPercentSlider(SectionBuilder &builder, PercentSliderArgs &&args) {
 		: family;
 }
 
+void ShowRestartBox(not_null<Window::SessionController*> controller) {
+	controller->show(Ui::MakeConfirmBox({
+		.text = tr::lng_settings_need_restart(),
+		.confirmed = [] {
+			Local::writeSettings();
+			Core::Restart();
+		},
+		.confirmText = tr::lng_settings_restart_now(),
+	}));
+}
+
 void BuildDeletedCategory(SectionBuilder &builder) {
 	const auto settings = &Core::App().settings();
 	builder.addSkip();
@@ -554,6 +567,27 @@ void BuildAppearanceCategory(SectionBuilder &builder) {
 		},
 		.keywords = { u"tukigram"_q, u"round"_q, u"video"_q, u"circle"_q },
 	});
+	AddPercentSlider(builder, {
+		.id = u"tukigram/message_width"_q,
+		.title = tr::lng_tukigram_message_width(),
+		.min = Core::Settings::kMessageWidthMin,
+		.max = Core::Settings::kMessageWidthMax,
+		.step = 10,
+		.current = settings->messageWidthPercent(),
+		.chosen = [=](int percent) {
+			if (percent == settings->messageWidthPercent()) {
+				return;
+			}
+			settings->setMessageWidthPercent(percent);
+			Core::App().saveSettingsDelayed();
+			if (controller) {
+				ShowRestartBox(controller);
+			}
+		},
+		.keywords = { u"tukigram"_q, u"wide"_q, u"width"_q, u"bubble"_q },
+	});
+	builder.addSkip();
+	builder.addDividerText(tr::lng_tukigram_message_width_about());
 	builder.addSkip();
 }
 

@@ -1317,6 +1317,10 @@ void Settings::addFromSerialized(const QByteArray &serialized) {
 	_monospaceFontFamily = QString::fromUtf8(
 		readPref<QByteArray>(kMonospaceFontKey));
 	_messageSeconds = readPref<bool>(kMessageSecondsKey);
+	_messageWidthPercent = std::clamp(
+		readPref<int>(kMessageWidthKey, 100),
+		kMessageWidthMin,
+		kMessageWidthMax);
 	_videoMessageSizePercent = std::clamp(
 		readPref<int>(kVideoMessageSizeKey, 100),
 		kVideoMessageSizeMin,
@@ -1441,6 +1445,14 @@ void Settings::setMessageSeconds(bool value) {
 	_messageSeconds = value;
 	writePref<bool>(kMessageSecondsKey, value);
 	_messageLayoutChanges.fire({});
+}
+
+void Settings::setMessageWidthPercent(int value) {
+	_messageWidthPercent = std::clamp(
+		value,
+		kMessageWidthMin,
+		kMessageWidthMax);
+	writePref<int>(kMessageWidthKey, _messageWidthPercent);
 }
 
 void Settings::setVideoMessageSizePercent(int value) {

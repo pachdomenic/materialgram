@@ -811,4 +811,6 @@ void FillComplexEllipse(
 	not_null<const ChatStyle*> st,
 	QRect rect);
 
+void ApplyMessageWidthPercent(int percent);
+
 } // namespace Ui

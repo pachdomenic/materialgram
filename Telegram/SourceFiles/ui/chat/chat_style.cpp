@@ -1616,4 +1616,19 @@ void FillComplexEllipse(
 	p.drawEllipse(rect);
 }
 
+void ApplyMessageWidthPercent(int percent) {
+	if (percent == 100) {
+		return;
+	}
+	// WHY: generated style values are plain ints behind const references,
+	// so widening them once right after the styles start reaches every
+	// message layout without patching codegen.
+	const auto widen = [&](const int &value) {
+		const_cast<int&>(value) = value * percent / 100;
+	};
+	widen(st::msgMaxWidth);
+	widen(st::maxMediaSize);
+	widen(st::historyGroupWidthMax);
+}
+
 } // namespace Ui

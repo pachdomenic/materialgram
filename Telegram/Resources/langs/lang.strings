@@ -1859,6 +1859,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_tukigram_mono_font" = "Monospace font";
 "lng_tukigram_fonts_about" = "The monospace font is used for code blocks and inline code. Changing fonts requires a restart.";
 "lng_tukigram_message_seconds" = "Show seconds in message time";
+"lng_tukigram_message_width" = "Message width";
+"lng_tukigram_message_width_about" = "Lets message bubbles, photos and videos grow wider in large windows. Requires a restart.";
 "lng_tukigram_video_message_size" = "Video message size";
 "lng_materialgram_settings_save_deleted" = "Keep deleted messages";
 "lng_materialgram_settings_save_deleted_own" = "Keep your own deleted messages";

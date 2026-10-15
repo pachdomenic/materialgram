@@ -79,6 +79,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/text/text_options.h"
 #include "ui/effects/spoiler_mess.h"
 #include "ui/cached_round_corners.h"
+#include "ui/chat/chat_style.h"
 #include "ui/power_saving.h"
 #include "ui/screen_reader_mode.h"
 #include "storage/storage_domain.h"
@@ -341,6 +342,7 @@ void Application::run() {
 	QCoreApplication::instance()->installTranslator(_translator.get());
 
 	style::StartManager(cScale());
+	Ui::ApplyMessageWidthPercent(settings().messageWidthPercent());
 	Ui::Accessible::Init();
 	Ui::InitTextOptions();
 	Ui::StartCachedCorners();
