@@ -1127,6 +1127,8 @@ PRIVATE
     history/view/history_view_corner_buttons.h
     history/view/history_view_cursor_state.cpp
     history/view/history_view_cursor_state.h
+    history/view/history_view_deleted_section.cpp
+    history/view/history_view_deleted_section.h
     history/view/history_view_drag.cpp
     history/view/history_view_drag.h
     history/view/history_view_draw_to_reply.cpp

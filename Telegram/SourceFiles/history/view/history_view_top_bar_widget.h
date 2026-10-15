@@ -83,6 +83,7 @@ public:
 		ActiveChat activeChat,
 		SendActionPainter *sendAction);
 	void setCustomTitle(const QString &title);
+	void setSearchAllowed(bool allowed);
 	void setTitleShownRatio(float64 shown);
 	[[nodiscard]] int titleLeft() const;
 
@@ -272,6 +273,7 @@ private:
 	int _rightTaken = 0;
 	float64 _titleShownRatio = 1.;
 	bool _animatingMode = false;
+	bool _searchAllowed = true;
 	std::unique_ptr<Ui::InfiniteRadialAnimation> _connecting;
 
 	SendActionPainter *_sendAction = nullptr;

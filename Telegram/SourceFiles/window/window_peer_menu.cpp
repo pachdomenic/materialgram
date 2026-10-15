@@ -81,6 +81,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/history_item_components.h"
 #include "history/view/controls/history_view_forward_panel.h"
 #include "history/view/history_view_context_menu.h"
+#include "history/view/history_view_deleted_section.h"
 #include "history/view/history_view_schedule_box.h"
 #include "iv/editor/iv_editor_session.h"
 #include "wallet/wallet_panel.h"
@@ -100,6 +101,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "info/profile/info_profile_values.h"
 #include "info/statistics/info_statistics_widget.h"
 #include "info/stories/info_stories_widget.h"
+#include "data/components/deleted_messages.h"
 #include "data/components/scheduled_messages.h"
 #include "data/components/welcome_messages.h"
 #include "data/notify/data_notify_settings.h"
@@ -331,6 +333,7 @@ private:
 	void addDirectMessages();
 	void addToggleTopicClosed();
 	void addExportChat();
+	void addDeletedMessages();
 	void addTranslate();
 	void addReport();
 	void addNewContact();
@@ -1108,6 +1111,19 @@ void Filler::addExportChat() {
 		tr::lng_profile_export_chat(tr::now),
 		[=] { PeerMenuExportChat(navigation, peer); },
 		&st::menuIconExport);
+}
+
+void Filler::addDeletedMessages() {
+	const auto history = _thread ? _thread->asHistory() : nullptr;
+	if (!history
+		|| !history->session().deletedMessages().has(history->peer->id)) {
+		return;
+	}
+	const auto navigation = _controller;
+	_addAction(tr::lng_tukigram_deleted_title(tr::now), [=] {
+		navigation->showSection(
+			std::make_shared<HistoryView::DeletedMemento>(history));
+	}, &st::menuIconRestore);
 }
 
 void Filler::addTranslate() {
@@ -1980,6 +1996,7 @@ void Filler::fillHistoryActions() {
 	addViewDiscussion();
 	addDirectMessages();
 	addExportChat();
+	addDeletedMessages();
 	addTranslate();
 	addReport();
 	addClearHistory();

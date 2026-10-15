@@ -76,6 +76,7 @@ void DeletedMessages::remember(not_null<HistoryItem*> item) {
 		list.erase(begin(list));
 	}
 	scheduleSave();
+	_changes.fire_copy(item->history()->peer->id);
 }
 
 void DeletedMessages::forget(PeerId peer, const QVector<MTPint> &ids) {
@@ -93,6 +94,7 @@ void DeletedMessages::forget(PeerId peer, const QVector<MTPint> &ids) {
 	}
 	if (changed) {
 		scheduleSave();
+		_changes.fire_copy(peer);
 	}
 }
 
@@ -100,6 +102,7 @@ void DeletedMessages::forgetAll(PeerId peer) {
 	ensureLoaded();
 	if (_messages.remove(peer)) {
 		scheduleSave();
+		_changes.fire_copy(peer);
 	}
 }
 
@@ -132,7 +135,10 @@ void DeletedMessages::restore(
 			continue;
 		} else if (msgId > maxId && !includeNewer) {
 			break;
-		} else if (owner->message(history->peer, msgId)) {
+		} else if (const auto existing = owner->message(history->peer, msgId)) {
+			if (!existing->mainView() && owner->isMessageDeleted(existing)) {
+				restored.push_back(existing);
+			}
 			continue;
 		}
 		if (const auto item = deserialize(history, msgId, serialized)) {
@@ -146,6 +152,49 @@ void DeletedMessages::restore(
 	}
 	items.insert(end(items), begin(restored), end(restored));
 	ranges::stable_sort(items, ranges::less(), id);
+}
+
+bool DeletedMessages::has(PeerId peer) {
+	ensureLoaded();
+	return _messages.contains(peer);
+}
+
+std::vector<MsgId> DeletedMessages::ids(PeerId peer) {
+	ensureLoaded();
+	const auto i = _messages.find(peer);
+	if (i == end(_messages)) {
+		return {};
+	}
+	return i->second | ranges::views::keys | ranges::to_vector;
+}
+
+HistoryItem *DeletedMessages::lookup(
+		not_null<History*> history,
+		MsgId id) {
+	const auto owner = &history->owner();
+	if (const auto existing = owner->message(history->peer, id)) {
+		return existing;
+	}
+	ensureLoaded();
+	const auto i = _messages.find(history->peer->id);
+	if (i == end(_messages)) {
+		return nullptr;
+	}
+	const auto j = i->second.find(id);
+	if (j == end(i->second)) {
+		return nullptr;
+	}
+	_restoring = true;
+	const auto item = deserialize(history, id, j->second);
+	if (item) {
+		owner->markMessageDeleted(item);
+	}
+	_restoring = false;
+	return item;
+}
+
+rpl::producer<PeerId> DeletedMessages::changes() const {
+	return _changes.events();
 }
 
 QByteArray DeletedMessages::serialize(not_null<HistoryItem*> item) const {

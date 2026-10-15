@@ -31,6 +31,11 @@ public:
 		not_null<History*> history,
 		std::vector<not_null<HistoryItem*>> &items);
 
+	[[nodiscard]] bool has(PeerId peer);
+	[[nodiscard]] std::vector<MsgId> ids(PeerId peer);
+	[[nodiscard]] HistoryItem *lookup(not_null<History*> history, MsgId id);
+	[[nodiscard]] rpl::producer<PeerId> changes() const;
+
 private:
 	[[nodiscard]] QByteArray serialize(not_null<HistoryItem*> item) const;
 	[[nodiscard]] HistoryItem *deserialize(
@@ -44,6 +49,7 @@ private:
 	const not_null<Main::Session*> _session;
 	base::flat_map<PeerId, base::flat_map<MsgId, QByteArray>> _messages;
 	base::Timer _saveTimer;
+	rpl::event_stream<PeerId> _changes;
 	bool _loaded = false;
 	bool _restoring = false;
 

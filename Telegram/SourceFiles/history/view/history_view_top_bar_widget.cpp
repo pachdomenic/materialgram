@@ -1021,6 +1021,13 @@ void TopBarWidget::setCustomTitle(const QString &title) {
 	}
 }
 
+void TopBarWidget::setSearchAllowed(bool allowed) {
+	if (_searchAllowed != allowed) {
+		_searchAllowed = allowed;
+		updateControlsVisibility();
+	}
+}
+
 void TopBarWidget::setTitleShownRatio(float64 shown) {
 	if (_titleShownRatio != shown) {
 		_titleShownRatio = shown;
@@ -1122,7 +1129,9 @@ void TopBarWidget::updateSearchVisibility() {
 			&& !pinnedInSavedMessages)
 		|| (_activeChat.section == Section::SavedSublist
 			&& _activeChat.key.sublist());
-	_search->setVisible(searchAllowedMode && !_chooseForReportReason);
+	_search->setVisible(searchAllowedMode
+		&& _searchAllowed
+		&& !_chooseForReportReason);
 }
 
 void TopBarWidget::updateInfoButtonVisibility() {
