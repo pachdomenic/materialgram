@@ -1316,6 +1316,7 @@ void Settings::addFromSerialized(const QByteArray &serialized) {
 	_deletedTransparent = !readPref<bool>(kDeletedOpaqueKey);
 	_monospaceFontFamily = QString::fromUtf8(
 		readPref<QByteArray>(kMonospaceFontKey));
+	_messageSeconds = readPref<bool>(kMessageSecondsKey);
 	{ // Parse the legacy translation setting.
 		if (legacySkipTranslationForLanguage == 0) {
 			_translateButtonEnabled = false;
@@ -1427,6 +1428,15 @@ void Settings::setDeletedTransparent(bool value) {
 void Settings::setMonospaceFontFamily(const QString &value) {
 	_monospaceFontFamily = value;
 	writePref<QByteArray>(kMonospaceFontKey, value.toUtf8());
+}
+
+void Settings::setMessageSeconds(bool value) {
+	if (_messageSeconds == value) {
+		return;
+	}
+	_messageSeconds = value;
+	writePref<bool>(kMessageSecondsKey, value);
+	_messageLayoutChanges.fire({});
 }
 
 void Settings::writePrefGeneric(

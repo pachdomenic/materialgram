@@ -480,6 +480,16 @@ void BuildAppearanceCategory(SectionBuilder &builder) {
 	builder.addSkip();
 	builder.addDividerText(tr::lng_tukigram_fonts_about());
 	builder.addSkip();
+
+	builder.addSubsectionTitle(tr::lng_tukigram_messages_title());
+	AddToggle(
+		builder,
+		u"tukigram/message_seconds"_q,
+		tr::lng_tukigram_message_seconds(),
+		[=] { return settings->messageSeconds(); },
+		[=](bool value) { settings->setMessageSeconds(value); },
+		{ u"tukigram"_q, u"seconds"_q, u"time"_q });
+	builder.addSkip();
 }
 
 [[nodiscard]] object_ptr<Ui::RpWidget> MakeHeader(QWidget *parent) {

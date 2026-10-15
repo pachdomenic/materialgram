@@ -71,6 +71,28 @@ void AppendEmojiMark(
 	marked.append(' ');
 }
 
+[[nodiscard]] QString FormatMessageTime(QTime time) {
+	const auto locale = QLocale();
+	auto format = locale.timeFormat(QLocale::ShortFormat);
+	if (!Core::App().settings().messageSeconds()
+		|| format.contains(QChar('s'))) {
+		return locale.toString(time, format);
+	}
+	const auto minutes = format.indexOf(QChar('m'));
+	if (minutes < 0) {
+		return locale.toString(time, QLocale::LongFormat);
+	}
+	const auto separator = (minutes > 0 && !format[minutes - 1].isLetter())
+		? format[minutes - 1]
+		: QChar(':');
+	auto end = minutes;
+	while (end < format.size() && format[end] == QChar('m')) {
+		++end;
+	}
+	format.insert(end, separator + u"ss"_q);
+	return locale.toString(time, format);
+}
+
 [[nodiscard]] QString SchedulePeriodText(TimeId period) {
 	struct Entry {
 		TimeId period = 0;
@@ -103,7 +125,7 @@ void AppendEmojiMark(
 
 [[nodiscard]] QString FormatEditedDate(QDateTime sent, QDateTime edited) {
 	const auto today = QDateTime::currentDateTime().date();
-	const auto time = QLocale().toString(edited.time(), QLocale::ShortFormat);
+	const auto time = FormatMessageTime(edited.time());
 	if (sent.date() == today && edited.date() == today) {
 		return tr::lng_edited_at(tr::now, lt_time, time);
 	}
@@ -539,7 +561,7 @@ void BottomInfo::layoutDateText() {
 		: edited + ((_data.flags
 			& (Data::Flag::ForwardedDate | Data::Flag::FullDate))
 		? Ui::FormatDateTimeSavedFrom(_data.date)
-		: QLocale().toString(_data.date.time(), QLocale::ShortFormat));
+		: FormatMessageTime(_data.date.time()));
 	const auto afterAuthor = prefix + date;
 	const auto afterAuthorWidth = st::msgDateFont->width(afterAuthor);
 	const auto authorWidth = st::msgDateFont->width(author);

@@ -1858,6 +1858,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_tukigram_fonts" = "Fonts";
 "lng_tukigram_mono_font" = "Monospace font";
 "lng_tukigram_fonts_about" = "The monospace font is used for code blocks and inline code. Changing fonts requires a restart.";
+"lng_tukigram_message_seconds" = "Show seconds in message time";
 "lng_materialgram_settings_save_deleted" = "Keep deleted messages";
 "lng_materialgram_settings_save_deleted_own" = "Keep your own deleted messages";
 "lng_materialgram_settings_forward_protected" = "Forward from protected chats";

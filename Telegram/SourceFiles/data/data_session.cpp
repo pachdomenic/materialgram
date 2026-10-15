@@ -376,6 +376,13 @@ Session::Session(not_null<Main::Session*> session)
 			requestItemViewRefresh(item);
 		}
 	}, _lifetime);
+	Core::App().settings().messageLayoutChanges(
+	) | rpl::on_next([=] {
+		const auto items = ranges::views::keys(_views) | ranges::to_vector;
+		for (const auto &item : items) {
+			requestItemViewRefresh(item);
+		}
+	}, _lifetime);
 
 	_chatsList.unreadStateChanges(
 	) | rpl::on_next([=] {
