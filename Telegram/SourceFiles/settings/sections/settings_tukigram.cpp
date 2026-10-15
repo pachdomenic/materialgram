@@ -499,7 +499,7 @@ const auto kMeta = BuildHelper({
 	.id = TukiGram::Id(),
 	.parentId = MainId(),
 	.title = &tr::lng_tukigram_settings,
-	.icon = &st::menuIconCustomize,
+	.icon = &st::menuIconTukiGram,
 }, [](SectionBuilder &builder) {
 	BuildTukiGramSection(builder);
 });

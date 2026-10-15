@@ -386,13 +386,6 @@ void BuildSectionButtons(SectionBuilder &builder) {
 	});
 
 	builder.addSectionButton({
-		.title = tr::lng_tukigram_settings(),
-		.targetSection = TukiGramId(),
-		.icon = { &st::menuIconCustomize },
-		.keywords = { u"tukigram"_q, u"materialgram"_q, u"deleted"_q },
-	});
-
-	builder.addSectionButton({
 		.title = tr::lng_settings_section_devices(),
 		.targetSection = CallsId(),
 		.icon = { &st::menuIconUnmute },
@@ -752,6 +745,17 @@ const auto kMeta = BuildHelper({
 	.title = &tr::lng_menu_settings,
 	.icon = &st::menuIconSettings,
 }, [](SectionBuilder &builder) {
+	builder.addDivider();
+	builder.addSkip();
+
+	builder.addSectionButton({
+		.title = tr::lng_tukigram_settings(),
+		.targetSection = TukiGramId(),
+		.icon = { &st::menuIconTukiGram },
+		.keywords = { u"tukigram"_q, u"materialgram"_q, u"deleted"_q },
+	});
+
+	builder.addSkip();
 	builder.addDivider();
 	builder.addSkip();
 
