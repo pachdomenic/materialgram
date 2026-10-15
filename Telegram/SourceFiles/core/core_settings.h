@@ -53,6 +53,8 @@ inline constexpr auto kMonospaceFontKey = "monospace-font"_cs;
 inline constexpr auto kMessageSecondsKey = "message-seconds"_cs;
 inline constexpr auto kMessageWidthKey = "message-width"_cs;
 inline constexpr auto kVideoMessageSizeKey = "video-message-size"_cs;
+inline constexpr auto kBubbleRadiusLargeKey = "bubble-radius-large"_cs;
+inline constexpr auto kBubbleRadiusSmallKey = "bubble-radius-small"_cs;
 
 enum class GhostOption : uchar {
 	HideReads,
@@ -231,6 +233,10 @@ public:
 	static constexpr auto kMessageWidthMax = 300;
 	static constexpr auto kVideoMessageSizeMin = 50;
 	static constexpr auto kVideoMessageSizeMax = 180;
+	static constexpr auto kBubbleRadiusMin = 0;
+	static constexpr auto kBubbleRadiusMax = 24;
+	static constexpr auto kBubbleRadiusLargeDefault = 16;
+	static constexpr auto kBubbleRadiusSmallDefault = 10;
 	[[nodiscard]] QString monospaceFontFamily() const {
 		return _monospaceFontFamily;
 	}
@@ -243,6 +249,14 @@ public:
 		return _messageWidthPercent;
 	}
 	void setMessageWidthPercent(int value);
+	[[nodiscard]] int bubbleRadiusLarge() const {
+		return _bubbleRadiusLarge;
+	}
+	void setBubbleRadiusLarge(int value);
+	[[nodiscard]] int bubbleRadiusSmall() const {
+		return _bubbleRadiusSmall;
+	}
+	void setBubbleRadiusSmall(int value);
 	[[nodiscard]] int videoMessageSizePercent() const {
 		return _videoMessageSizePercent;
 	}
@@ -1218,6 +1232,8 @@ private:
 	QString _monospaceFontFamily;
 	bool _messageSeconds = false;
 	int _messageWidthPercent = 100;
+	int _bubbleRadiusLarge = kBubbleRadiusLargeDefault;
+	int _bubbleRadiusSmall = kBubbleRadiusSmallDefault;
 	int _videoMessageSizePercent = 100;
 	rpl::event_stream<> _messageLayoutChanges;
 	std::array<bool, kGhostOptionCount> _ghostOptions = {};

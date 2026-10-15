@@ -1345,6 +1345,14 @@ void Settings::addFromSerialized(const QByteArray &serialized) {
 		readPref<int>(kVideoMessageSizeKey, 100),
 		kVideoMessageSizeMin,
 		kVideoMessageSizeMax);
+	_bubbleRadiusLarge = std::clamp(
+		readPref<int>(kBubbleRadiusLargeKey, kBubbleRadiusLargeDefault),
+		kBubbleRadiusMin,
+		kBubbleRadiusMax);
+	_bubbleRadiusSmall = std::clamp(
+		readPref<int>(kBubbleRadiusSmallKey, kBubbleRadiusSmallDefault),
+		kBubbleRadiusMin,
+		kBubbleRadiusMax);
 	for (auto i = 0; i != kGhostOptionCount; ++i) {
 		_ghostOptions[i] = readPref<bool>(GhostOptionKey(GhostOption(i)));
 	}
@@ -1476,6 +1484,16 @@ void Settings::setMessageWidthPercent(int value) {
 		kMessageWidthMin,
 		kMessageWidthMax);
 	writePref<int>(kMessageWidthKey, _messageWidthPercent);
+}
+
+void Settings::setBubbleRadiusLarge(int value) {
+	_bubbleRadiusLarge = std::clamp(value, kBubbleRadiusMin, kBubbleRadiusMax);
+	writePref<int>(kBubbleRadiusLargeKey, _bubbleRadiusLarge);
+}
+
+void Settings::setBubbleRadiusSmall(int value) {
+	_bubbleRadiusSmall = std::clamp(value, kBubbleRadiusMin, kBubbleRadiusMax);
+	writePref<int>(kBubbleRadiusSmallKey, _bubbleRadiusSmall);
 }
 
 void Settings::setVideoMessageSizePercent(int value) {

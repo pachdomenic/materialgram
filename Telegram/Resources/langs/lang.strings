@@ -1862,6 +1862,13 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_tukigram_message_width" = "Message width";
 "lng_tukigram_message_width_about" = "Lets message bubbles, photos and videos grow wider in large windows. Requires a restart.";
 "lng_tukigram_video_message_size" = "Video message size";
+"lng_tukigram_bubble_radius" = "Message bubble radius";
+"lng_tukigram_bubble_radius_small" = "Grouped bubble radius";
+"lng_tukigram_bubble_radius_about" = "Grouped corners are where consecutive messages from the same sender meet. Changing the radius requires a restart.";
+"lng_tukigram_bubble_restart" = "Restart to apply";
+"lng_tukigram_bubble_preview_first" = "Have you seen the new bubbles?";
+"lng_tukigram_bubble_preview_second" = "Drag the sliders to try them out.";
+"lng_tukigram_bubble_preview_out" = "Looks great! 🎉";
 "lng_tukigram_ghost_title" = "Ghost mode";
 "lng_tukigram_ghost_enable" = "Enable ghost mode";
 "lng_tukigram_ghost_about" = "Others won't see that you are online, typing or reading. Turns on every option below.";

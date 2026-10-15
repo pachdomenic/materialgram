@@ -1631,4 +1631,20 @@ void ApplyMessageWidthPercent(int percent) {
 	widen(st::historyGroupWidthMax);
 }
 
+int BubbleRadiusFromPixels(int px) {
+	// WHY: a zero radius gives null corner pixmaps, and the corner caches
+	// treat a null pixmap as "not prepared yet", rebuilding it every paint.
+	return std::max(style::ConvertScale(px), 1);
+}
+
+void ApplyBubbleRadius(int large, int small) {
+	// Same approach as ApplyMessageWidthPercent: every corner cache reads
+	// these values lazily, so this must run before anything is painted.
+	const auto apply = [](const int &value, int px) {
+		const_cast<int&>(value) = BubbleRadiusFromPixels(px);
+	};
+	apply(st::bubbleRadiusLarge, large);
+	apply(st::bubbleRadiusSmall, small);
+}
+
 } // namespace Ui

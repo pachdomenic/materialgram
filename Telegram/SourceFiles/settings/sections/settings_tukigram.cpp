@@ -200,6 +200,204 @@ void DeletedPreview::paintEvent(QPaintEvent *e) {
 	_inView->draw(p, context.translated(0, -_inTop));
 }
 
+class BubbleRadiusPreview final : public Ui::RpWidget {
+public:
+	BubbleRadiusPreview(
+		QWidget *parent,
+		not_null<Window::SessionController*> controller,
+		rpl::producer<int> large,
+		rpl::producer<int> small);
+
+private:
+	struct Bubble {
+		Ui::Text::String text;
+		bool out = false;
+		bool attachedTop = false;
+		bool attachedBottom = false;
+		QRect geometry;
+	};
+
+	void paintEvent(QPaintEvent *e) override;
+	void updateGeometries(int width);
+
+	const std::shared_ptr<Ui::ChatTheme> _theme;
+	const std::unique_ptr<Ui::ChatStyle> _style;
+	std::array<Bubble, 3> _bubbles;
+	int _large = 0;
+	int _small = 0;
+
+};
+
+[[nodiscard]] QPainterPath BubblePath(
+		QRectF rect,
+		float64 topLeft,
+		float64 topRight,
+		float64 bottomRight,
+		float64 bottomLeft) {
+	auto result = QPainterPath();
+	result.moveTo(rect.left() + topLeft, rect.top());
+	result.lineTo(rect.right() - topRight, rect.top());
+	result.arcTo(
+		rect.right() - 2 * topRight,
+		rect.top(),
+		2 * topRight,
+		2 * topRight,
+		90,
+		-90);
+	result.lineTo(rect.right(), rect.bottom() - bottomRight);
+	result.arcTo(
+		rect.right() - 2 * bottomRight,
+		rect.bottom() - 2 * bottomRight,
+		2 * bottomRight,
+		2 * bottomRight,
+		0,
+		-90);
+	result.lineTo(rect.left() + bottomLeft, rect.bottom());
+	result.arcTo(
+		rect.left(),
+		rect.bottom() - 2 * bottomLeft,
+		2 * bottomLeft,
+		2 * bottomLeft,
+		270,
+		-90);
+	result.lineTo(rect.left(), rect.top() + topLeft);
+	result.arcTo(
+		rect.left(),
+		rect.top(),
+		2 * topLeft,
+		2 * topLeft,
+		180,
+		-90);
+	result.closeSubpath();
+	return result;
+}
+
+BubbleRadiusPreview::BubbleRadiusPreview(
+	QWidget *parent,
+	not_null<Window::SessionController*> controller,
+	rpl::producer<int> large,
+	rpl::producer<int> small)
+: RpWidget(parent)
+, _theme(controller->defaultChatTheme())
+, _style(std::make_unique<Ui::ChatStyle>(
+	controller->session().colorIndicesValue())) {
+	_style->apply(_theme.get());
+
+	const auto init = [](
+			Bubble &bubble,
+			const QString &text,
+			bool out,
+			bool attachedTop,
+			bool attachedBottom) {
+		bubble.text.setText(st::messageTextStyle, text);
+		bubble.out = out;
+		bubble.attachedTop = attachedTop;
+		bubble.attachedBottom = attachedBottom;
+	};
+	init(
+		_bubbles[0],
+		tr::lng_tukigram_bubble_preview_first(tr::now),
+		false,
+		false,
+		true);
+	init(
+		_bubbles[1],
+		tr::lng_tukigram_bubble_preview_second(tr::now),
+		false,
+		true,
+		false);
+	init(
+		_bubbles[2],
+		tr::lng_tukigram_bubble_preview_out(tr::now),
+		true,
+		false,
+		false);
+
+	rpl::combine(
+		std::move(large),
+		std::move(small)
+	) | rpl::on_next([=](int large, int small) {
+		_large = Ui::BubbleRadiusFromPixels(large);
+		_small = Ui::BubbleRadiusFromPixels(small);
+		update();
+	}, lifetime());
+
+	widthValue() | rpl::on_next([=](int width) {
+		updateGeometries(width);
+	}, lifetime());
+}
+
+void BubbleRadiusPreview::updateGeometries(int width) {
+	const auto &padding = st::msgPadding;
+	const auto skip = st::msgMargin.left();
+	const auto bubbleMax = std::min(
+		st::msgMaxWidth,
+		width - skip - st::msgMargin.right());
+	const auto innerMax = bubbleMax - padding.left() - padding.right();
+	if (innerMax <= 0) {
+		return;
+	}
+	auto top = 0;
+	for (auto &bubble : _bubbles) {
+		top += bubble.attachedTop
+			? st::msgMarginTopAttached
+			: st::msgMargin.top();
+		const auto inner = std::min(bubble.text.maxWidth(), innerMax);
+		const auto bubbleWidth = inner + padding.left() + padding.right();
+		const auto bubbleHeight = padding.top()
+			+ bubble.text.countHeight(inner)
+			+ padding.bottom();
+		const auto left = bubble.out ? (width - skip - bubbleWidth) : skip;
+		bubble.geometry = QRect(left, top, bubbleWidth, bubbleHeight);
+		top += bubbleHeight + st::msgMargin.bottom();
+	}
+	resize(width, top + st::msgMargin.top());
+}
+
+void BubbleRadiusPreview::paintEvent(QPaintEvent *e) {
+	auto p = Painter(this);
+	const auto clip = e->rect();
+
+	p.setClipRect(clip);
+	Window::SectionWidget::PaintBackground(
+		p,
+		_theme.get(),
+		QSize(width(), window()->height()),
+		clip);
+
+	const auto &padding = st::msgPadding;
+	for (const auto &bubble : _bubbles) {
+		const auto &st = _style->messageStyle(bubble.out, false);
+		const auto rect = bubble.geometry;
+		const auto max = std::min(rect.width(), rect.height()) / 2.;
+		const auto large = std::min(float64(_large), max);
+		const auto small = std::min(float64(_small), max);
+
+		// Grouped corners are on the sender's side, like in the chat.
+		const auto top = bubble.attachedTop ? small : large;
+		const auto bottom = bubble.attachedBottom ? small : large;
+		const auto path = bubble.out
+			? BubblePath(rect, large, top, bottom, large)
+			: BubblePath(rect, top, large, large, bottom);
+		{
+			auto hq = PainterHighQualityEnabler(p);
+			p.setPen(Qt::NoPen);
+			p.setBrush(st.msgShadow);
+			p.drawPath(path.translated(0, st::msgShadow));
+			p.setBrush(st.msgBg);
+			p.drawPath(path);
+		}
+
+		p.setPen(st.historyTextFg);
+		bubble.text.draw(p, {
+			.position = rect.topLeft() + QPoint(padding.left(), padding.top()),
+			.outerWidth = width(),
+			.availableWidth = rect.width() - padding.left() - padding.right(),
+			.palette = &st.textPalette,
+		});
+	}
+}
+
 void DeletedMarkBox(not_null<Ui::GenericBox*> box) {
 	const auto settings = &Core::App().settings();
 	box->setTitle(tr::lng_tukigram_deleted_mark());
@@ -317,7 +515,7 @@ void AddToggle(
 	}
 }
 
-struct PercentSliderArgs {
+struct ValueSliderArgs {
 	QString id;
 	rpl::producer<QString> title;
 	int min = 0;
@@ -326,17 +524,15 @@ struct PercentSliderArgs {
 	int current = 0;
 	Fn<void(int)> chosen;
 	QStringList keywords;
+	Fn<void(int)> changing;
+	QString suffix = u"%"_q;
 };
 
-void AddPercentSlider(SectionBuilder &builder, PercentSliderArgs &&args) {
-	const auto value = std::make_shared<rpl::variable<int>>(args.current);
+void AddValueSlider(SectionBuilder &builder, ValueSliderArgs &&args) {
 	const auto button = builder.addButton({
 		.id = std::move(args.id),
 		.title = std::move(args.title),
 		.st = &st::settingsButtonNoIcon,
-		.label = value->value() | rpl::map([value](int percent) {
-			return QString::number(percent) + '%';
-		}),
 		.keywords = std::move(args.keywords),
 	});
 	if (!button) {
@@ -345,25 +541,72 @@ void AddPercentSlider(SectionBuilder &builder, PercentSliderArgs &&args) {
 	button->setAttribute(Qt::WA_TransparentForMouseEvents);
 
 	const auto min = args.min;
+	const auto max = args.max;
 	const auto step = args.step;
-	const auto count = (args.max - min) / step + 1;
+	const auto count = (max - min) / step + 1;
 	const auto current = args.current;
 	const auto chosen = args.chosen;
+	const auto changing = args.changing;
+	const auto suffix = args.suffix;
 	builder.add([=](const WidgetContext &ctx) {
-		auto slider = object_ptr<Ui::MediaSlider>(
-			ctx.container,
+		auto row = object_ptr<Ui::RpWidget>(ctx.container);
+		const auto raw = row.data();
+		const auto slider = Ui::CreateChild<Ui::MediaSlider>(
+			raw,
 			st::settingsScale);
-		const auto raw = slider.data();
-		raw->resize(st::settingsScale.seekSize);
-		raw->setPseudoDiscrete(
+		const auto &labelSt = st::settingsButtonNoIcon.rightLabel;
+		const auto label = Ui::CreateChild<Ui::FlatLabel>(raw, labelSt);
+
+		const auto format = [=](int value) {
+			return QString::number(value) + suffix;
+		};
+		const auto &font = labelSt.style.font;
+		const auto labelWidth = std::max(
+			font->width(format(min)),
+			font->width(format(max)));
+		const auto height = std::max(
+			st::settingsScale.seekSize.height(),
+			font->height);
+		const auto placeLabel = [=] {
+			label->resizeToNaturalWidth(labelWidth);
+			label->moveToRight(0, (height - label->height()) / 2);
+		};
+		const auto setLabel = [=](int value) {
+			label->setText(format(value));
+			placeLabel();
+		};
+
+		slider->setPseudoDiscrete(
 			count,
 			[=](int index) { return min + index * step; },
 			current,
-			[=](int percent) { *value = percent; },
+			[=](int value) {
+				setLabel(value);
+				if (changing) {
+					changing(value);
+				}
+			},
 			chosen);
+		setLabel(current);
+
+		raw->resize(raw->width(), height);
+		raw->widthValue() | rpl::on_next([=](int width) {
+			const auto seek = st::settingsScale.seekSize.height();
+			slider->resize(
+				std::max(width - labelWidth - st::settingsButtonRightSkip, 0),
+				seek);
+			slider->moveToLeft(0, (height - seek) / 2);
+			placeLabel();
+		}, raw->lifetime());
+
+		const auto &padding = st::settingsBigScalePadding;
 		return SectionBuilder::WidgetToAdd{
-			.widget = std::move(slider),
-			.margin = st::settingsBigScalePadding,
+			.widget = std::move(row),
+			.margin = QMargins(
+				padding.left(),
+				padding.top(),
+				st::settingsButtonNoIcon.padding.right(),
+				padding.bottom()),
 		};
 	});
 }
@@ -657,6 +900,26 @@ void BuildAppearanceCategory(SectionBuilder &builder) {
 	builder.addSkip();
 
 	builder.addSubsectionTitle(tr::lng_tukigram_messages_title());
+	const auto large = std::make_shared<rpl::variable<int>>(
+		settings->bubbleRadiusLarge());
+	const auto small = std::make_shared<rpl::variable<int>>(
+		settings->bubbleRadiusSmall());
+	if (controller) {
+		builder.add([=](const WidgetContext &ctx) {
+			return SectionBuilder::WidgetToAdd{
+				.widget = object_ptr<BubbleRadiusPreview>(
+					ctx.container,
+					controller,
+					large->value(),
+					small->value()),
+				.margin = QMargins(
+					0,
+					st::settingsCheckboxesSkip,
+					0,
+					st::settingsCheckboxesSkip),
+			};
+		});
+	}
 	AddToggle(
 		builder,
 		u"tukigram/message_seconds"_q,
@@ -664,20 +927,74 @@ void BuildAppearanceCategory(SectionBuilder &builder) {
 		[=] { return settings->messageSeconds(); },
 		[=](bool value) { settings->setMessageSeconds(value); },
 		{ u"tukigram"_q, u"seconds"_q, u"time"_q });
-	AddPercentSlider(builder, {
-		.id = u"tukigram/video_message_size"_q,
-		.title = tr::lng_tukigram_video_message_size(),
-		.min = Core::Settings::kVideoMessageSizeMin,
-		.max = Core::Settings::kVideoMessageSizeMax,
-		.step = 10,
-		.current = settings->videoMessageSizePercent(),
-		.chosen = [=](int percent) {
-			settings->setVideoMessageSizePercent(percent);
+	builder.addSkip();
+	builder.addDivider();
+	builder.addSkip();
+
+	AddValueSlider(builder, {
+		.id = u"tukigram/bubble_radius"_q,
+		.title = tr::lng_tukigram_bubble_radius(),
+		.min = Core::Settings::kBubbleRadiusMin,
+		.max = Core::Settings::kBubbleRadiusMax,
+		.step = 1,
+		.current = large->current(),
+		.chosen = [=](int px) {
+			settings->setBubbleRadiusLarge(px);
 			Core::App().saveSettingsDelayed();
 		},
-		.keywords = { u"tukigram"_q, u"round"_q, u"video"_q, u"circle"_q },
+		.keywords = {
+			u"tukigram"_q,
+			u"bubble"_q,
+			u"radius"_q,
+			u"corner"_q,
+			u"round"_q,
+		},
+		.changing = [=](int px) { *large = px; },
+		.suffix = u"px"_q,
 	});
-	AddPercentSlider(builder, {
+	AddValueSlider(builder, {
+		.id = u"tukigram/bubble_radius_small"_q,
+		.title = tr::lng_tukigram_bubble_radius_small(),
+		.min = Core::Settings::kBubbleRadiusMin,
+		.max = Core::Settings::kBubbleRadiusMax,
+		.step = 1,
+		.current = small->current(),
+		.chosen = [=](int px) {
+			settings->setBubbleRadiusSmall(px);
+			Core::App().saveSettingsDelayed();
+		},
+		.keywords = {
+			u"tukigram"_q,
+			u"bubble"_q,
+			u"radius"_q,
+			u"grouped"_q,
+			u"corner"_q,
+		},
+		.changing = [=](int px) { *small = px; },
+		.suffix = u"px"_q,
+	});
+	builder.addButton({
+		.title = tr::lng_tukigram_bubble_restart(),
+		.st = &st::settingsButtonLightNoIcon,
+		.onClick = [] {
+			Local::writeSettings();
+			Core::Restart();
+		},
+		.shown = rpl::combine(
+			large->value(),
+			small->value()
+		) | rpl::map([](int large, int small) {
+			return (Ui::BubbleRadiusFromPixels(large)
+					!= st::bubbleRadiusLarge)
+				|| (Ui::BubbleRadiusFromPixels(small)
+					!= st::bubbleRadiusSmall);
+		}),
+	});
+	builder.addSkip();
+	builder.addDividerText(tr::lng_tukigram_bubble_radius_about());
+	builder.addSkip();
+
+	AddValueSlider(builder, {
 		.id = u"tukigram/message_width"_q,
 		.title = tr::lng_tukigram_message_width(),
 		.min = Core::Settings::kMessageWidthMin,
@@ -698,6 +1015,21 @@ void BuildAppearanceCategory(SectionBuilder &builder) {
 	});
 	builder.addSkip();
 	builder.addDividerText(tr::lng_tukigram_message_width_about());
+	builder.addSkip();
+
+	AddValueSlider(builder, {
+		.id = u"tukigram/video_message_size"_q,
+		.title = tr::lng_tukigram_video_message_size(),
+		.min = Core::Settings::kVideoMessageSizeMin,
+		.max = Core::Settings::kVideoMessageSizeMax,
+		.step = 10,
+		.current = settings->videoMessageSizePercent(),
+		.chosen = [=](int percent) {
+			settings->setVideoMessageSizePercent(percent);
+			Core::App().saveSettingsDelayed();
+		},
+		.keywords = { u"tukigram"_q, u"round"_q, u"video"_q, u"circle"_q },
+	});
 	builder.addSkip();
 }
 

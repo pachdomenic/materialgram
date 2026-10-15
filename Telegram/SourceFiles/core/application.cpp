@@ -343,6 +343,9 @@ void Application::run() {
 
 	style::StartManager(cScale());
 	Ui::ApplyMessageWidthPercent(settings().messageWidthPercent());
+	Ui::ApplyBubbleRadius(
+		settings().bubbleRadiusLarge(),
+		settings().bubbleRadiusSmall());
 	Ui::Accessible::Init();
 	Ui::InitTextOptions();
 	Ui::StartCachedCorners();

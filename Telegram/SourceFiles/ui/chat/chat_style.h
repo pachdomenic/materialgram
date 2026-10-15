@@ -812,5 +812,7 @@ void FillComplexEllipse(
 	QRect rect);
 
 void ApplyMessageWidthPercent(int percent);
+[[nodiscard]] int BubbleRadiusFromPixels(int px);
+void ApplyBubbleRadius(int large, int small);
 
 } // namespace Ui
