@@ -44,6 +44,7 @@ class SponsoredMessages;
 class TopPeers;
 class Factchecks;
 class EditHistory;
+class DeletedMessages;
 class LocationPickers;
 class Credits;
 class PromoSuggestions;
@@ -194,6 +195,9 @@ public:
 	}
 	[[nodiscard]] Data::EditHistory &editHistory() const {
 		return *_editHistory;
+	}
+	[[nodiscard]] Data::DeletedMessages &deletedMessages() const {
+		return *_deletedMessages;
 	}
 	[[nodiscard]] Data::LocationPickers &locationPickers() const {
 		return *_locationPickers;
@@ -359,6 +363,7 @@ private:
 	const std::unique_ptr<Data::RecentInlineBots> _recentInlineBots;
 	const std::unique_ptr<Data::Factchecks> _factchecks;
 	const std::unique_ptr<Data::EditHistory> _editHistory;
+	const std::unique_ptr<Data::DeletedMessages> _deletedMessages;
 	const std::unique_ptr<Data::LocationPickers> _locationPickers;
 	const std::unique_ptr<Data::Credits> _credits;
 	const std::unique_ptr<Wallet::Session> _wallet;

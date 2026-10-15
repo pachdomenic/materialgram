@@ -23,6 +23,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "dialogs/ui/dialogs_layout.h"
 #include "data/business/data_shortcut_messages.h"
 #include "data/components/credits.h"
+#include "data/components/deleted_messages.h"
 #include "data/components/scheduled_messages.h"
 #include "data/components/sponsored_messages.h"
 #include "data/components/top_peers.h"
@@ -662,6 +663,7 @@ std::vector<not_null<HistoryItem*>> History::createItems(
 			localFlags,
 			detachExistingItem));
 	}
+	session().deletedMessages().restore(this, result);
 	return result;
 }
 

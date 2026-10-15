@@ -639,6 +639,8 @@ PRIVATE
     data/components/credits.h
     data/components/ephemeral_messages.cpp
     data/components/ephemeral_messages.h
+    data/components/deleted_messages.cpp
+    data/components/deleted_messages.h
     data/components/edit_history.cpp
     data/components/edit_history.h
     data/components/factchecks.cpp

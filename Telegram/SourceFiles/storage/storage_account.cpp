@@ -1272,6 +1272,27 @@ QByteArray Account::readEditHistory() {
 	return CheckStreamStatus(file.stream) ? serialized : QByteArray();
 }
 
+void Account::writeDeletedMessages(const QByteArray &serialized) {
+	Expects(_localKey != nullptr);
+
+	FileWriteDescriptor file(u"deleted"_q, _basePath);
+	EncryptedDescriptor data(Serialize::bytearraySize(serialized));
+	data.stream << serialized;
+	file.writeEncrypted(data, _localKey);
+}
+
+QByteArray Account::readDeletedMessages() {
+	Expects(_localKey != nullptr);
+
+	FileReadDescriptor file;
+	if (!ReadEncryptedFile(file, "deleted", _basePath, _localKey)) {
+		return QByteArray();
+	}
+	auto serialized = QByteArray();
+	file.stream >> serialized;
+	return CheckStreamStatus(file.stream) ? serialized : QByteArray();
+}
+
 std::unique_ptr<MTP::Config> Account::readMtpConfig() {
 	Expects(_localKey != nullptr);
 

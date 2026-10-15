@@ -47,6 +47,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/business/data_business_chatbots.h"
 #include "data/business/data_business_info.h"
 #include "data/business/data_shortcut_messages.h"
+#include "data/components/deleted_messages.h"
 #include "data/components/ephemeral_messages.h"
 #include "data/components/scheduled_messages.h"
 #include "data/components/sponsored_messages.h"
@@ -3430,6 +3431,7 @@ bool Session::keepDeletedMessage(not_null<const HistoryItem*> item) const {
 
 void Session::markMessageDeleted(not_null<HistoryItem*> item) {
 	if (_deletedMessages.emplace(item).second) {
+		_session->deletedMessages().remember(item);
 		requestItemViewRefresh(item);
 	}
 }

@@ -99,6 +99,8 @@ public:
 	void writeMtpConfig();
 	void writeEditHistory(const QByteArray &serialized);
 	[[nodiscard]] QByteArray readEditHistory();
+	void writeDeletedMessages(const QByteArray &serialized);
+	[[nodiscard]] QByteArray readDeletedMessages();
 
 	void registerDraftSource(
 		not_null<History*> history,

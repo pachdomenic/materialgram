@@ -9,6 +9,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "api/api_text_entities.h"
 #include "data/business/data_shortcut_messages.h"
+#include "data/components/deleted_messages.h"
 #include "data/components/ephemeral_messages.h"
 #include "data/components/scheduled_messages.h"
 #include "data/components/welcome_messages.h"
@@ -815,6 +816,7 @@ void Histories::deleteMessages(
 	not_null<History*> history,
 	const QVector<MTPint> &ids,
 	bool revoke) {
+	session().deletedMessages().forget(history->peer->id, ids);
 	const auto totalIds = ids.count();
 	const auto numBatches = (totalIds + MaxSelectedItems - 1) / MaxSelectedItems;
 	auto processBatch = [&](auto batchIndex, Fn<void()> finish) {
@@ -852,6 +854,7 @@ void Histories::deleteAllMessages(
 		MsgId deleteTillId,
 		bool justClear,
 		bool revoke) {
+	session().deletedMessages().forgetAll(history->peer->id);
 	sendRequest(history, RequestType::Delete, [=](Fn<void()> finish) {
 		const auto peer = history->peer;
 		const auto chat = peer->asChat();
