@@ -216,7 +216,8 @@ Photo::Photo(
 	? std::make_unique<MediaSpoiler>()
 	: nullptr)
 , _sensitiveSpoiler(realParent->isMediaSensitive() ? 1 : 0)
-, _ttlCover(realParent->isTtlCoveredMedia() ? 1 : 0) {
+, _ttlCover((realParent->isTtlCoveredMedia()
+		&& !realParent->showsKeptTtlMedia()) ? 1 : 0) {
 	create(realParent->fullId());
 }
 

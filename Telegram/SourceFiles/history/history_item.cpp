@@ -1891,6 +1891,12 @@ bool HistoryItem::isIncomingUnreadMedia() const {
 	return !out() && isUnreadMedia();
 }
 
+bool HistoryItem::showsKeptTtlMedia() const {
+	return !out()
+		&& isTtlCoveredMedia()
+		&& Core::App().settings().keepSelfDestructingMedia();
+}
+
 bool HistoryItem::isTtlCoveredMedia() const {
 	const auto media = _media.get();
 	if (!media || !media->ttlSeconds()) {

@@ -1275,7 +1275,7 @@ Element::Element(
 	| (countIsTopicRootReply() ? Flag::TopicRootReply : Flag()))
 , _context(delegate->elementContext()) {
 	history()->owner().registerItemView(this);
-	if (data->isTtlCoveredMedia()) {
+	if (data->isTtlCoveredMedia() && !data->showsKeptTtlMedia()) {
 		AddComponents(TtlPaintState::Bit());
 	}
 	refreshMedia(replacing);

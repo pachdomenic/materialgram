@@ -41,6 +41,36 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 namespace HistoryView {
 namespace {
 
+[[nodiscard]] QString KeptTtlMediaMark() {
+	return QString::fromUtf8("\xf0\x9f\x94\xa5\xf0\x9f\x94\xa5\xf0\x9f\x94\xa5");
+}
+
+void AppendEmojiMark(
+		TextWithEntities &marked,
+		Ui::Text::CustomEmojiHelper &helper,
+		const QString &mark) {
+	const auto end = mark.data() + mark.size();
+	for (auto ch = mark.data(); ch != end;) {
+		auto length = 0;
+		if (const auto emoji = Ui::Emoji::Find(ch, end, &length)) {
+			marked.append(helper.image({
+				.image = Ui::Emoji::SinglePixmap(
+					emoji,
+					Ui::Emoji::GetSizeNormal()).toImage().scaledToHeight(
+						st::deletedIconEmojiSize * style::DevicePixelRatio(),
+						Qt::SmoothTransformation),
+				.margin = QMargins(0, st::deletedIconEmojiTop, 0, 0),
+				.textColor = false,
+			}));
+			ch += length;
+		} else {
+			marked.append(*ch);
+			++ch;
+		}
+	}
+	marked.append(' ');
+}
+
 [[nodiscard]] QString SchedulePeriodText(TimeId period) {
 	struct Entry {
 		TimeId period = 0;
@@ -155,6 +185,7 @@ int BottomInfo::firstLineWidth() const {
 bool BottomInfo::isWide() const {
 	return (_data.flags & Data::Flag::Edited)
 		|| (_data.flags & Data::Flag::Deleted)
+		|| (_data.flags & Data::Flag::KeptTtlMedia)
 		|| _data.scheduleRepeatPeriod
 		|| !_data.author.isEmpty()
 		|| !_views.isEmpty()
@@ -532,22 +563,10 @@ void BottomInfo::layoutDateText() {
 		? Core::App().settings().deletedMark()
 		: QString();
 	if (!deletedMark.isEmpty()) {
-		auto length = 0;
-		const auto emoji = Ui::Emoji::Find(deletedMark, &length);
-		if (emoji && length == deletedMark.size()) {
-			marked.append(helper.image({
-				.image = Ui::Emoji::SinglePixmap(
-					emoji,
-					Ui::Emoji::GetSizeNormal()).toImage().scaledToHeight(
-						st::deletedIconEmojiSize * style::DevicePixelRatio(),
-						Qt::SmoothTransformation),
-				.margin = QMargins(0, st::deletedIconEmojiTop, 0, 0),
-				.textColor = false,
-			}));
-		} else {
-			marked.append(deletedMark);
-		}
-		marked.append(' ');
+		AppendEmojiMark(marked, helper, deletedMark);
+	}
+	if (_data.flags & Data::Flag::KeptTtlMedia) {
+		AppendEmojiMark(marked, helper, KeptTtlMediaMark());
 	}
 	if (const auto count = _data.stars) {
 		marked.append(
@@ -724,6 +743,9 @@ BottomInfo::Data BottomInfoDataFromMessage(not_null<Message*> message) {
 	}
 	if (item->history()->owner().isMessageDeleted(item)) {
 		result.flags |= Flag::Deleted;
+	}
+	if (item->showsKeptTtlMedia()) {
+		result.flags |= Flag::KeptTtlMedia;
 	}
 	if (IsAnchoredEphemeral(item)) {
 		result.flags |= Flag::Updated;

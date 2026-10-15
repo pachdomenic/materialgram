@@ -202,7 +202,8 @@ Gif::Gif(
 , _downloadSize(Ui::FormatSizeText(_data->size))
 , _videoTimestamp(::Media::View::ExtractVideoTimestamp(realParent))
 , _sensitiveSpoiler(realParent->isMediaSensitive())
-, _ttlCover(realParent->isTtlCoveredMedia())
+, _ttlCover(realParent->isTtlCoveredMedia()
+	&& !realParent->showsKeptTtlMedia())
 , _hasVideoCover(realParent->media() && realParent->media()->videoCover()) {
 	const auto media = _parent->data()->media();
 	if (_data->isVideoMessage() && media && media->ttlSeconds()) {
