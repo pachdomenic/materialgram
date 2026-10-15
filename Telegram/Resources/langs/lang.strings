@@ -1838,6 +1838,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 "lng_materialgram_info_registration" = "Registration date";
 "lng_materialgram_info_dc" = "DC";
+"lng_tukigram_settings" = "TukiGram";
 "lng_materialgram_settings_save_deleted" = "Keep deleted messages";
 "lng_materialgram_settings_save_deleted_own" = "Keep your own deleted messages";
 "lng_materialgram_settings_forward_protected" = "Forward from protected chats";

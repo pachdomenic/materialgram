@@ -1968,6 +1968,8 @@ PRIVATE
     settings/settings_type.h
     settings/sections/settings_shortcuts.cpp
     settings/sections/settings_shortcuts.h
+    settings/sections/settings_tukigram.cpp
+    settings/sections/settings_tukigram.h
     settings/sections/settings_websites.cpp
     settings/sections/settings_websites.h
     storage/details/storage_file_utilities.cpp
