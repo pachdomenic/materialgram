@@ -12,6 +12,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/unixtime.h"
 #include "core/application.h"
 #include "core/core_settings.h"
+#include "core/version.h"
 #include "data/data_session.h"
 #include "data/data_user.h"
 #include "history/history.h"
@@ -21,6 +22,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "main/main_session.h"
 #include "settings/sections/settings_main.h"
 #include "settings/settings_builder.h"
+#include "ui/basic_click_handlers.h"
 #include "ui/chat/chat_style.h"
 #include "ui/chat/chat_theme.h"
 #include "ui/effects/path_shift_gradient.h"
@@ -243,104 +245,90 @@ void DeletedMarkBox(not_null<Ui::GenericBox*> box) {
 	});
 }
 
-void BuildTukiGramSection(SectionBuilder &builder) {
+class TukiGram final : public Section<TukiGram> {
+public:
+	TukiGram(
+		QWidget *parent,
+		not_null<Window::SessionController*> controller);
+
+	[[nodiscard]] rpl::producer<QString> title() override;
+
+private:
+	void setupContent();
+
+};
+
+enum class CategoryId {
+	Deleted,
+	Messages,
+	Media,
+	Profile,
+};
+
+[[nodiscard]] const tr::phrase<> &CategoryTitle(CategoryId id);
+[[nodiscard]] SectionBuildMethod CategoryBuildMethod(CategoryId id);
+
+template <CategoryId kId>
+class Category final : public Section<Category<kId>> {
+public:
+	Category(
+		QWidget *parent,
+		not_null<Window::SessionController*> controller)
+	: Section<Category<kId>>(parent, controller) {
+		const auto content = Ui::CreateChild<Ui::VerticalLayout>(this);
+		this->build(content, CategoryBuildMethod(kId));
+		Ui::ResizeFitChild(this, content);
+	}
+
+	[[nodiscard]] rpl::producer<QString> title() override {
+		return CategoryTitle(kId)();
+	}
+
+};
+
+void AddToggle(
+		SectionBuilder &builder,
+		QString id,
+		rpl::producer<QString> title,
+		Fn<bool()> value,
+		Fn<void(bool)> apply,
+		QStringList keywords) {
+	const auto button = builder.addButton({
+		.id = std::move(id),
+		.title = std::move(title),
+		.st = &st::settingsButtonNoIcon,
+		.toggled = rpl::single(value()),
+		.keywords = std::move(keywords),
+	});
+	if (button) {
+		button->toggledValue(
+		) | rpl::filter([=](bool enabled) {
+			return (enabled != value());
+		}) | rpl::on_next([=](bool enabled) {
+			apply(enabled);
+			Core::App().saveSettingsDelayed();
+		}, button->lifetime());
+	}
+}
+
+void BuildDeletedCategory(SectionBuilder &builder) {
 	const auto settings = &Core::App().settings();
-
 	builder.addSkip();
 
-	const auto registration = builder.addButton({
-		.id = u"tukigram/registration"_q,
-		.title = tr::lng_materialgram_info_registration(),
-		.st = &st::settingsButtonNoIcon,
-		.toggled = rpl::single(settings->birthDateEnabled()),
-		.keywords = { u"tukigram"_q, u"registration"_q, u"date"_q },
-	});
-	if (registration) {
-		registration->toggledValue(
-		) | rpl::filter([=](bool enabled) {
-			return (enabled != settings->birthDateEnabled());
-		}) | rpl::on_next([=](bool enabled) {
-			settings->setBirthDateEnabled(enabled);
-			Core::App().saveSettingsDelayed();
-		}, registration->lifetime());
-	}
-
-	const auto datacenter = builder.addButton({
-		.id = u"tukigram/datacenter"_q,
-		.title = tr::lng_materialgram_info_dc(),
-		.st = &st::settingsButtonNoIcon,
-		.toggled = rpl::single(settings->datacenterEnabled()),
-		.keywords = { u"tukigram"_q, u"datacenter"_q, u"dc"_q },
-	});
-	if (datacenter) {
-		datacenter->toggledValue(
-		) | rpl::filter([=](bool enabled) {
-			return (enabled != settings->datacenterEnabled());
-		}) | rpl::on_next([=](bool enabled) {
-			settings->setDatacenterEnabled(enabled);
-			Core::App().saveSettingsDelayed();
-		}, datacenter->lifetime());
-	}
-
-	const auto gamee = builder.addButton({
-		.id = u"tukigram/gamee"_q,
-		.title = tr::lng_settings_profile_photo_privacy(),
-		.st = &st::settingsButtonNoIcon,
-		.toggled = rpl::single(settings->gameeEnabled()),
-		.keywords = { u"tukigram"_q, u"gamee"_q, u"profile"_q, u"photo"_q },
-	});
-	if (gamee) {
-		gamee->toggledValue(
-		) | rpl::filter([=](bool enabled) {
-			return (enabled != settings->gameeEnabled());
-		}) | rpl::on_next([=](bool enabled) {
-			settings->setGameeEnabled(enabled);
-			Core::App().saveSettingsDelayed();
-		}, gamee->lifetime());
-	}
-
-	builder.addSkip();
-	builder.addDivider();
-	builder.addSkip();
-	builder.addSubsectionTitle({
-		.id = u"tukigram/deleted"_q,
-		.title = tr::lng_tukigram_deleted_title(),
-		.keywords = { u"tukigram"_q, u"deleted"_q },
-	});
-
-	const auto saveDeleted = builder.addButton({
-		.id = u"tukigram/save_deleted"_q,
-		.title = tr::lng_materialgram_settings_save_deleted(),
-		.st = &st::settingsButtonNoIcon,
-		.toggled = rpl::single(settings->saveDeletedMessages()),
-		.keywords = { u"tukigram"_q, u"deleted"_q, u"messages"_q },
-	});
-	if (saveDeleted) {
-		saveDeleted->toggledValue(
-		) | rpl::filter([=](bool enabled) {
-			return (enabled != settings->saveDeletedMessages());
-		}) | rpl::on_next([=](bool enabled) {
-			settings->setSaveDeletedMessages(enabled);
-			Core::App().saveSettingsDelayed();
-		}, saveDeleted->lifetime());
-	}
-
-	const auto saveOwnDeleted = builder.addButton({
-		.id = u"tukigram/save_own_deleted"_q,
-		.title = tr::lng_materialgram_settings_save_deleted_own(),
-		.st = &st::settingsButtonNoIcon,
-		.toggled = rpl::single(settings->saveOwnDeletedMessages()),
-		.keywords = { u"tukigram"_q, u"deleted"_q, u"own"_q },
-	});
-	if (saveOwnDeleted) {
-		saveOwnDeleted->toggledValue(
-		) | rpl::filter([=](bool enabled) {
-			return (enabled != settings->saveOwnDeletedMessages());
-		}) | rpl::on_next([=](bool enabled) {
-			settings->setSaveOwnDeletedMessages(enabled);
-			Core::App().saveSettingsDelayed();
-		}, saveOwnDeleted->lifetime());
-	}
+	AddToggle(
+		builder,
+		u"tukigram/save_deleted"_q,
+		tr::lng_materialgram_settings_save_deleted(),
+		[=] { return settings->saveDeletedMessages(); },
+		[=](bool value) { settings->setSaveDeletedMessages(value); },
+		{ u"tukigram"_q, u"deleted"_q, u"messages"_q });
+	AddToggle(
+		builder,
+		u"tukigram/save_own_deleted"_q,
+		tr::lng_materialgram_settings_save_deleted_own(),
+		[=] { return settings->saveOwnDeletedMessages(); },
+		[=](bool value) { settings->setSaveOwnDeletedMessages(value); },
+		{ u"tukigram"_q, u"deleted"_q, u"own"_q });
 
 	const auto controller = builder.controller();
 	if (controller) {
@@ -364,147 +352,240 @@ void BuildTukiGramSection(SectionBuilder &builder) {
 		},
 		.keywords = { u"tukigram"_q, u"deleted"_q, u"mark"_q, u"emoji"_q },
 	});
-
-	const auto transparent = builder.addButton({
-		.id = u"tukigram/deleted_transparent"_q,
-		.title = tr::lng_tukigram_deleted_transparent(),
-		.st = &st::settingsButtonNoIcon,
-		.toggled = rpl::single(settings->deletedTransparent()),
-		.keywords = { u"tukigram"_q, u"deleted"_q, u"transparent"_q },
-	});
-	if (transparent) {
-		transparent->toggledValue(
-		) | rpl::filter([=](bool enabled) {
-			return (enabled != settings->deletedTransparent());
-		}) | rpl::on_next([=](bool enabled) {
-			settings->setDeletedTransparent(enabled);
-			Core::App().saveSettingsDelayed();
-		}, transparent->lifetime());
-	}
-
-	builder.addSkip();
-	builder.addDivider();
-	builder.addSkip();
-	builder.addSubsectionTitle({
-		.id = u"tukigram/privacy"_q,
-		.title = tr::lng_tukigram_privacy_title(),
-		.keywords = { u"tukigram"_q, u"privacy"_q },
-	});
-
-	const auto forwardProtected = builder.addButton({
-		.id = u"tukigram/forward_protected"_q,
-		.title = tr::lng_materialgram_settings_forward_protected(),
-		.st = &st::settingsButtonNoIcon,
-		.toggled = rpl::single(settings->forwardProtectedMessages()),
-		.keywords = {
-			u"tukigram"_q,
-			u"forward"_q,
-			u"protected"_q,
-			u"restricted"_q,
-		},
-	});
-	if (forwardProtected) {
-		forwardProtected->toggledValue(
-		) | rpl::filter([=](bool enabled) {
-			return (enabled != settings->forwardProtectedMessages());
-		}) | rpl::on_next([=](bool enabled) {
-			settings->setForwardProtectedMessages(enabled);
-			Core::App().saveSettingsDelayed();
-		}, forwardProtected->lifetime());
-	}
-
-	const auto keepTtl = builder.addButton({
-		.id = u"tukigram/keep_ttl"_q,
-		.title = tr::lng_materialgram_settings_keep_ttl(),
-		.st = &st::settingsButtonNoIcon,
-		.toggled = rpl::single(settings->keepSelfDestructingMedia()),
-		.keywords = {
-			u"tukigram"_q,
-			u"self-destructing"_q,
-			u"view once"_q,
-			u"timer"_q,
-		},
-	});
-	if (keepTtl) {
-		keepTtl->toggledValue(
-		) | rpl::filter([=](bool enabled) {
-			return (enabled != settings->keepSelfDestructingMedia());
-		}) | rpl::on_next([=](bool enabled) {
-			settings->setKeepSelfDestructingMedia(enabled);
-			Core::App().saveSettingsDelayed();
-		}, keepTtl->lifetime());
-	}
-
-	const auto ttlRead = builder.addButton({
-		.id = u"tukigram/ttl_read"_q,
-		.title = tr::lng_materialgram_settings_ttl_read(),
-		.st = &st::settingsButtonNoIcon,
-		.toggled = rpl::single(settings->markSelfDestructingRead()),
-		.keywords = {
-			u"tukigram"_q,
-			u"self-destructing"_q,
-			u"viewed"_q,
-			u"read"_q,
-		},
-	});
-	if (ttlRead) {
-		ttlRead->toggledValue(
-		) | rpl::filter([=](bool enabled) {
-			return (enabled != settings->markSelfDestructingRead());
-		}) | rpl::on_next([=](bool enabled) {
-			settings->setMarkSelfDestructingRead(enabled);
-			Core::App().saveSettingsDelayed();
-		}, ttlRead->lifetime());
-	}
-
-	const auto editHistory = builder.addButton({
-		.id = u"tukigram/edit_history"_q,
-		.title = tr::lng_materialgram_settings_edit_history(),
-		.st = &st::settingsButtonNoIcon,
-		.toggled = rpl::single(settings->saveEditHistory()),
-		.keywords = {
-			u"tukigram"_q,
-			u"edit"_q,
-			u"history"_q,
-			u"edited"_q,
-		},
-	});
-	if (editHistory) {
-		editHistory->toggledValue(
-		) | rpl::filter([=](bool enabled) {
-			return (enabled != settings->saveEditHistory());
-		}) | rpl::on_next([=](bool enabled) {
-			settings->setSaveEditHistory(enabled);
-			Core::App().saveSettingsDelayed();
-		}, editHistory->lifetime());
-	}
+	AddToggle(
+		builder,
+		u"tukigram/deleted_transparent"_q,
+		tr::lng_tukigram_deleted_transparent(),
+		[=] { return settings->deletedTransparent(); },
+		[=](bool value) { settings->setDeletedTransparent(value); },
+		{ u"tukigram"_q, u"deleted"_q, u"transparent"_q });
 
 	builder.addSkip();
 }
 
-class TukiGram : public Section<TukiGram> {
-public:
-	TukiGram(
-		QWidget *parent,
-		not_null<Window::SessionController*> controller);
+void BuildMessagesCategory(SectionBuilder &builder) {
+	const auto settings = &Core::App().settings();
+	builder.addSkip();
 
-	[[nodiscard]] rpl::producer<QString> title() override;
+	AddToggle(
+		builder,
+		u"tukigram/forward_protected"_q,
+		tr::lng_materialgram_settings_forward_protected(),
+		[=] { return settings->forwardProtectedMessages(); },
+		[=](bool value) { settings->setForwardProtectedMessages(value); },
+		{ u"tukigram"_q, u"forward"_q, u"protected"_q, u"restricted"_q });
+	AddToggle(
+		builder,
+		u"tukigram/edit_history"_q,
+		tr::lng_materialgram_settings_edit_history(),
+		[=] { return settings->saveEditHistory(); },
+		[=](bool value) { settings->setSaveEditHistory(value); },
+		{ u"tukigram"_q, u"edit"_q, u"history"_q, u"edited"_q });
 
-private:
-	void setupContent();
+	builder.addSkip();
+}
 
-};
+void BuildMediaCategory(SectionBuilder &builder) {
+	const auto settings = &Core::App().settings();
+	builder.addSkip();
+
+	AddToggle(
+		builder,
+		u"tukigram/keep_ttl"_q,
+		tr::lng_materialgram_settings_keep_ttl(),
+		[=] { return settings->keepSelfDestructingMedia(); },
+		[=](bool value) { settings->setKeepSelfDestructingMedia(value); },
+		{ u"tukigram"_q, u"self-destructing"_q, u"view once"_q, u"timer"_q });
+	AddToggle(
+		builder,
+		u"tukigram/ttl_read"_q,
+		tr::lng_materialgram_settings_ttl_read(),
+		[=] { return settings->markSelfDestructingRead(); },
+		[=](bool value) { settings->setMarkSelfDestructingRead(value); },
+		{ u"tukigram"_q, u"self-destructing"_q, u"viewed"_q, u"read"_q });
+
+	builder.addSkip();
+}
+
+void BuildProfileCategory(SectionBuilder &builder) {
+	const auto settings = &Core::App().settings();
+	builder.addSkip();
+
+	AddToggle(
+		builder,
+		u"tukigram/registration"_q,
+		tr::lng_materialgram_info_registration(),
+		[=] { return settings->birthDateEnabled(); },
+		[=](bool value) { settings->setBirthDateEnabled(value); },
+		{ u"tukigram"_q, u"registration"_q, u"date"_q });
+	AddToggle(
+		builder,
+		u"tukigram/datacenter"_q,
+		tr::lng_materialgram_info_dc(),
+		[=] { return settings->datacenterEnabled(); },
+		[=](bool value) { settings->setDatacenterEnabled(value); },
+		{ u"tukigram"_q, u"datacenter"_q, u"dc"_q });
+	AddToggle(
+		builder,
+		u"tukigram/gamee"_q,
+		tr::lng_settings_profile_photo_privacy(),
+		[=] { return settings->gameeEnabled(); },
+		[=](bool value) { settings->setGameeEnabled(value); },
+		{ u"tukigram"_q, u"gamee"_q, u"profile"_q, u"photo"_q });
+
+	builder.addSkip();
+}
+
+[[nodiscard]] object_ptr<Ui::RpWidget> MakeHeader(QWidget *parent) {
+	auto result = object_ptr<Ui::VerticalLayout>(parent);
+	const auto raw = result.data();
+
+	const auto size = st::tukigramLogoSize;
+	const auto logo = raw->add(
+		object_ptr<Ui::RpWidget>(raw),
+		st::tukigramLogoMargin);
+	logo->resize(size, size);
+	logo->paintRequest() | rpl::on_next([=] {
+		auto p = QPainter(logo);
+		auto hq = PainterHighQualityEnabler(p);
+		const auto circle = QRect((logo->width() - size) / 2, 0, size, size);
+		p.setPen(Qt::NoPen);
+		p.setBrush(st::activeButtonBg);
+		p.drawEllipse(circle);
+		st::tukigramLogoIcon.paintInCenter(p, circle);
+	}, logo->lifetime());
+
+	const auto padding = st::boxRowPadding;
+	raw->add(
+		object_ptr<Ui::FlatLabel>(
+			raw,
+			tr::lng_tukigram_version(
+				lt_version,
+				rpl::single(QString::fromLatin1(AppVersionStr))),
+			st::settingsAgeVerifyTitle),
+		QMargins(padding.left(), 0, padding.right(), 0),
+		style::al_top);
+	raw->add(
+		object_ptr<Ui::FlatLabel>(
+			raw,
+			tr::lng_tukigram_about(),
+			st::settingsAgeVerifyText),
+		QMargins(
+			padding.left(),
+			st::settingsAgeVerifyMargin.top(),
+			padding.right(),
+			st::tukigramLogoMargin.top()),
+		style::al_top);
+	return result;
+}
+
+void BuildTukiGramSection(SectionBuilder &builder) {
+	builder.add([](const WidgetContext &ctx) {
+		return SectionBuilder::WidgetToAdd{
+			.widget = MakeHeader(ctx.container),
+		};
+	});
+
+	builder.addDivider();
+	builder.addSkip();
+	builder.addSubsectionTitle(tr::lng_tukigram_categories());
+	builder.addSectionButton({
+		.title = tr::lng_tukigram_deleted_title(),
+		.targetSection = Category<CategoryId::Deleted>::Id(),
+		.icon = { &st::menuIconDelete },
+		.keywords = { u"tukigram"_q, u"deleted"_q },
+	});
+	builder.addSectionButton({
+		.title = tr::lng_tukigram_messages_title(),
+		.targetSection = Category<CategoryId::Messages>::Id(),
+		.icon = { &st::menuIconChatBubble },
+		.keywords = { u"tukigram"_q, u"forward"_q, u"edit"_q },
+	});
+	builder.addSectionButton({
+		.title = tr::lng_tukigram_media_title(),
+		.targetSection = Category<CategoryId::Media>::Id(),
+		.icon = { &st::menuIconTimer },
+		.keywords = { u"tukigram"_q, u"self-destructing"_q, u"timer"_q },
+	});
+	builder.addSectionButton({
+		.title = tr::lng_tukigram_profile_title(),
+		.targetSection = Category<CategoryId::Profile>::Id(),
+		.icon = { &st::menuIconProfile },
+		.keywords = { u"tukigram"_q, u"profile"_q, u"dc"_q },
+	});
+
+	builder.addSkip();
+	builder.addDivider();
+	builder.addSkip();
+	builder.addSubsectionTitle(tr::lng_tukigram_links());
+	builder.addButton({
+		.id = u"tukigram/github"_q,
+		.title = rpl::single(u"GitHub"_q),
+		.icon = { &st::menuIconGitHub },
+		.label = rpl::single(u"pachdomenic/materialgram"_q),
+		.onClick = [] {
+			UrlClickHandler::Open(
+				u"https://github.com/pachdomenic/materialgram"_q);
+		},
+		.keywords = { u"tukigram"_q, u"github"_q },
+	});
+	builder.addSkip();
+}
 
 const auto kMeta = BuildHelper({
 	.id = TukiGram::Id(),
 	.parentId = MainId(),
 	.title = &tr::lng_tukigram_settings,
 	.icon = &st::menuIconTukiGram,
-}, [](SectionBuilder &builder) {
-	BuildTukiGramSection(builder);
-});
+}, BuildTukiGramSection);
 
-const SectionBuildMethod kTukiGramSection = kMeta.build;
+const auto kDeletedMeta = BuildHelper({
+	.id = Category<CategoryId::Deleted>::Id(),
+	.parentId = TukiGram::Id(),
+	.title = &tr::lng_tukigram_deleted_title,
+	.icon = &st::menuIconDelete,
+}, BuildDeletedCategory);
+
+const auto kMessagesMeta = BuildHelper({
+	.id = Category<CategoryId::Messages>::Id(),
+	.parentId = TukiGram::Id(),
+	.title = &tr::lng_tukigram_messages_title,
+	.icon = &st::menuIconChatBubble,
+}, BuildMessagesCategory);
+
+const auto kMediaMeta = BuildHelper({
+	.id = Category<CategoryId::Media>::Id(),
+	.parentId = TukiGram::Id(),
+	.title = &tr::lng_tukigram_media_title,
+	.icon = &st::menuIconTimer,
+}, BuildMediaCategory);
+
+const auto kProfileMeta = BuildHelper({
+	.id = Category<CategoryId::Profile>::Id(),
+	.parentId = TukiGram::Id(),
+	.title = &tr::lng_tukigram_profile_title,
+	.icon = &st::menuIconProfile,
+}, BuildProfileCategory);
+
+const tr::phrase<> &CategoryTitle(CategoryId id) {
+	switch (id) {
+	case CategoryId::Deleted: return tr::lng_tukigram_deleted_title;
+	case CategoryId::Messages: return tr::lng_tukigram_messages_title;
+	case CategoryId::Media: return tr::lng_tukigram_media_title;
+	case CategoryId::Profile: return tr::lng_tukigram_profile_title;
+	}
+	Unexpected("Category in CategoryTitle.");
+}
+
+SectionBuildMethod CategoryBuildMethod(CategoryId id) {
+	switch (id) {
+	case CategoryId::Deleted: return kDeletedMeta.build;
+	case CategoryId::Messages: return kMessagesMeta.build;
+	case CategoryId::Media: return kMediaMeta.build;
+	case CategoryId::Profile: return kProfileMeta.build;
+	}
+	Unexpected("Category in CategoryBuildMethod.");
+}
 
 TukiGram::TukiGram(
 	QWidget *parent,
@@ -520,7 +601,7 @@ rpl::producer<QString> TukiGram::title() {
 void TukiGram::setupContent() {
 	const auto content = Ui::CreateChild<Ui::VerticalLayout>(this);
 
-	build(content, kTukiGramSection);
+	build(content, kMeta.build);
 
 	Ui::ResizeFitChild(this, content);
 }

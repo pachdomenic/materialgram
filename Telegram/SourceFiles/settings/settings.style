@@ -762,3 +762,7 @@ detailedSettingsButtonStyle: DetailedSettingsButtonStyle {
 }
 
 settingsToastStarIcon: icon {{ "toast/star", toastFg }};
+
+tukigramLogoSize: 96px;
+tukigramLogoIcon: icon {{ "settings/tukigram_logo-56x56", activeButtonFg }};
+tukigramLogoMargin: margins(0px, 24px, 0px, 16px);

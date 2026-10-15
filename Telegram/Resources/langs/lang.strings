@@ -1840,7 +1840,13 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_materialgram_info_dc" = "DC";
 "lng_tukigram_settings" = "TukiGram";
 "lng_tukigram_deleted_title" = "Deleted messages";
-"lng_tukigram_privacy_title" = "Privacy";
+"lng_tukigram_version" = "TukiGram v{version}";
+"lng_tukigram_about" = "materialgram fork with extra privacy and message features.";
+"lng_tukigram_categories" = "Categories";
+"lng_tukigram_links" = "Links";
+"lng_tukigram_messages_title" = "Messages";
+"lng_tukigram_media_title" = "Self-destructing media";
+"lng_tukigram_profile_title" = "Profile info";
 "lng_tukigram_deleted_mark" = "Deleted mark";
 "lng_tukigram_deleted_mark_none" = "None";
 "lng_tukigram_deleted_mark_placeholder" = "Emoji or text";
