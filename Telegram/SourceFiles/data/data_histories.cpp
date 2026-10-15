@@ -753,6 +753,45 @@ void Histories::afterGhostSend(
 	}
 }
 
+void Histories::keepGhostScheduled(
+		not_null<HistoryItem*> local,
+		MsgId scheduledId) {
+	if (!_ghostScheduledLifetime) {
+		_owner->itemRemoved(
+		) | rpl::on_next([=](not_null<const HistoryItem*> item) {
+			ghostItemRemoved(item);
+		}, _ghostScheduledLifetime);
+	}
+	const auto peerId = local->history()->peer->id;
+	_ghostScheduled[FullMsgId(peerId, scheduledId)] = local->fullId();
+}
+
+void Histories::ghostItemRemoved(not_null<const HistoryItem*> item) {
+	if (_ghostScheduled.empty()) {
+		return;
+	}
+	const auto id = item->fullId();
+	const auto i = _ghostScheduled.find(id);
+	if (i == end(_ghostScheduled)) {
+		const auto j = ranges::find(_ghostScheduled, id, [](const auto &p) {
+			return p.second;
+		});
+		if (j != end(_ghostScheduled)) {
+			_ghostScheduled.erase(j);
+		}
+		return;
+	}
+	const auto localId = i->second;
+	_ghostScheduled.erase(i);
+	crl::on_main(&session(), [=] {
+		if (const auto local = _owner->message(localId)) {
+			const auto history = local->history();
+			local->destroy();
+			history->requestChatListMessage();
+		}
+	});
+}
+
 void Histories::sendReadRequests() {
 	DEBUG_LOG(("Reading: send requests with count %1.").arg(_states.size()));
 	if (_states.empty()) {

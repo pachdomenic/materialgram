@@ -2326,6 +2326,7 @@ Api::SendAction ChatWidget::prepareSendAction(
 		_peer->id,
 		_repliesRootId,
 		_monoforumPeerId);
+	Api::MarkGhostScheduled(result);
 	return result;
 }
 

@@ -38,6 +38,7 @@ struct SendOptions {
 	bool hideViaBot = false;
 	bool mediaSpoiler = false;
 	bool welcomeTemplate = false;
+	bool ghostScheduled = false;
 	crl::time ttlSeconds = 0;
 	SuggestOptions suggest;
 
@@ -46,6 +47,7 @@ struct SendOptions {
 		const SendOptions &) = default;
 };
 [[nodiscard]] SendOptions DefaultSendWhenOnlineOptions();
+[[nodiscard]] TimeId RequestScheduleDate(const SendOptions &options);
 
 enum class SendType {
 	Normal,
@@ -71,6 +73,8 @@ struct SendAction {
 		const SendAction &,
 		const SendAction &) = default;
 };
+
+void MarkGhostScheduled(SendAction &action);
 
 struct MessageToSend {
 	explicit MessageToSend(SendAction action) : action(action) {

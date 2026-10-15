@@ -68,6 +68,7 @@ public:
 
 	void allowGhostRead(const void *thread);
 	[[nodiscard]] bool takeGhostReadAllowed(const void *thread);
+	void keepGhostScheduled(not_null<HistoryItem*> local, MsgId scheduledId);
 
 	struct ShownRead {
 		not_null<HistoryItem*> shown;
@@ -214,6 +215,7 @@ private:
 	void sendReadRequests();
 	void sendReadRequest(not_null<History*> history, State &state);
 	void afterGhostSend(not_null<History*> history, MsgId topicRootId);
+	void ghostItemRemoved(not_null<const HistoryItem*> item);
 	[[nodiscard]] State *lookup(not_null<History*> history);
 	void checkEmptyState(not_null<History*> history);
 	void checkPostponed(not_null<History*> history, int id);
@@ -243,6 +245,8 @@ private:
 	int _requestAutoincrement = 0;
 	base::Timer _readRequestsTimer;
 	base::flat_map<const void*, crl::time> _ghostReadAllowed;
+	base::flat_map<FullMsgId, FullMsgId> _ghostScheduled;
+	rpl::lifetime _ghostScheduledLifetime;
 
 	base::flat_set<not_null<Data::Folder*>> _dialogFolderRequests;
 	base::flat_map<

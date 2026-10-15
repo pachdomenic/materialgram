@@ -43,6 +43,7 @@ constexpr auto kGhostModeOptions = std::array{
 	case GhostOption::HideTyping: return "ghost-hide-typing";
 	case GhostOption::OfflineAfterSend: return "ghost-offline-after-send";
 	case GhostOption::ReadAfterSend: return "ghost-read-after-send";
+	case GhostOption::ScheduledSend: return "ghost-scheduled-send";
 	}
 	Unexpected("Option in GhostOptionKey.");
 }

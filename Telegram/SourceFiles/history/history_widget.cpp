@@ -5788,6 +5788,7 @@ Api::SendAction HistoryWidget::prepareSendAction(
 			_history->peer).get()
 		: nullptr;
 	result.clearDraft = !isComposeBoxOpen();
+	Api::MarkGhostScheduled(result);
 	return result;
 }
 

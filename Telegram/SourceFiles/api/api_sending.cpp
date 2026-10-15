@@ -123,8 +123,11 @@ void SendSimpleMedia(SendAction action, MTPInputMedia inputMedia) {
 	const auto starsPaid = std::min(
 		peer->starsPerMessageChecked(),
 		action.options.starsApproved);
+	const auto scheduled = RequestScheduleDate(action.options);
 	if (action.options.scheduled) {
 		flags |= MessageFlag::IsOrWasScheduled;
+	}
+	if (scheduled) {
 		sendFlags |= MTPmessages_SendMedia::Flag::f_schedule_date;
 		if (action.options.scheduleRepeatPeriod) {
 			sendFlags |= MTPmessages_SendMedia::Flag::f_schedule_repeat_period;
@@ -163,7 +166,7 @@ void SendSimpleMedia(SendAction action, MTPInputMedia inputMedia) {
 			MTP_long(randomId),
 			MTPReplyMarkup(),
 			MTPvector<MTPMessageEntity>(),
-			MTP_int(action.options.scheduled),
+			MTP_int(scheduled),
 			MTP_int(action.options.scheduleRepeatPeriod),
 			(sendAs ? sendAs->input() : MTP_inputPeerEmpty()),
 			Data::ShortcutIdToMTP(session, action.options.shortcutId),
@@ -255,8 +258,11 @@ void SendExistingMedia(
 	const auto starsPaid = std::min(
 		peer->starsPerMessageChecked(),
 		action.options.starsApproved);
+	const auto scheduled = RequestScheduleDate(action.options);
 	if (action.options.scheduled) {
 		flags |= MessageFlag::IsOrWasScheduled;
+	}
+	if (scheduled) {
 		sendFlags |= MTPmessages_SendMedia::Flag::f_schedule_date;
 		if (action.options.scheduleRepeatPeriod) {
 			sendFlags |= MTPmessages_SendMedia::Flag::f_schedule_repeat_period;
@@ -332,7 +338,7 @@ void SendExistingMedia(
 				MTP_long(randomId),
 				MTPReplyMarkup(),
 				sentEntities,
-				MTP_int(action.options.scheduled),
+				MTP_int(scheduled),
 				MTP_int(action.options.scheduleRepeatPeriod),
 				(sendAs ? sendAs->input() : MTP_inputPeerEmpty()),
 				Data::ShortcutIdToMTP(session, action.options.shortcutId),
@@ -582,7 +588,8 @@ void SendMusicSelectionBatch(
 			if (!entities.v.isEmpty()) {
 				sendFlags |= MTPmessages_SendMedia::Flag::f_entities;
 			}
-			if (action.options.scheduled) {
+			const auto scheduled = RequestScheduleDate(action.options);
+			if (scheduled) {
 				sendFlags |= MTPmessages_SendMedia::Flag::f_schedule_date;
 				if (action.options.scheduleRepeatPeriod) {
 					sendFlags |= MTPmessages_SendMedia::Flag::f_schedule_repeat_period;
@@ -627,7 +634,7 @@ void SendMusicSelectionBatch(
 					MTP_long(item.randomId),
 					MTPReplyMarkup(),
 					entities,
-					MTP_int(action.options.scheduled),
+					MTP_int(scheduled),
 					MTP_int(action.options.scheduleRepeatPeriod),
 					(sendAs ? sendAs->input() : MTP_inputPeerEmpty()),
 					Data::ShortcutIdToMTP(session, action.options.shortcutId),
@@ -643,13 +650,14 @@ void SendMusicSelectionBatch(
 			return;
 		}
 
+		const auto scheduled = RequestScheduleDate(action.options);
 		using Flag = MTPmessages_SendMultiMedia::Flag;
 		const auto sendFlags = Flag(0)
 			| (action.replyTo ? Flag::f_reply_to : Flag(0))
 			| (ShouldSendSilent(peer, action.options)
 				? Flag::f_silent
 				: Flag(0))
-			| (action.options.scheduled
+			| (scheduled
 				? Flag::f_schedule_date
 				: Flag(0))
 			| (sendAs ? Flag::f_send_as : Flag(0))
@@ -681,7 +689,7 @@ void SendMusicSelectionBatch(
 				peer->input(),
 				Data::Histories::ReplyToPlaceholder(),
 				MTP_vector<MTPInputSingleMedia>(std::move(media)),
-				MTP_int(action.options.scheduled),
+				MTP_int(scheduled),
 				(sendAs ? sendAs->input() : MTP_inputPeerEmpty()),
 				Data::ShortcutIdToMTP(session, action.options.shortcutId),
 				MTP_long(action.options.effectId),
@@ -856,8 +864,11 @@ bool SendDice(MessageToSend &message) {
 	if (sendAs) {
 		sendFlags |= MTPmessages_SendMedia::Flag::f_send_as;
 	}
+	const auto scheduled = RequestScheduleDate(action.options);
 	if (action.options.scheduled) {
 		flags |= MessageFlag::IsOrWasScheduled;
+	}
+	if (scheduled) {
 		sendFlags |= MTPmessages_SendMedia::Flag::f_schedule_date;
 		if (action.options.scheduleRepeatPeriod) {
 			sendFlags |= MTPmessages_SendMedia::Flag::f_schedule_repeat_period;
@@ -932,7 +943,7 @@ bool SendDice(MessageToSend &message) {
 			MTP_long(randomId),
 			MTPReplyMarkup(),
 			MTP_vector<MTPMessageEntity>(),
-			MTP_int(action.options.scheduled),
+			MTP_int(scheduled),
 			MTP_int(action.options.scheduleRepeatPeriod),
 			(sendAs ? sendAs->input() : MTP_inputPeerEmpty()),
 			Data::ShortcutIdToMTP(session, action.options.shortcutId),

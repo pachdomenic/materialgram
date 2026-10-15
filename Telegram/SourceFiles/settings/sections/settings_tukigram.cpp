@@ -33,6 +33,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/layers/generic_box.h"
 #include "ui/painter.h"
 #include "ui/widgets/buttons.h"
+#include "ui/widgets/checkbox.h"
 #include "ui/widgets/continuous_sliders.h"
 #include "ui/widgets/fields/input_field.h"
 #include "ui/widgets/labels.h"
@@ -40,6 +41,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "window/section_widget.h"
 #include "window/window_session_controller.h"
 #include "styles/style_chat.h"
+#include "styles/style_edit_peer_members.h"
+#include "styles/style_info.h"
 #include "styles/style_layers.h"
 #include "styles/style_menu_icons.h"
 #include "styles/style_settings.h"
@@ -51,6 +54,13 @@ using namespace Builder;
 
 constexpr auto kFakeUserId = UserId(0xFFFFFFF001ULL);
 constexpr auto kMaxDeletedMarkLength = 16;
+constexpr auto kGhostModeOptions = std::array{
+	Core::GhostOption::HideReads,
+	Core::GhostOption::HideStoryViews,
+	Core::GhostOption::HideOnline,
+	Core::GhostOption::HideTyping,
+	Core::GhostOption::OfflineAfterSend,
+};
 
 class PreviewDelegate final : public HistoryView::DefaultElementDelegate {
 public:
@@ -509,12 +519,10 @@ private:
 };
 
 enum class CategoryId {
-	Deleted,
+	Illegal,
 	Messages,
-	Media,
 	Profile,
 	Appearance,
-	Ghost,
 };
 
 [[nodiscard]] const tr::phrase<> &CategoryTitle(CategoryId id);
@@ -678,9 +686,8 @@ void ShowRestartBox(not_null<Window::SessionController*> controller) {
 	}));
 }
 
-void BuildDeletedCategory(SectionBuilder &builder) {
+void AddDeletedOptions(SectionBuilder &builder) {
 	const auto settings = &Core::App().settings();
-	builder.addSkip();
 
 	AddToggle(
 		builder,
@@ -726,8 +733,6 @@ void BuildDeletedCategory(SectionBuilder &builder) {
 		[=] { return settings->deletedTransparent(); },
 		[=](bool value) { settings->setDeletedTransparent(value); },
 		{ u"tukigram"_q, u"deleted"_q, u"transparent"_q });
-
-	builder.addSkip();
 }
 
 void BuildMessagesCategory(SectionBuilder &builder) {
@@ -752,9 +757,8 @@ void BuildMessagesCategory(SectionBuilder &builder) {
 	builder.addSkip();
 }
 
-void BuildMediaCategory(SectionBuilder &builder) {
+void AddMediaOptions(SectionBuilder &builder) {
 	const auto settings = &Core::App().settings();
-	builder.addSkip();
 
 	AddToggle(
 		builder,
@@ -770,8 +774,6 @@ void BuildMediaCategory(SectionBuilder &builder) {
 		[=] { return settings->markSelfDestructingRead(); },
 		[=](bool value) { settings->setMarkSelfDestructingRead(value); },
 		{ u"tukigram"_q, u"self-destructing"_q, u"viewed"_q, u"read"_q });
-
-	builder.addSkip();
 }
 
 void BuildProfileCategory(SectionBuilder &builder) {
@@ -849,55 +851,203 @@ void AddGhostOption(
 		std::move(keywords));
 }
 
-void BuildGhostCategory(SectionBuilder &builder) {
-	using Option = Core::GhostOption;
+[[nodiscard]] object_ptr<Ui::SettingsButton> MakeGhostModeButton(
+		not_null<Ui::VerticalLayout*> container,
+		std::shared_ptr<rpl::variable<bool>> expanded) {
 	const auto settings = &Core::App().settings();
-	builder.addSkip();
+	const auto &st = st::settingsButtonNoIcon;
+	auto result = object_ptr<Ui::SettingsButton>(container, nullptr, st);
+	const auto button = result.data();
+	const auto toggleButton = Ui::CreateChild<Ui::SettingsButton>(
+		button,
+		nullptr,
+		st);
 
-	AddGhostToggle(
-		builder,
-		u"tukigram/ghost"_q,
-		tr::lng_tukigram_ghost_enable(),
-		[=] { return settings->ghostMode(); },
-		[=](bool value) { settings->setGhostMode(value); },
-		{ u"tukigram"_q, u"ghost"_q, u"stealth"_q, u"invisible"_q });
+	struct State final {
+		State(const style::Toggle &st, Fn<void()> callback)
+		: checkView(st, false, std::move(callback)) {
+		}
+		Ui::ToggleView checkView;
+		Ui::Animations::Simple animation;
+	};
+	const auto state = button->lifetime().make_state<State>(
+		st.toggle,
+		[=] { toggleButton->update(); });
+	const auto checkView = &state->checkView;
+	const auto checkedCount = [=] {
+		return rpl::single(
+			rpl::empty
+		) | rpl::then(
+			settings->ghostModeChanges()
+		) | rpl::map([=] {
+			return int(ranges::count_if(kGhostModeOptions, [&](
+					Core::GhostOption option) {
+				return settings->ghostOption(option);
+			}));
+		});
+	};
+
+	const auto separator = Ui::CreateChild<Ui::RpWidget>(button);
+	separator->paintRequest(
+	) | rpl::on_next([=, bg = st.textBgOver] {
+		auto p = QPainter(separator);
+		p.fillRect(separator->rect(), bg);
+	}, separator->lifetime());
+	const auto separatorHeight = 2 * st.toggle.border + st.toggle.diameter;
+	button->sizeValue(
+	) | rpl::on_next([=](QSize size) {
+		const auto w = st::rightsButtonToggleWidth;
+		toggleButton->setGeometry(size.width() - w, 0, w, size.height());
+		separator->setGeometry(
+			toggleButton->x() - st::lineWidth,
+			(size.height() - separatorHeight) / 2,
+			st::lineWidth,
+			separatorHeight);
+	}, toggleButton->lifetime());
+
+	const auto checkWidget = Ui::CreateChild<Ui::RpWidget>(toggleButton);
+	checkWidget->resize(checkView->getSize());
+	checkWidget->paintRequest(
+	) | rpl::on_next([=] {
+		auto p = QPainter(checkWidget);
+		checkView->paint(p, 0, 0, checkWidget->width());
+	}, checkWidget->lifetime());
+	toggleButton->sizeValue(
+	) | rpl::on_next([=](QSize size) {
+		checkWidget->moveToRight(
+			st.toggleSkip,
+			(size.height() - checkWidget->height()) / 2);
+	}, toggleButton->lifetime());
+	checkedCount(
+	) | rpl::on_next([=](int count) {
+		checkView->setChecked(count > 0, anim::type::normal);
+	}, toggleButton->lifetime());
+	checkView->finishAnimating();
+
+	const auto total = int(kGhostModeOptions.size());
+	const auto label = Ui::CreateChild<Ui::FlatLabel>(
+		button,
+		rpl::combine(
+			tr::lng_tukigram_ghost_title(),
+			checkedCount()
+		) | rpl::map([=](const QString &title, int checked) {
+			return TextWithEntities::Simple(title).append(tr::bold("  "
+				+ QString::number(checked)
+				+ '/'
+				+ QString::number(total)));
+		}));
+	label->setAttribute(Qt::WA_TransparentForMouseEvents);
+
+	const auto arrow = Ui::CreateChild<Ui::RpWidget>(button);
+	const auto &icon = st::permissionsExpandIcon;
+	arrow->resize(icon.size());
+	arrow->setAttribute(Qt::WA_TransparentForMouseEvents);
+	arrow->paintRequest(
+	) | rpl::on_next([=, &icon] {
+		auto p = QPainter(arrow);
+		const auto center = QPointF(icon.width() / 2., icon.height() / 2.);
+		const auto progress = state->animation.value(
+			expanded->current() ? 1. : 0.);
+		auto hq = std::optional<PainterHighQualityEnabler>();
+		if (progress > 0.) {
+			hq.emplace(p);
+			p.translate(center);
+			p.rotate(progress * 180.);
+			p.translate(-center);
+		}
+		icon.paint(p, 0, 0, arrow->width());
+	}, arrow->lifetime());
+
+	rpl::combine(
+		button->sizeValue(),
+		checkedCount()
+	) | rpl::on_next([=, &st](QSize size, int) {
+		const auto labelLeft = st.padding.left();
+		const auto labelRight = size.width() - st::rightsButtonToggleWidth;
+		const auto arrowSkip = st::rightsButtonArrowSkip;
+		label->resizeToWidth(
+			labelRight - labelLeft - arrow->width() - arrowSkip);
+		label->moveToLeft(labelLeft, (size.height() - label->height()) / 2);
+		arrow->moveToLeft(
+			std::min(
+				labelLeft + label->textMaxWidth() + arrowSkip,
+				labelRight - arrow->width()),
+			(size.height() - arrow->height()) / 2);
+	}, button->lifetime());
+
+	expanded->changes(
+	) | rpl::on_next([=](bool toggled) {
+		state->animation.start(
+			[=] { arrow->update(); },
+			toggled ? 0. : 1.,
+			toggled ? 1. : 0.,
+			st::slideWrapDuration);
+	}, button->lifetime());
+
+	button->clicks(
+	) | rpl::on_next([=] {
+		*expanded = !expanded->current();
+	}, button->lifetime());
+	toggleButton->clicks(
+	) | rpl::on_next([=] {
+		settings->setGhostMode(!checkView->checked());
+		Core::App().saveSettingsDelayed();
+	}, toggleButton->lifetime());
+
+	return result;
+}
+
+void AddGhostOptions(SectionBuilder &builder) {
+	using Option = Core::GhostOption;
+	const auto expanded = std::make_shared<rpl::variable<bool>>(false);
+
+	builder.addControl({
+		.factory = [=](not_null<Ui::VerticalLayout*> container) {
+			return MakeGhostModeButton(container, expanded);
+		},
+		.id = u"tukigram/ghost"_q,
+		.title = tr::lng_tukigram_ghost_title(),
+		.keywords = {
+			u"tukigram"_q,
+			u"ghost"_q,
+			u"stealth"_q,
+			u"invisible"_q,
+		},
+	});
+	builder.scope([&] {
+		AddGhostOption(
+			builder,
+			u"tukigram/ghost_reads"_q,
+			tr::lng_tukigram_ghost_reads(),
+			Option::HideReads,
+			{ u"ghost"_q, u"read"_q, u"receipts"_q });
+		AddGhostOption(
+			builder,
+			u"tukigram/ghost_stories"_q,
+			tr::lng_tukigram_ghost_story_views(),
+			Option::HideStoryViews,
+			{ u"ghost"_q, u"stories"_q, u"views"_q });
+		AddGhostOption(
+			builder,
+			u"tukigram/ghost_online"_q,
+			tr::lng_tukigram_ghost_online(),
+			Option::HideOnline,
+			{ u"ghost"_q, u"online"_q, u"last seen"_q });
+		AddGhostOption(
+			builder,
+			u"tukigram/ghost_typing"_q,
+			tr::lng_tukigram_ghost_typing(),
+			Option::HideTyping,
+			{ u"ghost"_q, u"typing"_q, u"upload"_q });
+		AddGhostOption(
+			builder,
+			u"tukigram/ghost_offline_after_send"_q,
+			tr::lng_tukigram_ghost_offline_after_send(),
+			Option::OfflineAfterSend,
+			{ u"ghost"_q, u"offline"_q, u"send"_q });
+	}, expanded->value());
 	builder.addSkip();
 	builder.addDividerText(tr::lng_tukigram_ghost_about());
-	builder.addSkip();
-
-	builder.addSubsectionTitle(tr::lng_tukigram_ghost_options());
-	AddGhostOption(
-		builder,
-		u"tukigram/ghost_reads"_q,
-		tr::lng_tukigram_ghost_reads(),
-		Option::HideReads,
-		{ u"ghost"_q, u"read"_q, u"receipts"_q });
-	AddGhostOption(
-		builder,
-		u"tukigram/ghost_stories"_q,
-		tr::lng_tukigram_ghost_story_views(),
-		Option::HideStoryViews,
-		{ u"ghost"_q, u"stories"_q, u"views"_q });
-	AddGhostOption(
-		builder,
-		u"tukigram/ghost_online"_q,
-		tr::lng_tukigram_ghost_online(),
-		Option::HideOnline,
-		{ u"ghost"_q, u"online"_q, u"last seen"_q });
-	AddGhostOption(
-		builder,
-		u"tukigram/ghost_typing"_q,
-		tr::lng_tukigram_ghost_typing(),
-		Option::HideTyping,
-		{ u"ghost"_q, u"typing"_q, u"upload"_q });
-	AddGhostOption(
-		builder,
-		u"tukigram/ghost_offline_after_send"_q,
-		tr::lng_tukigram_ghost_offline_after_send(),
-		Option::OfflineAfterSend,
-		{ u"ghost"_q, u"offline"_q, u"send"_q });
-	builder.addSkip();
-	builder.addDivider();
 	builder.addSkip();
 
 	builder.addSubsectionTitle(tr::lng_tukigram_ghost_exceptions());
@@ -909,6 +1059,32 @@ void BuildGhostCategory(SectionBuilder &builder) {
 		{ u"ghost"_q, u"read"_q, u"send"_q });
 	builder.addSkip();
 	builder.addDividerText(tr::lng_tukigram_ghost_exceptions_about());
+	builder.addSkip();
+
+	builder.addSubsectionTitle(tr::lng_tukigram_ghost_sending());
+	AddGhostOption(
+		builder,
+		u"tukigram/ghost_scheduled_send"_q,
+		tr::lng_tukigram_ghost_scheduled_send(),
+		Option::ScheduledSend,
+		{ u"ghost"_q, u"scheduled"_q, u"send"_q, u"online"_q });
+	builder.addSkip();
+	builder.addDividerText(tr::lng_tukigram_ghost_scheduled_send_about());
+	builder.addSkip();
+}
+
+void BuildIllegalCategory(SectionBuilder &builder) {
+	builder.addSkip();
+	builder.addSubsectionTitle(tr::lng_tukigram_media_title());
+	AddMediaOptions(builder);
+	builder.addSkip();
+	builder.addDivider();
+	builder.addSkip();
+
+	AddGhostOptions(builder);
+
+	builder.addSubsectionTitle(tr::lng_tukigram_deleted_title());
+	AddDeletedOptions(builder);
 	builder.addSkip();
 }
 
@@ -1135,28 +1311,23 @@ void BuildTukiGramSection(SectionBuilder &builder) {
 	builder.addSkip();
 	builder.addSubsectionTitle(tr::lng_tukigram_categories());
 	builder.addSectionButton({
-		.title = tr::lng_tukigram_ghost_title(),
-		.targetSection = Category<CategoryId::Ghost>::Id(),
+		.title = tr::lng_tukigram_illegal_title(),
+		.targetSection = Category<CategoryId::Illegal>::Id(),
 		.icon = { &st::menuIconStealth },
-		.keywords = { u"tukigram"_q, u"ghost"_q, u"stealth"_q },
-	});
-	builder.addSectionButton({
-		.title = tr::lng_tukigram_deleted_title(),
-		.targetSection = Category<CategoryId::Deleted>::Id(),
-		.icon = { &st::menuIconDelete },
-		.keywords = { u"tukigram"_q, u"deleted"_q },
+		.keywords = {
+			u"tukigram"_q,
+			u"ghost"_q,
+			u"stealth"_q,
+			u"deleted"_q,
+			u"self-destructing"_q,
+			u"timer"_q,
+		},
 	});
 	builder.addSectionButton({
 		.title = tr::lng_tukigram_messages_title(),
 		.targetSection = Category<CategoryId::Messages>::Id(),
 		.icon = { &st::menuIconChatBubble },
 		.keywords = { u"tukigram"_q, u"forward"_q, u"edit"_q },
-	});
-	builder.addSectionButton({
-		.title = tr::lng_tukigram_media_title(),
-		.targetSection = Category<CategoryId::Media>::Id(),
-		.icon = { &st::menuIconTimer },
-		.keywords = { u"tukigram"_q, u"self-destructing"_q, u"timer"_q },
 	});
 	builder.addSectionButton({
 		.title = tr::lng_tukigram_profile_title(),
@@ -1196,12 +1367,12 @@ const auto kMeta = BuildHelper({
 	.icon = &st::menuIconTukiGram,
 }, BuildTukiGramSection);
 
-const auto kDeletedMeta = BuildHelper({
-	.id = Category<CategoryId::Deleted>::Id(),
+const auto kIllegalMeta = BuildHelper({
+	.id = Category<CategoryId::Illegal>::Id(),
 	.parentId = TukiGram::Id(),
-	.title = &tr::lng_tukigram_deleted_title,
-	.icon = &st::menuIconDelete,
-}, BuildDeletedCategory);
+	.title = &tr::lng_tukigram_illegal_title,
+	.icon = &st::menuIconStealth,
+}, BuildIllegalCategory);
 
 const auto kMessagesMeta = BuildHelper({
 	.id = Category<CategoryId::Messages>::Id(),
@@ -1209,13 +1380,6 @@ const auto kMessagesMeta = BuildHelper({
 	.title = &tr::lng_tukigram_messages_title,
 	.icon = &st::menuIconChatBubble,
 }, BuildMessagesCategory);
-
-const auto kMediaMeta = BuildHelper({
-	.id = Category<CategoryId::Media>::Id(),
-	.parentId = TukiGram::Id(),
-	.title = &tr::lng_tukigram_media_title,
-	.icon = &st::menuIconTimer,
-}, BuildMediaCategory);
 
 const auto kProfileMeta = BuildHelper({
 	.id = Category<CategoryId::Profile>::Id(),
@@ -1231,33 +1395,22 @@ const auto kAppearanceMeta = BuildHelper({
 	.icon = &st::menuIconPalette,
 }, BuildAppearanceCategory);
 
-const auto kGhostMeta = BuildHelper({
-	.id = Category<CategoryId::Ghost>::Id(),
-	.parentId = TukiGram::Id(),
-	.title = &tr::lng_tukigram_ghost_title,
-	.icon = &st::menuIconStealth,
-}, BuildGhostCategory);
-
 const tr::phrase<> &CategoryTitle(CategoryId id) {
 	switch (id) {
-	case CategoryId::Deleted: return tr::lng_tukigram_deleted_title;
+	case CategoryId::Illegal: return tr::lng_tukigram_illegal_title;
 	case CategoryId::Messages: return tr::lng_tukigram_messages_title;
-	case CategoryId::Media: return tr::lng_tukigram_media_title;
 	case CategoryId::Profile: return tr::lng_tukigram_profile_title;
 	case CategoryId::Appearance: return tr::lng_tukigram_appearance_title;
-	case CategoryId::Ghost: return tr::lng_tukigram_ghost_title;
 	}
 	Unexpected("Category in CategoryTitle.");
 }
 
 SectionBuildMethod CategoryBuildMethod(CategoryId id) {
 	switch (id) {
-	case CategoryId::Deleted: return kDeletedMeta.build;
+	case CategoryId::Illegal: return kIllegalMeta.build;
 	case CategoryId::Messages: return kMessagesMeta.build;
-	case CategoryId::Media: return kMediaMeta.build;
 	case CategoryId::Profile: return kProfileMeta.build;
 	case CategoryId::Appearance: return kAppearanceMeta.build;
-	case CategoryId::Ghost: return kGhostMeta.build;
 	}
 	Unexpected("Category in CategoryBuildMethod.");
 }

@@ -1846,6 +1846,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_tukigram_links" = "Links";
 "lng_tukigram_messages_title" = "Messages";
 "lng_tukigram_media_title" = "Self-destructing media";
+"lng_tukigram_illegal_title" = "Нелегалочка";
 "lng_tukigram_profile_title" = "Profile info";
 "lng_tukigram_deleted_mark" = "Deleted mark";
 "lng_tukigram_deleted_mark_none" = "None";
@@ -1870,9 +1871,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_tukigram_bubble_preview_second" = "Drag the sliders to try them out.";
 "lng_tukigram_bubble_preview_out" = "Looks great! 🎉";
 "lng_tukigram_ghost_title" = "Ghost mode";
-"lng_tukigram_ghost_enable" = "Enable ghost mode";
-"lng_tukigram_ghost_about" = "Others won't see that you are online, typing or reading. Turns on every option below.";
-"lng_tukigram_ghost_options" = "What to hide";
+"lng_tukigram_ghost_about" = "Others won't see that you are online, typing or reading. The switch turns every option on or off, tap the row to choose what to hide.";
 "lng_tukigram_ghost_reads" = "Don't send read receipts";
 "lng_tukigram_ghost_story_views" = "Don't mark stories as viewed";
 "lng_tukigram_ghost_online" = "Don't show online status";
@@ -1881,6 +1880,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_tukigram_ghost_exceptions" = "Exceptions";
 "lng_tukigram_ghost_read_after_send" = "Read the chat after sending";
 "lng_tukigram_ghost_exceptions_about" = "Mark as read from the chat list always reads the chat, even when read receipts are hidden.";
+"lng_tukigram_ghost_sending" = "Sending";
+"lng_tukigram_ghost_scheduled_send" = "Send messages as scheduled";
+"lng_tukigram_ghost_scheduled_send_about" = "Messages from the chat box are scheduled a few seconds ahead, so sending them doesn't show you online. They stay in the chat as sending until delivered.";
 "lng_materialgram_settings_save_deleted" = "Keep deleted messages";
 "lng_materialgram_settings_save_deleted_own" = "Keep your own deleted messages";
 "lng_materialgram_settings_forward_protected" = "Forward from protected chats";

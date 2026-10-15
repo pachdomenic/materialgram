@@ -63,8 +63,9 @@ enum class GhostOption : uchar {
 	HideTyping,
 	OfflineAfterSend,
 	ReadAfterSend,
+	ScheduledSend,
 };
-inline constexpr auto kGhostOptionCount = 6;
+inline constexpr auto kGhostOptionCount = 7;
 
 struct WindowPosition {
 	int32 moncrc = 0;

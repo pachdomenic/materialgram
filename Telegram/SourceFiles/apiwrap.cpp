@@ -4047,11 +4047,14 @@ void ApiWrap::forwardMessages(
 			++shared->requestsLeft;
 		}
 		const auto idsCopy = localIds;
-		const auto scheduled = action.options.scheduled;
+		const auto scheduled = Api::RequestScheduleDate(action.options);
 		const auto starsPaid = std::min(
 			action.options.starsApproved,
 			int(ids.size() * peer->starsPerMessageChecked()));
 		auto oneFlags = sendFlags;
+		if (scheduled) {
+			oneFlags |= SendFlag::f_schedule_date;
+		}
 		if (fromEphemeral) {
 			oneFlags |= SendFlag::f_from_ephemeral;
 		} else {
@@ -4088,7 +4091,7 @@ void ApiWrap::forwardMessages(
 					? MTP_inputReplyToMonoForum(
 						monoforumPeer->input())
 					: MTPInputReplyTo()),
-				MTP_int(action.options.scheduled),
+				MTP_int(scheduled),
 				MTP_int(action.options.scheduleRepeatPeriod),
 				(sendAs
 					? sendAs->input()
@@ -4683,7 +4686,8 @@ void ApiWrap::sendRichMessage(
 	if (action.options.sendAs) {
 		sendFlags |= Flag::f_send_as;
 	}
-	if (action.options.scheduled) {
+	const auto scheduled = Api::RequestScheduleDate(action.options);
+	if (scheduled) {
 		sendFlags |= Flag::f_schedule_date;
 		if (action.options.scheduleRepeatPeriod) {
 			sendFlags |= Flag::f_schedule_repeat_period;
@@ -4778,7 +4782,7 @@ void ApiWrap::sendRichMessage(
 				MTP_long(randomId),
 				MTPReplyMarkup(),
 				MTPVector<MTPMessageEntity>(),
-				MTP_int(action.options.scheduled),
+				MTP_int(scheduled),
 				MTP_int(action.options.scheduleRepeatPeriod),
 				(action.options.sendAs
 					? action.options.sendAs->input()
@@ -4969,8 +4973,11 @@ void ApiWrap::sendMessage(
 			sendFlags |= MTPmessages_SendMessage::Flag::f_send_as;
 			mediaFlags |= MTPmessages_SendMedia::Flag::f_send_as;
 		}
+		const auto scheduled = Api::RequestScheduleDate(action.options);
 		if (action.options.scheduled) {
 			flags |= MessageFlag::IsOrWasScheduled;
+		}
+		if (scheduled) {
 			sendFlags |= MTPmessages_SendMessage::Flag::f_schedule_date;
 			mediaFlags |= MTPmessages_SendMedia::Flag::f_schedule_date;
 			if (action.options.scheduleRepeatPeriod) {
@@ -5094,7 +5101,7 @@ void ApiWrap::sendMessage(
 					MTP_long(randomId),
 					MTPReplyMarkup(),
 					sentEntities,
-					MTP_int(action.options.scheduled),
+					MTP_int(scheduled),
 					MTP_int(action.options.scheduleRepeatPeriod),
 					(sendAs ? sendAs->input() : MTP_inputPeerEmpty()),
 					mtpShortcut,
@@ -5115,7 +5122,7 @@ void ApiWrap::sendMessage(
 					MTP_long(randomId),
 					MTPReplyMarkup(),
 					sentEntities,
-					MTP_int(action.options.scheduled),
+					MTP_int(scheduled),
 					MTP_int(action.options.scheduleRepeatPeriod),
 					(sendAs ? sendAs->input() : MTP_inputPeerEmpty()),
 					mtpShortcut,
@@ -5210,8 +5217,11 @@ void ApiWrap::sendInlineResult(
 	if (silentPost) {
 		sendFlags |= SendFlag::f_silent;
 	}
+	const auto scheduled = Api::RequestScheduleDate(action.options);
 	if (action.options.scheduled) {
 		flags |= MessageFlag::IsOrWasScheduled;
+	}
+	if (scheduled) {
 		sendFlags |= SendFlag::f_schedule_date;
 	}
 	if (action.options.shortcutId) {
@@ -5264,7 +5274,7 @@ void ApiWrap::sendInlineResult(
 			MTP_long(randomId),
 			MTP_long(data->getQueryId()),
 			MTP_string(data->getId()),
-			MTP_int(action.options.scheduled),
+			MTP_int(scheduled),
 			(sendAs ? sendAs->input() : MTP_inputPeerEmpty()),
 			Data::ShortcutIdToMTP(_session, action.options.shortcutId),
 			MTP_long(starsPaid)
@@ -5448,6 +5458,7 @@ void ApiWrap::sendMediaWithRandomId(
 		options.starsApproved -= starsPaid;
 	}
 
+	const auto scheduled = Api::RequestScheduleDate(options);
 	using Flag = MTPmessages_SendMedia::Flag;
 	const auto flags = Flag(0)
 		| (replyTo ? Flag::f_reply_to : Flag(0))
@@ -5455,8 +5466,8 @@ void ApiWrap::sendMediaWithRandomId(
 			? Flag::f_silent
 			: Flag(0))
 		| (!sentEntities.v.isEmpty() ? Flag::f_entities : Flag(0))
-		| (options.scheduled ? Flag::f_schedule_date : Flag(0))
-		| ((options.scheduled && options.scheduleRepeatPeriod)
+		| (scheduled ? Flag::f_schedule_date : Flag(0))
+		| ((scheduled && options.scheduleRepeatPeriod)
 			? Flag::f_schedule_repeat_period
 			: Flag(0))
 		| (options.sendAs ? Flag::f_send_as : Flag(0))
@@ -5487,7 +5498,7 @@ void ApiWrap::sendMediaWithRandomId(
 			MTP_long(randomId),
 			MTPReplyMarkup(),
 			sentEntities,
-			MTP_int(options.scheduled),
+			MTP_int(scheduled),
 			MTP_int(options.scheduleRepeatPeriod),
 			(options.sendAs ? options.sendAs->input() : MTP_inputPeerEmpty()),
 			Data::ShortcutIdToMTP(_session, options.shortcutId),
@@ -5537,6 +5548,7 @@ void ApiWrap::sendMultiPaidMedia(
 		options.starsApproved -= starsPaid;
 	}
 
+	const auto scheduled = Api::RequestScheduleDate(options);
 	using Flag = MTPmessages_SendMedia::Flag;
 	const auto flags = Flag(0)
 		| (replyTo ? Flag::f_reply_to : Flag(0))
@@ -5544,7 +5556,7 @@ void ApiWrap::sendMultiPaidMedia(
 			? Flag::f_silent
 			: Flag(0))
 		| (!sentEntities.v.isEmpty() ? Flag::f_entities : Flag(0))
-		| (options.scheduled ? Flag::f_schedule_date : Flag(0))
+		| (scheduled ? Flag::f_schedule_date : Flag(0))
 		| (options.scheduleRepeatPeriod
 			? Flag::f_schedule_repeat_period
 			: Flag(0))
@@ -5575,7 +5587,7 @@ void ApiWrap::sendMultiPaidMedia(
 			MTP_long(randomId),
 			MTPReplyMarkup(),
 			sentEntities,
-			MTP_int(options.scheduled),
+			MTP_int(scheduled),
 			MTP_int(options.scheduleRepeatPeriod),
 			(options.sendAs ? options.sendAs->input() : MTP_inputPeerEmpty()),
 			Data::ShortcutIdToMTP(_session, options.shortcutId),
@@ -5702,13 +5714,14 @@ void ApiWrap::sendAlbumIfReady(not_null<SendingAlbum*> album) {
 	if (starsPaid) {
 		album->options.starsApproved -= starsPaid;
 	}
+	const auto scheduled = Api::RequestScheduleDate(album->options);
 	using Flag = MTPmessages_SendMultiMedia::Flag;
 	const auto flags = Flag(0)
 		| (replyTo ? Flag::f_reply_to : Flag(0))
 		| (ShouldSendSilent(history->peer, album->options)
 			? Flag::f_silent
 			: Flag(0))
-		| (album->options.scheduled ? Flag::f_schedule_date : Flag(0))
+		| (scheduled ? Flag::f_schedule_date : Flag(0))
 		//| (album->options.scheduleRepeatPeriod
 		//	? Flag::f_schedule_repeat_period
 		//	: Flag(0))
@@ -5731,7 +5744,7 @@ void ApiWrap::sendAlbumIfReady(not_null<SendingAlbum*> album) {
 			peer->input(),
 			Data::Histories::ReplyToPlaceholder(),
 			MTP_vector<MTPInputSingleMedia>(medias),
-			MTP_int(album->options.scheduled),
+			MTP_int(scheduled),
 			//MTP_int(album->options.scheduleRepeatPeriod),
 			(sendAs ? sendAs->input() : MTP_inputPeerEmpty()),
 			Data::ShortcutIdToMTP(_session, album->options.shortcutId),

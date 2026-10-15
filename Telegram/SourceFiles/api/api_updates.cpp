@@ -230,6 +230,17 @@ bool HasForceLogoutNotification(const MTPUpdates &updates) {
 	return false;
 }
 
+// A server-side conversion while processing video keeps the upstream jump.
+[[nodiscard]] bool IsGhostScheduledSend(const MTPMessage &message) {
+	return Core::App().settings().ghostOption(
+		Core::GhostOption::ScheduledSend)
+		&& message.match([](const MTPDmessage &data) {
+			return !data.is_video_processing_pending();
+		}, [](const auto &) {
+			return false;
+		});
+}
+
 } // namespace
 
 Updates::Updates(not_null<Main::Session*> session)
@@ -940,7 +951,13 @@ void Updates::applyConvertToScheduledOnSend(
 						const auto rand = dataId.vrandom_id().v;
 						const auto localId = owner.messageIdByRandomId(rand);
 						if (const auto local = owner.message(localId)) {
-							if (!local->isScheduled()) {
+							if (!local->isScheduled()
+								&& IsGhostScheduledSend(message)) {
+								_session->data().unregisterMessageRandomId(
+									rand);
+								_session->data().histories(
+								).keepGhostScheduled(local, scheduledId);
+							} else if (!local->isScheduled()) {
 								_session->data().sentToScheduled({
 									.history = local->history(),
 									.scheduledId = scheduledId,
