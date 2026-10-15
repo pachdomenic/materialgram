@@ -138,4 +138,6 @@ private:
 [[nodiscard]] BottomInfo::Data BottomInfoDataFromMessage(
 	not_null<Message*> message);
 
+[[nodiscard]] QString FormatMessageTime(QTime time);
+
 } // namespace HistoryView

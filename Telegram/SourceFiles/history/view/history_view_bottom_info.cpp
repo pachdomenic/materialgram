@@ -71,7 +71,9 @@ void AppendEmojiMark(
 	marked.append(' ');
 }
 
-[[nodiscard]] QString FormatMessageTime(QTime time) {
+} // namespace
+
+QString FormatMessageTime(QTime time) {
 	const auto locale = QLocale();
 	auto format = locale.timeFormat(QLocale::ShortFormat);
 	if (!Core::App().settings().messageSeconds()
@@ -92,6 +94,8 @@ void AppendEmojiMark(
 	format.insert(end, separator + u"ss"_q);
 	return locale.toString(time, format);
 }
+
+namespace {
 
 [[nodiscard]] QString SchedulePeriodText(TimeId period) {
 	struct Entry {

@@ -17,6 +17,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_user.h"
 #include "history/history.h"
 #include "history/history_item.h"
+#include "history/view/history_view_bottom_info.h"
 #include "history/view/history_view_element.h"
 #include "lang/lang_keys.h"
 #include "main/main_session.h"
@@ -211,6 +212,8 @@ public:
 private:
 	struct Bubble {
 		Ui::Text::String text;
+		QString time;
+		int infoWidth = 0;
 		bool out = false;
 		bool attachedTop = false;
 		bool attachedBottom = false;
@@ -218,6 +221,7 @@ private:
 	};
 
 	void paintEvent(QPaintEvent *e) override;
+	void updateTime();
 	void updateGeometries(int width);
 
 	const std::shared_ptr<Ui::ChatTheme> _theme;
@@ -312,6 +316,14 @@ BubbleRadiusPreview::BubbleRadiusPreview(
 		true,
 		false,
 		false);
+	updateTime();
+
+	Core::App().settings().messageLayoutChanges(
+	) | rpl::on_next([=] {
+		updateTime();
+		updateGeometries(width());
+		update();
+	}, lifetime());
 
 	rpl::combine(
 		std::move(large),
@@ -325,6 +337,20 @@ BubbleRadiusPreview::BubbleRadiusPreview(
 	widthValue() | rpl::on_next([=](int width) {
 		updateGeometries(width);
 	}, lifetime());
+}
+
+void BubbleRadiusPreview::updateTime() {
+	const auto time = HistoryView::FormatMessageTime(QTime::currentTime());
+	for (auto &bubble : _bubbles) {
+		bubble.time = time;
+		bubble.infoWidth = st::msgDateFont->width(time)
+			+ (bubble.out ? st::historySendStateSpace : 0);
+
+		// Reserve room for the time on the last line, as messages do.
+		bubble.text.updateSkipBlock(
+			st::msgDateSpace + bubble.infoWidth - st::msgDateDelta.x(),
+			st::msgDateFont->height - st::msgDateDelta.y());
+	}
 }
 
 void BubbleRadiusPreview::updateGeometries(int width) {
@@ -395,6 +421,28 @@ void BubbleRadiusPreview::paintEvent(QPaintEvent *e) {
 			.availableWidth = rect.width() - padding.left() - padding.right(),
 			.palette = &st.textPalette,
 		});
+
+		const auto infoRight = rect.x()
+			+ rect.width()
+			- (padding.right() - st::msgDateDelta.x());
+		const auto infoBottom = rect.y()
+			+ rect.height()
+			- (padding.bottom() - st::msgDateDelta.y());
+		auto dateRight = infoRight;
+		if (bubble.out) {
+			st.historySentIcon.paint(
+				p,
+				QPoint(infoRight, infoBottom) + st::historySendStatePosition,
+				width());
+			dateRight -= st::historySendStateSpace;
+		}
+		p.setFont(st::msgDateFont);
+		p.setPen(st.msgDateFg);
+		p.drawTextLeft(
+			dateRight - st::msgDateFont->width(bubble.time),
+			infoBottom - st::msgDateFont->height,
+			width(),
+			bubble.time);
 	}
 }
 
