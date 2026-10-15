@@ -1854,6 +1854,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_tukigram_deleted_transparent" = "Make messages transparent";
 "lng_tukigram_preview_out" = "It's morning in Tokyo 😎";
 "lng_tukigram_preview_in" = "I hope you're enjoying your day as much as I am.";
+"lng_tukigram_appearance_title" = "Appearance";
+"lng_tukigram_fonts" = "Fonts";
+"lng_tukigram_mono_font" = "Monospace font";
+"lng_tukigram_fonts_about" = "The monospace font is used for code blocks and inline code. Changing fonts requires a restart.";
 "lng_materialgram_settings_save_deleted" = "Keep deleted messages";
 "lng_materialgram_settings_save_deleted_own" = "Keep your own deleted messages";
 "lng_materialgram_settings_forward_protected" = "Forward from protected chats";

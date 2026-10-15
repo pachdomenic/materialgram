@@ -15,6 +15,7 @@ void ChooseFontBox(
 	not_null<GenericBox*> box,
 	Fn<QImage()> generatePreviewBg,
 	const QString &family,
-	Fn<void(QString)> save);
+	Fn<void(QString)> save,
+	bool monospace);
 
 } // namespace Ui

@@ -313,6 +313,7 @@ void Application::run() {
 	startLocalStorage();
 
 	style::SetCustomFont(settings().customFontFamily());
+	style::SetCustomMonospaceFont(settings().monospaceFontFamily());
 	style::internal::StartFonts();
 
 	Test::ApplyStartupOverrides();

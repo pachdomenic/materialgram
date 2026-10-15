@@ -49,6 +49,7 @@ inline constexpr auto kEditHistoryDisabledKey
 	= "edit-history-disabled"_cs;
 inline constexpr auto kDeletedMarkKey = "deleted-mark"_cs;
 inline constexpr auto kDeletedOpaqueKey = "deleted-opaque"_cs;
+inline constexpr auto kMonospaceFontKey = "monospace-font"_cs;
 
 struct WindowPosition {
 	int32 moncrc = 0;
@@ -213,6 +214,10 @@ public:
 	[[nodiscard]] rpl::producer<> deletedAppearanceChanges() const {
 		return _deletedAppearanceChanges.events();
 	}
+	[[nodiscard]] QString monospaceFontFamily() const {
+		return _monospaceFontFamily;
+	}
+	void setMonospaceFontFamily(const QString &value);
 	[[nodiscard]] float64 songVolume() const {
 		return _songVolume.current();
 	}
@@ -1169,6 +1174,7 @@ private:
 	QString _deletedMark = DefaultDeletedMark();
 	bool _deletedTransparent = true;
 	rpl::event_stream<> _deletedAppearanceChanges;
+	QString _monospaceFontFamily;
 	rpl::variable<float64> _songVolume = kDefaultVolume;
 	rpl::variable<float64> _videoVolume = kDefaultVolume;
 	bool _askDownloadPath = false;

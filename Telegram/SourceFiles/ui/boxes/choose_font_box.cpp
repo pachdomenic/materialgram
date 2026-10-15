@@ -34,7 +34,8 @@ namespace {
 constexpr auto kMinTextWidth = 120;
 
 struct PreviewRequest {
-	QString family;
+	QString nameFamily;
+	QString textFamily;
 	QColor msgBg;
 	QColor msgShadow;
 	QColor replyBar;
@@ -97,7 +98,8 @@ public:
 		rpl::producer<QString> filter,
 		rpl::producer<> submits,
 		Fn<void(QString)> chosen,
-		Fn<void(Ui::ScrollToRequest, anim::type)> scrollTo);
+		Fn<void(Ui::ScrollToRequest, anim::type)> scrollTo,
+		bool monospace);
 
 	void initScroll(anim::type animated);
 	void setMinHeight(int height);
@@ -114,7 +116,9 @@ private:
 		std::unique_ptr<Ui::RippleAnimation> ripple;
 		int paletteVersion = 0;
 	};
-	[[nodiscard]] static std::vector<Entry> FullList(const QString &now);
+	[[nodiscard]] static std::vector<Entry> FullList(
+		const QString &now,
+		bool monospace);
 
 	int resizeGetHeight(int newWidth) override;
 	void paintEvent(QPaintEvent *e) override;
@@ -166,10 +170,11 @@ Selector::Selector(
 	rpl::producer<QString> filter,
 	rpl::producer<> submits,
 	Fn<void(QString)> chosen,
-	Fn<void(Ui::ScrollToRequest, anim::type)> scrollTo)
+	Fn<void(Ui::ScrollToRequest, anim::type)> scrollTo,
+	bool monospace)
 : RpWidget(parent)
 , _st(st::settingsButton)
-, _rows(FullList(now))
+, _rows(FullList(now, monospace))
 , _chosen(now)
 , _callback(std::move(chosen))
 , _scrollTo(std::move(scrollTo))
@@ -524,7 +529,9 @@ void Selector::addRipple(int index, QPoint position) {
 	row->ripple->add(position - QPoint(0, _rowsSkip + index * _rowHeight));
 }
 
-std::vector<Selector::Entry> Selector::FullList(const QString &now) {
+std::vector<Selector::Entry> Selector::FullList(
+		const QString &now,
+		bool monospace) {
 	using namespace TextUtilities;
 
 	auto database = QFontDatabase();
@@ -539,7 +546,10 @@ std::vector<Selector::Entry> Selector::FullList(const QString &now) {
 		});
 	};
 	add(tr::lng_font_default(tr::now));
-	add(tr::lng_font_system(tr::now), style::SystemFontTag());
+	if (!monospace) {
+		add(tr::lng_font_system(tr::now), style::SystemFontTag());
+	}
+	const auto fixed = int(result.size());
 	for (const auto &family : families) {
 		if (database.isScalable(family)) {
 			result.push_back({ .id = family });
@@ -550,14 +560,14 @@ std::vector<Selector::Entry> Selector::FullList(const QString &now) {
 		result.push_back({ .id = now });
 		nowIt = end(result) - 1;
 	}
-	for (auto i = begin(result) + 2; i != end(result); ++i) {
+	for (auto i = begin(result) + fixed; i != end(result); ++i) {
 		i->key = TextUtilities::RemoveAccents(i->id).toLower();
 		i->text = i->id;
 		i->keywords = TextUtilities::PrepareSearchWords(i->id);
 	}
-	auto skip = 2;
+	auto skip = fixed;
 	if (nowIt - begin(result) >= skip) {
-		std::swap(result[2], *nowIt);
+		std::swap(result[fixed], *nowIt);
 		++skip;
 	}
 	ranges::sort(
@@ -567,9 +577,16 @@ std::vector<Selector::Entry> Selector::FullList(const QString &now) {
 	return result;
 }
 
-[[nodiscard]] PreviewRequest PrepareRequest(const QString &family) {
+[[nodiscard]] PreviewRequest PrepareRequest(
+		const QString &family,
+		bool monospace) {
 	return {
-		.family = family,
+		.nameFamily = monospace ? QString() : family,
+		.textFamily = !monospace
+			? family
+			: family.isEmpty()
+			? style::DefaultMonospaceFont()
+			: family,
 		.msgBg = st::msgInBg->c,
 		.msgShadow = st::msgInShadow->c,
 		.replyBar = st::msgInReplyBarColor->c,
@@ -582,10 +599,10 @@ PreviewPainter::PreviewPainter(const QImage &bg, PreviewRequest request)
 : _request(request)
 , _msgBg(_request.msgBg)
 , _msgShadow(_request.msgShadow)
-, _nameFontOwned(_request.family, style::FontFlag::Bold, st::fsize)
+, _nameFontOwned(_request.nameFamily, style::FontFlag::Bold, st::fsize)
 , _nameFont(_nameFontOwned.font())
 , _nameStyle(st::semiboldTextStyle)
-, _textFontOwned(_request.family, 0, st::fsize)
+, _textFontOwned(_request.textFamily, 0, st::fsize)
 , _textFont(_textFontOwned.font())
 , _textStyle(st::defaultTextStyle) {
 	_nameStyle.font = _nameFont;
@@ -778,7 +795,8 @@ void PreviewPainter::layout() {
 [[nodiscard]] object_ptr<Ui::RpWidget> MakePreview(
 		not_null<QWidget*> parent,
 		Fn<QImage()> generatePreviewBg,
-		rpl::producer<QString> family) {
+		rpl::producer<QString> family,
+		bool monospace) {
 	auto result = object_ptr<Ui::RpWidget>(parent.get());
 	const auto raw = result.data();
 
@@ -802,12 +820,12 @@ void PreviewPainter::layout() {
 		if (state->preview.isNull()) {
 			state->preview = GeneratePreview(
 				state->bg,
-				PrepareRequest(family));
+				PrepareRequest(family, monospace));
 			const auto ratio = state->preview.devicePixelRatio();
 			raw->resize(state->preview.size() / int(ratio));
 		} else {
 			const auto weak = base::make_weak(raw);
-			const auto request = PrepareRequest(family);
+			const auto request = PrepareRequest(family, monospace);
 			crl::async([=, bg = state->bg] {
 				crl::on_main([
 					weak,
@@ -840,7 +858,8 @@ void ChooseFontBox(
 		not_null<GenericBox*> box,
 		Fn<QImage()> generatePreviewBg,
 		const QString &family,
-		Fn<void(QString)> save) {
+		Fn<void(QString)> save,
+		bool monospace) {
 	box->setTitle(tr::lng_font_box_title());
 
 	struct State {
@@ -854,7 +873,11 @@ void ChooseFontBox(
 
 	const auto top = box->setPinnedToTopContent(
 		object_ptr<Ui::VerticalLayout>(box));
-	top->add(MakePreview(top, generatePreviewBg, state->family.value()));
+	top->add(MakePreview(
+		top,
+		generatePreviewBg,
+		state->family.value(),
+		monospace));
 	const auto filter = top->add(object_ptr<Ui::MultiSelect>(
 		top,
 		st::defaultMultiSelect,
@@ -887,7 +910,8 @@ void ChooseFontBox(
 			state->query.value(),
 			state->submits.events(),
 			chosen,
-			scrollTo),
+			scrollTo,
+			monospace),
 		QMargins());
 	box->setMinHeight(st::boxMaxListHeight);
 	box->setMaxHeight(st::boxMaxListHeight);

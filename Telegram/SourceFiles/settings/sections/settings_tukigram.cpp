@@ -20,6 +20,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/view/history_view_element.h"
 #include "lang/lang_keys.h"
 #include "main/main_session.h"
+#include "settings/sections/settings_chat.h"
 #include "settings/sections/settings_main.h"
 #include "settings/settings_builder.h"
 #include "ui/basic_click_handlers.h"
@@ -263,6 +264,7 @@ enum class CategoryId {
 	Messages,
 	Media,
 	Profile,
+	Appearance,
 };
 
 [[nodiscard]] const tr::phrase<> &CategoryTitle(CategoryId id);
@@ -309,6 +311,14 @@ void AddToggle(
 			Core::App().saveSettingsDelayed();
 		}, button->lifetime());
 	}
+}
+
+[[nodiscard]] QString FontFamilyLabel(const QString &family) {
+	return family.isEmpty()
+		? tr::lng_font_default(tr::now)
+		: (family == style::SystemFontTag())
+		? tr::lng_font_system(tr::now)
+		: family;
 }
 
 void BuildDeletedCategory(SectionBuilder &builder) {
@@ -436,6 +446,42 @@ void BuildProfileCategory(SectionBuilder &builder) {
 	builder.addSkip();
 }
 
+void BuildAppearanceCategory(SectionBuilder &builder) {
+	const auto settings = &Core::App().settings();
+	const auto controller = builder.controller();
+	builder.addSkip();
+
+	builder.addSubsectionTitle(tr::lng_tukigram_fonts());
+	builder.addButton({
+		.id = u"tukigram/font"_q,
+		.title = tr::lng_settings_font_family(),
+		.st = &st::settingsButtonNoIcon,
+		.label = rpl::single(FontFamilyLabel(settings->customFontFamily())),
+		.onClick = [=] {
+			if (controller) {
+				ShowChooseFontBox(controller, false);
+			}
+		},
+		.keywords = { u"tukigram"_q, u"font"_q, u"family"_q },
+	});
+	builder.addButton({
+		.id = u"tukigram/mono_font"_q,
+		.title = tr::lng_tukigram_mono_font(),
+		.st = &st::settingsButtonNoIcon,
+		.label = rpl::single(
+			FontFamilyLabel(settings->monospaceFontFamily())),
+		.onClick = [=] {
+			if (controller) {
+				ShowChooseFontBox(controller, true);
+			}
+		},
+		.keywords = { u"tukigram"_q, u"font"_q, u"monospace"_q, u"code"_q },
+	});
+	builder.addSkip();
+	builder.addDividerText(tr::lng_tukigram_fonts_about());
+	builder.addSkip();
+}
+
 [[nodiscard]] object_ptr<Ui::RpWidget> MakeHeader(QWidget *parent) {
 	auto result = object_ptr<Ui::VerticalLayout>(parent);
 	const auto raw = result.data();
@@ -513,6 +559,12 @@ void BuildTukiGramSection(SectionBuilder &builder) {
 		.icon = { &st::menuIconProfile },
 		.keywords = { u"tukigram"_q, u"profile"_q, u"dc"_q },
 	});
+	builder.addSectionButton({
+		.title = tr::lng_tukigram_appearance_title(),
+		.targetSection = Category<CategoryId::Appearance>::Id(),
+		.icon = { &st::menuIconPalette },
+		.keywords = { u"tukigram"_q, u"appearance"_q, u"font"_q },
+	});
 
 	builder.addSkip();
 	builder.addDivider();
@@ -567,12 +619,20 @@ const auto kProfileMeta = BuildHelper({
 	.icon = &st::menuIconProfile,
 }, BuildProfileCategory);
 
+const auto kAppearanceMeta = BuildHelper({
+	.id = Category<CategoryId::Appearance>::Id(),
+	.parentId = TukiGram::Id(),
+	.title = &tr::lng_tukigram_appearance_title,
+	.icon = &st::menuIconPalette,
+}, BuildAppearanceCategory);
+
 const tr::phrase<> &CategoryTitle(CategoryId id) {
 	switch (id) {
 	case CategoryId::Deleted: return tr::lng_tukigram_deleted_title;
 	case CategoryId::Messages: return tr::lng_tukigram_messages_title;
 	case CategoryId::Media: return tr::lng_tukigram_media_title;
 	case CategoryId::Profile: return tr::lng_tukigram_profile_title;
+	case CategoryId::Appearance: return tr::lng_tukigram_appearance_title;
 	}
 	Unexpected("Category in CategoryTitle.");
 }
@@ -583,6 +643,7 @@ SectionBuildMethod CategoryBuildMethod(CategoryId id) {
 	case CategoryId::Messages: return kMessagesMeta.build;
 	case CategoryId::Media: return kMediaMeta.build;
 	case CategoryId::Profile: return kProfileMeta.build;
+	case CategoryId::Appearance: return kAppearanceMeta.build;
 	}
 	Unexpected("Category in CategoryBuildMethod.");
 }
