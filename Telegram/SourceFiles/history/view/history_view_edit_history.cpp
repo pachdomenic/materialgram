@@ -48,7 +48,7 @@ void EditHistoryBox(
 		auto title = langDateTimeFull(base::unixtime::parse(version.date));
 		if (i + 1 == int(versions.size())) {
 			title = tr::lng_materialgram_edit_history_current(tr::now)
-				+ u" · "_q
+				+ u" \u00B7 "_q
 				+ title;
 		}
 		Ui::AddSubsectionTitle(content, rpl::single(title));

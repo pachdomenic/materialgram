@@ -15,6 +15,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/text/text_options.h"
 #include "ui/text/text_utilities.h"
 #include "ui/painter.h"
+#include "core/application.h"
+#include "core/core_settings.h"
 #include "core/ui_integration.h"
 #include "lang/lang_keys.h"
 #include "history/history_item_components.h"
@@ -526,16 +528,26 @@ void BottomInfo::layoutDateText() {
 	auto helper = Ui::Text::CustomEmojiHelper(
 		Core::TextContext({ .session = &_reactionsOwner->session() }));
 	auto marked = TextWithEntities();
-	if (_data.flags & Data::Flag::Deleted) {
-		marked.append(helper.image({
-			.image = Ui::Emoji::SinglePixmap(
-				Ui::Emoji::Find(QString::fromUtf8("\xf0\x9f\x97\x91")),
-				Ui::Emoji::GetSizeNormal()).toImage().scaledToHeight(
-					st::deletedIconEmojiSize * style::DevicePixelRatio(),
-					Qt::SmoothTransformation),
-			.margin = QMargins(0, st::deletedIconEmojiTop, 0, 0),
-			.textColor = false,
-		})).append(' ');
+	const auto deletedMark = (_data.flags & Data::Flag::Deleted)
+		? Core::App().settings().deletedMark()
+		: QString();
+	if (!deletedMark.isEmpty()) {
+		auto length = 0;
+		const auto emoji = Ui::Emoji::Find(deletedMark, &length);
+		if (emoji && length == deletedMark.size()) {
+			marked.append(helper.image({
+				.image = Ui::Emoji::SinglePixmap(
+					emoji,
+					Ui::Emoji::GetSizeNormal()).toImage().scaledToHeight(
+						st::deletedIconEmojiSize * style::DevicePixelRatio(),
+						Qt::SmoothTransformation),
+				.margin = QMargins(0, st::deletedIconEmojiTop, 0, 0),
+				.textColor = false,
+			}));
+		} else {
+			marked.append(deletedMark);
+		}
+		marked.append(' ');
 	}
 	if (const auto count = _data.stars) {
 		marked.append(

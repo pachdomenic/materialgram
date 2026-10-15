@@ -1839,6 +1839,15 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_materialgram_info_registration" = "Registration date";
 "lng_materialgram_info_dc" = "DC";
 "lng_tukigram_settings" = "TukiGram";
+"lng_tukigram_deleted_title" = "Deleted messages";
+"lng_tukigram_privacy_title" = "Privacy";
+"lng_tukigram_deleted_mark" = "Deleted mark";
+"lng_tukigram_deleted_mark_none" = "None";
+"lng_tukigram_deleted_mark_placeholder" = "Emoji or text";
+"lng_tukigram_deleted_mark_about" = "Shown next to the time of deleted messages. Leave empty to hide it.";
+"lng_tukigram_deleted_transparent" = "Make messages transparent";
+"lng_tukigram_preview_out" = "It's morning in Tokyo 😎";
+"lng_tukigram_preview_in" = "I hope you're enjoying your day as much as I am.";
 "lng_materialgram_settings_save_deleted" = "Keep deleted messages";
 "lng_materialgram_settings_save_deleted_own" = "Keep your own deleted messages";
 "lng_materialgram_settings_forward_protected" = "Forward from protected chats";

@@ -47,6 +47,8 @@ inline constexpr auto kSelfDestructingNoReadKey
 	= "self-destructing-no-read"_cs;
 inline constexpr auto kEditHistoryDisabledKey
 	= "edit-history-disabled"_cs;
+inline constexpr auto kDeletedMarkKey = "deleted-mark"_cs;
+inline constexpr auto kDeletedOpaqueKey = "deleted-opaque"_cs;
 
 struct WindowPosition {
 	int32 moncrc = 0;
@@ -199,6 +201,18 @@ public:
 		return _saveEditHistory;
 	}
 	void setSaveEditHistory(bool value);
+	[[nodiscard]] static QString DefaultDeletedMark();
+	[[nodiscard]] QString deletedMark() const {
+		return _deletedMark;
+	}
+	void setDeletedMark(const QString &value);
+	[[nodiscard]] bool deletedTransparent() const {
+		return _deletedTransparent;
+	}
+	void setDeletedTransparent(bool value);
+	[[nodiscard]] rpl::producer<> deletedAppearanceChanges() const {
+		return _deletedAppearanceChanges.events();
+	}
 	[[nodiscard]] float64 songVolume() const {
 		return _songVolume.current();
 	}
@@ -1152,6 +1166,9 @@ private:
 	bool _keepSelfDestructingMedia = false;
 	bool _markSelfDestructingRead = true;
 	bool _saveEditHistory = true;
+	QString _deletedMark = DefaultDeletedMark();
+	bool _deletedTransparent = true;
+	rpl::event_stream<> _deletedAppearanceChanges;
 	rpl::variable<float64> _songVolume = kDefaultVolume;
 	rpl::variable<float64> _videoVolume = kDefaultVolume;
 	bool _askDownloadPath = false;

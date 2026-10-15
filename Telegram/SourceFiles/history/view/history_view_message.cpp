@@ -13,6 +13,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/qt/qt_key_modifiers.h"
 #include "base/unixtime.h"
 #include "core/application.h"
+#include "core/core_settings.h"
 #include "core/click_handler_types.h" // ClickHandlerContext
 #include "core/ui_integration.h"
 #include "core/update_checker.h"
@@ -1850,7 +1851,8 @@ void Message::draw(Painter &p, const PaintContext &context) const {
 	}
 
 	auto deletedOpacity = std::optional<ScopedPainterOpacity>();
-	if (item->history()->owner().isMessageDeleted(item)) {
+	if (item->history()->owner().isMessageDeleted(item)
+		&& Core::App().settings().deletedTransparent()) {
 		deletedOpacity.emplace(p, p.opacity() * 0.5);
 	}
 

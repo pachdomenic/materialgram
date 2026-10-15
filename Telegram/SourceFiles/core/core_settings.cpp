@@ -1310,6 +1310,10 @@ void Settings::addFromSerialized(const QByteArray &serialized) {
 	_keepSelfDestructingMedia = readPref<bool>(kKeepSelfDestructingMediaKey);
 	_markSelfDestructingRead = !readPref<bool>(kSelfDestructingNoReadKey);
 	_saveEditHistory = !readPref<bool>(kEditHistoryDisabledKey);
+	_deletedMark = QString::fromUtf8(readPref<QByteArray>(
+		kDeletedMarkKey,
+		DefaultDeletedMark().toUtf8()));
+	_deletedTransparent = !readPref<bool>(kDeletedOpaqueKey);
 	{ // Parse the legacy translation setting.
 		if (legacySkipTranslationForLanguage == 0) {
 			_translateButtonEnabled = false;
@@ -1394,6 +1398,28 @@ void Settings::setMarkSelfDestructingRead(bool value) {
 void Settings::setSaveEditHistory(bool value) {
 	_saveEditHistory = value;
 	writePref<bool>(kEditHistoryDisabledKey, !value);
+}
+
+QString Settings::DefaultDeletedMark() {
+	return QString::fromUtf8("\xf0\x9f\x97\x91");
+}
+
+void Settings::setDeletedMark(const QString &value) {
+	if (_deletedMark == value) {
+		return;
+	}
+	_deletedMark = value;
+	writePref<QByteArray>(kDeletedMarkKey, value.toUtf8());
+	_deletedAppearanceChanges.fire({});
+}
+
+void Settings::setDeletedTransparent(bool value) {
+	if (_deletedTransparent == value) {
+		return;
+	}
+	_deletedTransparent = value;
+	writePref<bool>(kDeletedOpaqueKey, !value);
+	_deletedAppearanceChanges.fire({});
 }
 
 void Settings::writePrefGeneric(
@@ -1846,6 +1872,8 @@ void Settings::resetOnLastLogout() {
 	_keepSelfDestructingMedia = false;
 	_markSelfDestructingRead = true;
 	_saveEditHistory = true;
+	_deletedMark = DefaultDeletedMark();
+	_deletedTransparent = true;
 	_quickDialogAction = Dialogs::Ui::QuickDialogAction::Disabled;
 	_notificationsVolume = 100;
 

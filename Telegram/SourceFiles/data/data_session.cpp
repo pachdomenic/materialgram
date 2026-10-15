@@ -370,6 +370,13 @@ Session::Session(not_null<Main::Session*> session)
 	setupPeerNameViewer();
 	setupUserIsContactViewer();
 
+	Core::App().settings().deletedAppearanceChanges(
+	) | rpl::on_next([=] {
+		for (const auto &item : _deletedMessages) {
+			requestItemViewRefresh(item);
+		}
+	}, _lifetime);
+
 	_chatsList.unreadStateChanges(
 	) | rpl::on_next([=] {
 		notifyUnreadBadgeChanged();
