@@ -1255,6 +1255,18 @@ void BuildAppearanceCategory(SectionBuilder &builder) {
 		.keywords = { u"tukigram"_q, u"round"_q, u"video"_q, u"circle"_q },
 	});
 	builder.addSkip();
+	builder.addDivider();
+	builder.addSkip();
+
+	builder.addSubsectionTitle(tr::lng_tukigram_folders_title());
+	AddToggle(
+		builder,
+		u"tukigram/hide_folder_badges"_q,
+		tr::lng_tukigram_hide_folder_badges(),
+		[=] { return settings->hideFolderBadges(); },
+		[=](bool value) { settings->setHideFolderBadges(value); },
+		{ u"tukigram"_q, u"folders"_q, u"unread"_q, u"badge"_q });
+	builder.addSkip();
 }
 
 [[nodiscard]] object_ptr<Ui::RpWidget> MakeHeader(QWidget *parent) {

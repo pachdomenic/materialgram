@@ -1863,6 +1863,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_tukigram_message_width" = "Message width";
 "lng_tukigram_message_width_about" = "Lets message bubbles, photos and videos grow wider in large windows. Requires a restart.";
 "lng_tukigram_video_message_size" = "Video message size";
+"lng_tukigram_folders_title" = "Chat folders";
+"lng_tukigram_hide_folder_badges" = "Hide unread counters on folders";
 "lng_tukigram_bubble_radius" = "Message bubble radius";
 "lng_tukigram_bubble_radius_small" = "Grouped bubble radius";
 "lng_tukigram_bubble_radius_about" = "Grouped corners are where consecutive messages from the same sender meet. Changing the radius requires a restart.";

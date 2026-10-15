@@ -606,16 +606,18 @@ base::unique_qptr<Ui::SideBarButton> FiltersMenu::prepareButton(
 		}
 		rpl::combine(
 			Data::UnreadStateValue(&_session->session(), id),
-			Data::IncludeMutedCounterFoldersValue()
+			Data::IncludeMutedCounterFoldersValue(),
+			Core::App().settings().hideFolderBadgesValue()
 		) | rpl::on_next([=](
 				const Dialogs::UnreadState &state,
-				bool includeMuted) {
+				bool includeMuted,
+				bool hideBadges) {
 			const auto chats = state.chats;
 			const auto chatsMuted = state.chatsMuted;
 			const auto muted = (chatsMuted + state.marksMuted);
 			const auto count = (chats + state.marks)
 				- (includeMuted ? 0 : muted);
-			const auto string = !count
+			const auto string = (!count || hideBadges)
 				? QString()
 				: (count > 999)
 				? "99+"

@@ -55,6 +55,7 @@ inline constexpr auto kMessageWidthKey = "message-width"_cs;
 inline constexpr auto kVideoMessageSizeKey = "video-message-size"_cs;
 inline constexpr auto kBubbleRadiusLargeKey = "bubble-radius-large"_cs;
 inline constexpr auto kBubbleRadiusSmallKey = "bubble-radius-small"_cs;
+inline constexpr auto kHideFolderBadgesKey = "hide-folder-badges"_cs;
 
 enum class GhostOption : uchar {
 	HideReads,
@@ -265,6 +266,13 @@ public:
 	[[nodiscard]] rpl::producer<> messageLayoutChanges() const {
 		return _messageLayoutChanges.events();
 	}
+	[[nodiscard]] bool hideFolderBadges() const {
+		return _hideFolderBadges.current();
+	}
+	[[nodiscard]] rpl::producer<bool> hideFolderBadgesValue() const {
+		return _hideFolderBadges.value();
+	}
+	void setHideFolderBadges(bool value);
 	[[nodiscard]] bool ghostOption(GhostOption option) const {
 		return _ghostOptions[size_t(option)];
 	}
@@ -1237,6 +1245,7 @@ private:
 	int _bubbleRadiusSmall = kBubbleRadiusSmallDefault;
 	int _videoMessageSizePercent = 100;
 	rpl::event_stream<> _messageLayoutChanges;
+	rpl::variable<bool> _hideFolderBadges = false;
 	std::array<bool, kGhostOptionCount> _ghostOptions = {};
 	rpl::event_stream<> _ghostModeChanges;
 	rpl::variable<float64> _songVolume = kDefaultVolume;

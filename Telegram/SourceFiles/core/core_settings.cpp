@@ -1338,6 +1338,7 @@ void Settings::addFromSerialized(const QByteArray &serialized) {
 	_monospaceFontFamily = QString::fromUtf8(
 		readPref<QByteArray>(kMonospaceFontKey));
 	_messageSeconds = readPref<bool>(kMessageSecondsKey);
+	_hideFolderBadges = readPref<bool>(kHideFolderBadgesKey);
 	_messageWidthPercent = std::clamp(
 		readPref<int>(kMessageWidthKey, 100),
 		kMessageWidthMin,
@@ -1477,6 +1478,14 @@ void Settings::setMessageSeconds(bool value) {
 	_messageSeconds = value;
 	writePref<bool>(kMessageSecondsKey, value);
 	_messageLayoutChanges.fire({});
+}
+
+void Settings::setHideFolderBadges(bool value) {
+	if (_hideFolderBadges.current() == value) {
+		return;
+	}
+	_hideFolderBadges = value;
+	writePref<bool>(kHideFolderBadgesKey, value);
 }
 
 void Settings::setMessageWidthPercent(int value) {
