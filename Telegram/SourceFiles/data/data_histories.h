@@ -89,7 +89,8 @@ public:
 	void deleteMessages(
 		not_null<History*> history,
 		const QVector<MTPint> &ids,
-		bool revoke);
+		bool revoke,
+		bool keepLocally = false);
 	void deleteAllMessages(
 		not_null<History*> history,
 		MsgId deleteTillId,
@@ -107,7 +108,10 @@ public:
 		TimeId maxDate,
 		bool revoke);
 
-	void deleteMessages(const MessageIdsList &ids, bool revoke);
+	void deleteMessages(
+		const MessageIdsList &ids,
+		bool revoke,
+		bool keepLocally = false);
 
 	int sendRequest(
 		not_null<History*> history,

@@ -243,6 +243,14 @@ void DeleteMessagesBox::prepare() {
 	_text.create(this, rpl::single(std::move(details)), st::boxLabel);
 	_text->resizeToWidth(st::boxWidth - rect::m::sum::h(st::boxPadding));
 
+	if (canDelete && canKeepLocally()) {
+		_keepLocally.create(
+			this,
+			tr::lng_materialgram_delete_keep_locally(tr::now),
+			false,
+			st::defaultBoxCheckbox);
+	}
+
 	if (_wipeHistoryJustClear && _wipeHistoryPeer) {
 		const auto validator = TTLMenu::TTLValidator(
 			uiShow(),
@@ -283,6 +291,10 @@ void DeleteMessagesBox::prepare() {
 			+ st::boxPadding.bottom();
 		if (_revoke) {
 			fullHeight += st::boxMediumSkip + _revoke->heightNoMargins();
+		}
+		if (_keepLocally) {
+			fullHeight += (_revoke ? st::boxLittleSkip : st::boxMediumSkip)
+				+ _keepLocally->heightNoMargins();
 		}
 		if (_autoDeleteSettings) {
 			fullHeight += st::boxMediumSkip
@@ -450,6 +462,12 @@ void DeleteMessagesBox::resizeEvent(QResizeEvent *e) {
 			top += _revokeRemember->heightNoMargins();
 		}
 	}
+	if (_keepLocally) {
+		const auto availableWidth = width() - 2 * padding.left();
+		_keepLocally->resizeToNaturalWidth(availableWidth);
+		_keepLocally->moveToLeft(padding.left(), top);
+		top += _keepLocally->heightNoMargins() + st::boxLittleSkip;
+	}
 	if (_autoDeleteSettings) {
 		top += st::boxMediumSkip - st::boxLittleSkip;
 		_autoDeleteSettings->moveToLeft(padding.left(), top);
@@ -465,6 +483,21 @@ void DeleteMessagesBox::keyPressEvent(QKeyEvent *e) {
 	} else {
 		BoxContent::keyPressEvent(e);
 	}
+}
+
+bool DeleteMessagesBox::canKeepLocally() const {
+	if (_wipeHistoryPeer
+		|| hasScheduledMessages()
+		|| hasWelcomeTemplateMessages()
+		|| hasSavedMusicMessages()) {
+		return false;
+	}
+	return ranges::any_of(_ids, [&](FullMsgId id) {
+		const auto item = _session->data().message(id);
+		return item
+			&& item->isRegular()
+			&& !_session->data().isMessageDeleted(item);
+	});
 }
 
 PaidPostType DeleteMessagesBox::paidPostType() const {
@@ -581,7 +614,8 @@ void DeleteMessagesBox::deleteAndClear() {
 		return;
 	}
 	const auto ids = _ids;
+	const auto keepLocally = _keepLocally && _keepLocally->checked();
 	invokeCallbackAndClose();
-	session->data().histories().deleteMessages(ids, revoke);
+	session->data().histories().deleteMessages(ids, revoke, keepLocally);
 	session->data().sendHistoryChangeNotifications();
 }

@@ -7,8 +7,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "data/components/deleted_messages.h"
 
-#include "core/application.h"
-#include "core/core_settings.h"
 #include "core/version.h"
 #include "data/data_document.h"
 #include "data/data_media_types.h"
@@ -108,7 +106,7 @@ void DeletedMessages::forgetAll(PeerId peer) {
 void DeletedMessages::restore(
 		not_null<History*> history,
 		std::vector<not_null<HistoryItem*>> &items) {
-	if (items.empty() || !Core::App().settings().saveDeletedMessages()) {
+	if (items.empty()) {
 		return;
 	}
 	ensureLoaded();

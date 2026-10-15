@@ -1848,6 +1848,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_materialgram_settings_edit_history" = "Save edit history";
 "lng_materialgram_edit_history" = "Edit history";
 "lng_materialgram_edit_history_current" = "Current";
+"lng_materialgram_delete_keep_locally" = "Keep locally";
 "lng_info_personal_channel_label" = "Channel";
 "lng_info_mobile_label" = "Mobile";
 "lng_info_mobile_context_menu_fragment_about" = "This number is not tied to a SIM card and was acquired on {link}.";

@@ -3416,9 +3416,9 @@ void Session::processNonChannelMessagesDeleted(const QVector<MTPint> &data) {
 
 bool Session::keepDeletedMessage(not_null<const HistoryItem*> item) const {
 	const auto &settings = Core::App().settings();
-	if (!settings.saveDeletedMessages()) {
-		return false;
-	} else if (_deletedMessages.contains(item)) {
+	if (_deletedMessages.contains(item)) {
+		return true;
+	} else if (!settings.saveDeletedMessages()) {
 		return false;
 	} else if (!item->isRegular() || !item->isHistoryEntry()) {
 		// Only keep real server messages present in the history.

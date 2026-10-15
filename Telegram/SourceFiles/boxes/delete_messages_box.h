@@ -60,6 +60,7 @@ private:
 	[[nodiscard]] bool hasScheduledMessages() const;
 	[[nodiscard]] bool hasWelcomeTemplateMessages() const;
 	[[nodiscard]] bool hasSavedMusicMessages() const;
+	[[nodiscard]] bool canKeepLocally() const;
 	[[nodiscard]] std::optional<RevokeConfig> revokeText(
 		not_null<PeerData*> peer) const;
 	[[nodiscard]] PaidPostType paidPostType() const;
@@ -78,6 +79,7 @@ private:
 	object_ptr<Ui::FlatLabel> _text = { nullptr };
 	object_ptr<Ui::Checkbox> _revoke = { nullptr };
 	object_ptr<Ui::SlideWrap<Ui::Checkbox>> _revokeRemember = { nullptr };
+	object_ptr<Ui::Checkbox> _keepLocally = { nullptr };
 	object_ptr<Ui::LinkButton> _autoDeleteSettings = { nullptr };
 
 	int _fullHeight = 0;

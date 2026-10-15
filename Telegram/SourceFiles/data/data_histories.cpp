@@ -815,8 +815,11 @@ bool Histories::postponeEntryRequest(const State &state) const {
 void Histories::deleteMessages(
 	not_null<History*> history,
 	const QVector<MTPint> &ids,
-	bool revoke) {
-	session().deletedMessages().forget(history->peer->id, ids);
+	bool revoke,
+	bool keepLocally) {
+	if (!keepLocally) {
+		session().deletedMessages().forget(history->peer->id, ids);
+	}
 	const auto totalIds = ids.count();
 	const auto numBatches = (totalIds + MaxSelectedItems - 1) / MaxSelectedItems;
 	auto processBatch = [&](auto batchIndex, Fn<void()> finish) {
@@ -976,7 +979,10 @@ void Histories::deleteMessagesByDates(
 	history->destroyMessagesByDates(minDate, maxDate);
 }
 
-void Histories::deleteMessages(const MessageIdsList &ids, bool revoke) {
+void Histories::deleteMessages(
+		const MessageIdsList &ids,
+		bool revoke,
+		bool keepLocally) {
 	auto remove = std::vector<not_null<HistoryItem*>>();
 	remove.reserve(ids.size());
 	base::flat_map<not_null<History*>, QVector<MTPint>> idsByPeer;
@@ -1030,7 +1036,11 @@ void Histories::deleteMessages(const MessageIdsList &ids, bool revoke) {
 	}
 
 	for (const auto &[history, ids] : idsByPeer) {
-		history->owner().histories().deleteMessages(history, ids, revoke);
+		history->owner().histories().deleteMessages(
+			history,
+			ids,
+			revoke,
+			keepLocally);
 	}
 	for (const auto &[peer, ids] : scheduledIdsByPeer) {
 		peer->session().api().request(MTPmessages_DeleteScheduledMessages(
@@ -1053,6 +1063,16 @@ void Histories::deleteMessages(const MessageIdsList &ids, bool revoke) {
 		document->owner().savedMusic().remove(document);
 	}
 
+	if (keepLocally) {
+		remove.erase(ranges::remove_if(remove, [&](
+				not_null<HistoryItem*> item) {
+			if (!item->isRegular()) {
+				return false;
+			}
+			_owner->markMessageDeleted(item);
+			return true;
+		}), end(remove));
+	}
 	if (!remove.empty()) {
 		_owner->notifyItemsAboutToBeDestroyed(remove);
 	}
