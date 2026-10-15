@@ -155,6 +155,11 @@ using ::Media::ValidFrameSize;
 	};
 }
 
+[[nodiscard]] int VideoMessageMaxSize() {
+	const auto percent = Core::App().settings().videoMessageSizePercent();
+	return st::maxVideoMessageSize * percent / 100;
+}
+
 } // namespace
 
 struct Gif::Streamed {
@@ -371,7 +376,7 @@ QSize Gif::countThumbSize(int &inOutWidthMax) const {
 		} else if (_data->isVideoFile()) {
 			return st::maxMediaSize;
 		} else if (_data->isVideoMessage()) {
-			return st::maxVideoMessageSize;
+			return VideoMessageMaxSize();
 		}
 		return st::maxGifSize;
 	}();

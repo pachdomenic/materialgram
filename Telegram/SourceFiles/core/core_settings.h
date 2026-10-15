@@ -51,6 +51,7 @@ inline constexpr auto kDeletedMarkKey = "deleted-mark"_cs;
 inline constexpr auto kDeletedOpaqueKey = "deleted-opaque"_cs;
 inline constexpr auto kMonospaceFontKey = "monospace-font"_cs;
 inline constexpr auto kMessageSecondsKey = "message-seconds"_cs;
+inline constexpr auto kVideoMessageSizeKey = "video-message-size"_cs;
 
 struct WindowPosition {
 	int32 moncrc = 0;
@@ -215,6 +216,8 @@ public:
 	[[nodiscard]] rpl::producer<> deletedAppearanceChanges() const {
 		return _deletedAppearanceChanges.events();
 	}
+	static constexpr auto kVideoMessageSizeMin = 50;
+	static constexpr auto kVideoMessageSizeMax = 180;
 	[[nodiscard]] QString monospaceFontFamily() const {
 		return _monospaceFontFamily;
 	}
@@ -223,6 +226,10 @@ public:
 		return _messageSeconds;
 	}
 	void setMessageSeconds(bool value);
+	[[nodiscard]] int videoMessageSizePercent() const {
+		return _videoMessageSizePercent;
+	}
+	void setVideoMessageSizePercent(int value);
 	[[nodiscard]] rpl::producer<> messageLayoutChanges() const {
 		return _messageLayoutChanges.events();
 	}
@@ -1184,6 +1191,7 @@ private:
 	rpl::event_stream<> _deletedAppearanceChanges;
 	QString _monospaceFontFamily;
 	bool _messageSeconds = false;
+	int _videoMessageSizePercent = 100;
 	rpl::event_stream<> _messageLayoutChanges;
 	rpl::variable<float64> _songVolume = kDefaultVolume;
 	rpl::variable<float64> _videoVolume = kDefaultVolume;

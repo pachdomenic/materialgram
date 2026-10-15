@@ -30,6 +30,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/layers/generic_box.h"
 #include "ui/painter.h"
 #include "ui/widgets/buttons.h"
+#include "ui/widgets/continuous_sliders.h"
 #include "ui/widgets/fields/input_field.h"
 #include "ui/widgets/labels.h"
 #include "ui/wrap/vertical_layout.h"
@@ -313,6 +314,57 @@ void AddToggle(
 	}
 }
 
+struct PercentSliderArgs {
+	QString id;
+	rpl::producer<QString> title;
+	int min = 0;
+	int max = 0;
+	int step = 0;
+	int current = 0;
+	Fn<void(int)> chosen;
+	QStringList keywords;
+};
+
+void AddPercentSlider(SectionBuilder &builder, PercentSliderArgs &&args) {
+	const auto value = std::make_shared<rpl::variable<int>>(args.current);
+	const auto button = builder.addButton({
+		.id = std::move(args.id),
+		.title = std::move(args.title),
+		.st = &st::settingsButtonNoIcon,
+		.label = value->value() | rpl::map([value](int percent) {
+			return QString::number(percent) + '%';
+		}),
+		.keywords = std::move(args.keywords),
+	});
+	if (!button) {
+		return;
+	}
+	button->setAttribute(Qt::WA_TransparentForMouseEvents);
+
+	const auto min = args.min;
+	const auto step = args.step;
+	const auto count = (args.max - min) / step + 1;
+	const auto current = args.current;
+	const auto chosen = args.chosen;
+	builder.add([=](const WidgetContext &ctx) {
+		auto slider = object_ptr<Ui::MediaSlider>(
+			ctx.container,
+			st::settingsScale);
+		const auto raw = slider.data();
+		raw->resize(st::settingsScale.seekSize);
+		raw->setPseudoDiscrete(
+			count,
+			[=](int index) { return min + index * step; },
+			current,
+			[=](int percent) { *value = percent; },
+			chosen);
+		return SectionBuilder::WidgetToAdd{
+			.widget = std::move(slider),
+			.margin = st::settingsBigScalePadding,
+		};
+	});
+}
+
 [[nodiscard]] QString FontFamilyLabel(const QString &family) {
 	return family.isEmpty()
 		? tr::lng_font_default(tr::now)
@@ -489,6 +541,19 @@ void BuildAppearanceCategory(SectionBuilder &builder) {
 		[=] { return settings->messageSeconds(); },
 		[=](bool value) { settings->setMessageSeconds(value); },
 		{ u"tukigram"_q, u"seconds"_q, u"time"_q });
+	AddPercentSlider(builder, {
+		.id = u"tukigram/video_message_size"_q,
+		.title = tr::lng_tukigram_video_message_size(),
+		.min = Core::Settings::kVideoMessageSizeMin,
+		.max = Core::Settings::kVideoMessageSizeMax,
+		.step = 10,
+		.current = settings->videoMessageSizePercent(),
+		.chosen = [=](int percent) {
+			settings->setVideoMessageSizePercent(percent);
+			Core::App().saveSettingsDelayed();
+		},
+		.keywords = { u"tukigram"_q, u"round"_q, u"video"_q, u"circle"_q },
+	});
 	builder.addSkip();
 }
 

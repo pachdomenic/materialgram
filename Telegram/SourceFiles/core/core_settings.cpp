@@ -1317,6 +1317,10 @@ void Settings::addFromSerialized(const QByteArray &serialized) {
 	_monospaceFontFamily = QString::fromUtf8(
 		readPref<QByteArray>(kMonospaceFontKey));
 	_messageSeconds = readPref<bool>(kMessageSecondsKey);
+	_videoMessageSizePercent = std::clamp(
+		readPref<int>(kVideoMessageSizeKey, 100),
+		kVideoMessageSizeMin,
+		kVideoMessageSizeMax);
 	{ // Parse the legacy translation setting.
 		if (legacySkipTranslationForLanguage == 0) {
 			_translateButtonEnabled = false;
@@ -1439,6 +1443,16 @@ void Settings::setMessageSeconds(bool value) {
 	_messageLayoutChanges.fire({});
 }
 
+void Settings::setVideoMessageSizePercent(int value) {
+	value = std::clamp(value, kVideoMessageSizeMin, kVideoMessageSizeMax);
+	if (_videoMessageSizePercent == value) {
+		return;
+	}
+	_videoMessageSizePercent = value;
+	writePref<int>(kVideoMessageSizeKey, value);
+	_messageLayoutChanges.fire({});
+}
+
 void Settings::writePrefGeneric(
 		std::string_view key,
 		const QByteArray &value) {
@@ -1470,6 +1484,21 @@ std::optional<bool> Settings::readPrefImpl<bool>(std::string_view key) {
 template <>
 void Settings::writePrefImpl<bool>(std::string_view key, bool value) {
 	writePrefGeneric(key, value ? "\x1"_q : QByteArray());
+}
+
+template <>
+std::optional<int> Settings::readPrefImpl<int>(std::string_view key) {
+	if (const auto data = readPrefGeneric(key)) {
+		auto ok = false;
+		const auto result = data->toInt(&ok);
+		return ok ? result : std::optional<int>();
+	}
+	return {};
+}
+
+template <>
+void Settings::writePrefImpl<int>(std::string_view key, int value) {
+	writePrefGeneric(key, QByteArray::number(value));
 }
 
 template <>
