@@ -31,7 +31,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/widgets/labels.h"
 #include "ui/wrap/vertical_layout.h"
 #include "window/section_widget.h"
-#include "window/themes/window_theme.h"
 #include "window/window_session_controller.h"
 #include "styles/style_chat.h"
 #include "styles/style_layers.h"
@@ -63,7 +62,7 @@ public:
 		return _pathGradient.get();
 	}
 	HistoryView::Context elementContext() override {
-		return HistoryView::Context::AdminLog;
+		return HistoryView::Context::ChatPreview;
 	}
 
 private:
@@ -88,7 +87,7 @@ private:
 
 	const not_null<Main::Session*> _session;
 	const not_null<History*> _history;
-	const std::unique_ptr<Ui::ChatTheme> _theme;
+	const std::shared_ptr<Ui::ChatTheme> _theme;
 	const std::unique_ptr<Ui::ChatStyle> _style;
 	const std::unique_ptr<PreviewDelegate> _delegate;
 	const not_null<HistoryItem*> _out;
@@ -105,7 +104,7 @@ DeletedPreview::DeletedPreview(
 : RpWidget(parent)
 , _session(&controller->session())
 , _history(_session->data().history(_session->data().user(kFakeUserId)))
-, _theme(Window::Theme::DefaultChatThemeOn(lifetime()))
+, _theme(controller->defaultChatTheme())
 , _style(std::make_unique<Ui::ChatStyle>(_session->colorIndicesValue()))
 , _delegate(std::make_unique<PreviewDelegate>(this, _style.get(), [=] {
 	update();
