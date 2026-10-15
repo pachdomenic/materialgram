@@ -1,6 +1,4 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg width="16px" height="16px" viewBox="0 0 16 16" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-    <g id="plane" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
-        <path d="m13.9 14h-11.8l5.9-14zm-1.7-1.1l-4.2-9.9-4.2 9.9h3.1l1.1-4.4 1.1 4.4zm0 0h-8.3z" fill="#FFFFFF"></path>
-    </g>
+<svg width="16px" height="16px" viewBox="0 0 16 16" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <path d="M8.000,9.051 L4.916,4.939 L2.356,12.417 L0.700,11.850 L0.983,11.022 L4.332,1.244 L8.000,6.134 L11.668,1.244 L15.300,11.850 L13.644,12.417 L13.361,11.589 L11.084,4.939 Z M8.000,14.956 L5.525,12.518 L10.475,12.518 Z" fill="#FFFFFF" fill-rule="evenodd"/>
 </svg>

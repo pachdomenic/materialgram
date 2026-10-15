@@ -91,8 +91,17 @@ bool DarkTasbarValueValid/* = false*/;
 	auto hq = PainterHighQualityEnabler(p);
 	const auto xm = image.width() / 16.;
 	const auto ym = image.height() / 16.;
-	p.setBrush(color);
 	p.setPen(Qt::NoPen);
+	// the dot would merge with the ear of the logo without a gap
+	p.setCompositionMode(QPainter::CompositionMode_Clear);
+	p.setBrush(Qt::black);
+	p.drawEllipse(QRectF( // cx=3.9, cy=12.7, r=3.3
+		0.6 * xm,
+		9.4 * ym,
+		6.6 * xm,
+		6.6 * ym));
+	p.setCompositionMode(QPainter::CompositionMode_SourceOver);
+	p.setBrush(color);
 	p.drawEllipse(QRectF( // cx=3.9, cy=12.7, r=2.2
 		1.7 * xm,
 		10.5 * ym,
