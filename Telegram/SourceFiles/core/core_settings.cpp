@@ -1331,6 +1331,15 @@ void Settings::addFromSerialized(const QByteArray &serialized) {
 	_keepSelfDestructingMedia = readPref<bool>(kKeepSelfDestructingMediaKey);
 	_markSelfDestructingRead = !readPref<bool>(kSelfDestructingNoReadKey);
 	_saveEditHistory = !readPref<bool>(kEditHistoryDisabledKey);
+	_deletedSkipChannels = readPref<bool>(kDeletedSkipChannelsKey);
+	_deletedSkipBots = readPref<bool>(kDeletedSkipBotsKey);
+	_deletedSkipPeers.clear();
+	const auto skipPeers = readPref<QByteArray>(kDeletedSkipPeersKey);
+	for (const auto &id : skipPeers.split(',')) {
+		if (const auto value = id.toULongLong()) {
+			_deletedSkipPeers.emplace(PeerId(PeerIdHelper(value)));
+		}
+	}
 	_deletedMark = QString::fromUtf8(readPref<QByteArray>(
 		kDeletedMarkKey,
 		DefaultDeletedMark().toUtf8()));
@@ -1478,6 +1487,26 @@ void Settings::setMessageSeconds(bool value) {
 	_messageSeconds = value;
 	writePref<bool>(kMessageSecondsKey, value);
 	_messageLayoutChanges.fire({});
+}
+
+void Settings::setDeletedSkipChannels(bool value) {
+	_deletedSkipChannels = value;
+	writePref<bool>(kDeletedSkipChannelsKey, value);
+}
+
+void Settings::setDeletedSkipBots(bool value) {
+	_deletedSkipBots = value;
+	writePref<bool>(kDeletedSkipBotsKey, value);
+}
+
+void Settings::setDeletedSkipPeers(base::flat_set<PeerId> value) {
+	_deletedSkipPeers = std::move(value);
+	auto list = QByteArrayList();
+	list.reserve(_deletedSkipPeers.size());
+	for (const auto &id : _deletedSkipPeers) {
+		list.push_back(QByteArray::number(id.value));
+	}
+	writePref<QByteArray>(kDeletedSkipPeersKey, list.join(','));
 }
 
 void Settings::setHideFolderBadges(bool value) {

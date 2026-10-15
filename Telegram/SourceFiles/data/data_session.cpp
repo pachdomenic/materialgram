@@ -3440,6 +3440,14 @@ bool Session::keepDeletedMessage(not_null<const HistoryItem*> item) const {
 	} else if (item->out() && !settings.saveOwnDeletedMessages()) {
 		return false;
 	}
+	const auto peer = item->history()->peer;
+	if (settings.deletedSkipPeers().contains(peer->id)) {
+		return false;
+	} else if (settings.deletedSkipChannels() && peer->isBroadcast()) {
+		return false;
+	} else if (settings.deletedSkipBots() && peer->isBot()) {
+		return false;
+	}
 	return true;
 }
 

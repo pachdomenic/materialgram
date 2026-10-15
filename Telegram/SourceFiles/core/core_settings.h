@@ -56,6 +56,9 @@ inline constexpr auto kVideoMessageSizeKey = "video-message-size"_cs;
 inline constexpr auto kBubbleRadiusLargeKey = "bubble-radius-large"_cs;
 inline constexpr auto kBubbleRadiusSmallKey = "bubble-radius-small"_cs;
 inline constexpr auto kHideFolderBadgesKey = "hide-folder-badges"_cs;
+inline constexpr auto kDeletedSkipChannelsKey = "deleted-skip-channels"_cs;
+inline constexpr auto kDeletedSkipBotsKey = "deleted-skip-bots"_cs;
+inline constexpr auto kDeletedSkipPeersKey = "deleted-skip-peers"_cs;
 
 enum class GhostOption : uchar {
 	HideReads,
@@ -203,6 +206,18 @@ public:
 	void setSaveOwnDeletedMessages(bool value) {
 		_saveOwnDeletedMessages = value;
 	}
+	[[nodiscard]] bool deletedSkipChannels() const {
+		return _deletedSkipChannels;
+	}
+	void setDeletedSkipChannels(bool value);
+	[[nodiscard]] bool deletedSkipBots() const {
+		return _deletedSkipBots;
+	}
+	void setDeletedSkipBots(bool value);
+	[[nodiscard]] const base::flat_set<PeerId> &deletedSkipPeers() const {
+		return _deletedSkipPeers;
+	}
+	void setDeletedSkipPeers(base::flat_set<PeerId> value);
 	[[nodiscard]] bool forwardProtectedMessages() const {
 		return _forwardProtectedMessages;
 	}
@@ -1231,6 +1246,9 @@ private:
 	bool _moderateModeEnabled = false;
 	bool _saveDeletedMessages = true;
 	bool _saveOwnDeletedMessages = true;
+	bool _deletedSkipChannels = false;
+	bool _deletedSkipBots = false;
+	base::flat_set<PeerId> _deletedSkipPeers;
 	bool _forwardProtectedMessages = false;
 	bool _keepSelfDestructingMedia = false;
 	bool _markSelfDestructingRead = true;

@@ -1853,6 +1853,12 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_tukigram_deleted_mark_placeholder" = "Emoji or text";
 "lng_tukigram_deleted_mark_about" = "Shown next to the time of deleted messages. Leave empty to hide it.";
 "lng_tukigram_deleted_transparent" = "Make messages transparent";
+"lng_tukigram_deleted_exceptions" = "Exceptions";
+"lng_tukigram_deleted_skip_channels" = "Don't keep in channels";
+"lng_tukigram_deleted_skip_bots" = "Don't keep in bots";
+"lng_tukigram_deleted_skip_chats" = "Excluded chats";
+"lng_tukigram_deleted_skip_chats_none" = "None";
+"lng_tukigram_deleted_exceptions_about" = "Deleted messages in these chats disappear as usual.";
 "lng_tukigram_preview_out" = "It's morning in Tokyo 😎";
 "lng_tukigram_preview_in" = "I hope you're enjoying your day as much as I am.";
 "lng_tukigram_appearance_title" = "Appearance";

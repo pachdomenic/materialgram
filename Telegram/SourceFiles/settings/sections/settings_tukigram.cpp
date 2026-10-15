@@ -10,6 +10,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "settings/settings_common_session.h"
 
 #include "base/unixtime.h"
+#include "boxes/peer_list_controllers.h"
 #include "core/application.h"
 #include "core/core_settings.h"
 #include "core/version.h"
@@ -686,6 +687,133 @@ void ShowRestartBox(not_null<Window::SessionController*> controller) {
 	}));
 }
 
+class DeletedExceptionsController final : public ChatsListBoxController {
+public:
+	DeletedExceptionsController(
+		not_null<Main::Session*> session,
+		std::vector<not_null<PeerData*>> selected);
+
+	Main::Session &session() const override;
+	void rowClicked(not_null<PeerListRow*> row) override;
+
+protected:
+	void prepareViewHook() override;
+	std::unique_ptr<Row> createRow(not_null<History*> history) override;
+
+private:
+	const not_null<Main::Session*> _session;
+	std::vector<not_null<PeerData*>> _selected;
+
+};
+
+DeletedExceptionsController::DeletedExceptionsController(
+	not_null<Main::Session*> session,
+	std::vector<not_null<PeerData*>> selected)
+: ChatsListBoxController(session)
+, _session(session)
+, _selected(std::move(selected)) {
+}
+
+Main::Session &DeletedExceptionsController::session() const {
+	return *_session;
+}
+
+void DeletedExceptionsController::rowClicked(not_null<PeerListRow*> row) {
+	delegate()->peerListSetRowChecked(row, !row->checked());
+}
+
+void DeletedExceptionsController::prepareViewHook() {
+	delegate()->peerListSetTitle(tr::lng_tukigram_deleted_skip_chats());
+	delegate()->peerListAddSelectedPeers(_selected);
+}
+
+auto DeletedExceptionsController::createRow(not_null<History*> history)
+-> std::unique_ptr<Row> {
+	const auto peer = history->peer;
+	if (peer->isSelf() || peer->isRepliesChat() || peer->isVerifyCodes()) {
+		return nullptr;
+	}
+	return std::make_unique<Row>(history);
+}
+
+void ShowDeletedExceptionsBox(
+		not_null<Window::SessionController*> controller,
+		Fn<void()> saved) {
+	const auto session = &controller->session();
+	const auto settings = &Core::App().settings();
+	auto selected = std::vector<not_null<PeerData*>>();
+	for (const auto &id : settings->deletedSkipPeers()) {
+		if (const auto peer = session->data().peerLoaded(id)) {
+			selected.push_back(peer);
+		}
+	}
+	auto initBox = [=](not_null<PeerListBox*> box) {
+		box->addButton(tr::lng_settings_save(), [=] {
+			// Keep exceptions that belong to other accounts.
+			auto ids = base::flat_set<PeerId>();
+			for (const auto &id : settings->deletedSkipPeers()) {
+				if (!session->data().peerLoaded(id)) {
+					ids.emplace(id);
+				}
+			}
+			for (const auto &peer : box->collectSelectedRows()) {
+				ids.emplace(peer->id);
+			}
+			settings->setDeletedSkipPeers(std::move(ids));
+			Core::App().saveSettingsDelayed();
+			saved();
+			box->closeBox();
+		});
+		box->addButton(tr::lng_cancel(), [=] { box->closeBox(); });
+	};
+	controller->show(Box<PeerListBox>(
+		std::make_unique<DeletedExceptionsController>(
+			session,
+			std::move(selected)),
+		std::move(initBox)));
+}
+
+void AddDeletedExceptions(SectionBuilder &builder) {
+	const auto settings = &Core::App().settings();
+	const auto controller = builder.controller();
+
+	AddToggle(
+		builder,
+		u"tukigram/deleted_skip_channels"_q,
+		tr::lng_tukigram_deleted_skip_channels(),
+		[=] { return settings->deletedSkipChannels(); },
+		[=](bool value) { settings->setDeletedSkipChannels(value); },
+		{ u"tukigram"_q, u"deleted"_q, u"channels"_q, u"exceptions"_q });
+	AddToggle(
+		builder,
+		u"tukigram/deleted_skip_bots"_q,
+		tr::lng_tukigram_deleted_skip_bots(),
+		[=] { return settings->deletedSkipBots(); },
+		[=](bool value) { settings->setDeletedSkipBots(value); },
+		{ u"tukigram"_q, u"deleted"_q, u"bots"_q, u"exceptions"_q });
+
+	const auto count = std::make_shared<rpl::variable<int>>(
+		int(settings->deletedSkipPeers().size()));
+	builder.addButton({
+		.id = u"tukigram/deleted_skip_chats"_q,
+		.title = tr::lng_tukigram_deleted_skip_chats(),
+		.st = &st::settingsButtonNoIcon,
+		.label = count->value() | rpl::map([](int value) {
+			return value
+				? QString::number(value)
+				: tr::lng_tukigram_deleted_skip_chats_none(tr::now);
+		}),
+		.onClick = [=] {
+			if (controller) {
+				ShowDeletedExceptionsBox(controller, [=] {
+					*count = int(settings->deletedSkipPeers().size());
+				});
+			}
+		},
+		.keywords = { u"tukigram"_q, u"deleted"_q, u"exceptions"_q },
+	});
+}
+
 void AddDeletedOptions(SectionBuilder &builder) {
 	const auto settings = &Core::App().settings();
 
@@ -1085,6 +1213,14 @@ void BuildIllegalCategory(SectionBuilder &builder) {
 
 	builder.addSubsectionTitle(tr::lng_tukigram_deleted_title());
 	AddDeletedOptions(builder);
+	builder.addSkip();
+	builder.addDivider();
+	builder.addSkip();
+
+	builder.addSubsectionTitle(tr::lng_tukigram_deleted_exceptions());
+	AddDeletedExceptions(builder);
+	builder.addSkip();
+	builder.addDividerText(tr::lng_tukigram_deleted_exceptions_about());
 	builder.addSkip();
 }
 
