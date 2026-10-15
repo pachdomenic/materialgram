@@ -306,6 +306,20 @@ void Cover::refreshQrButtonGeometry(int newWidth) {
 	_qrButton->moveToRight(buttonRight - inset, buttonTop, newWidth);
 }
 
+void BuildTukiGramButton(SectionBuilder &builder) {
+	builder.addDivider();
+	builder.addSkip();
+	builder.addSectionButton({
+		.title = tr::lng_tukigram_settings(),
+		.targetSection = TukiGramId(),
+		.icon = { &st::menuIconTukiGram },
+		.keywords = { u"tukigram"_q, u"materialgram"_q, u"deleted"_q },
+	});
+	builder.addSkip();
+	builder.addDivider();
+	builder.addSkip();
+}
+
 void BuildSectionButtons(SectionBuilder &builder) {
 	const auto session = builder.session();
 	const auto controller = builder.controller();
@@ -683,8 +697,7 @@ void Main::setupContent() {
 			.isPaused = isPaused,
 			.highlights = highlights,
 		});
-		builder.addDivider();
-		builder.addSkip();
+		BuildTukiGramButton(builder);
 		BuildValidationSuggestions(builder);
 		BuildSectionButtons(builder);
 		builder.addSkip();
@@ -745,19 +758,7 @@ const auto kMeta = BuildHelper({
 	.title = &tr::lng_menu_settings,
 	.icon = &st::menuIconSettings,
 }, [](SectionBuilder &builder) {
-	builder.addDivider();
-	builder.addSkip();
-
-	builder.addSectionButton({
-		.title = tr::lng_tukigram_settings(),
-		.targetSection = TukiGramId(),
-		.icon = { &st::menuIconTukiGram },
-		.keywords = { u"tukigram"_q, u"materialgram"_q, u"deleted"_q },
-	});
-
-	builder.addSkip();
-	builder.addDivider();
-	builder.addSkip();
+	BuildTukiGramButton(builder);
 
 	builder.add(nullptr, [] {
 		return SearchEntry{
