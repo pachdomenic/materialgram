@@ -54,7 +54,7 @@ BEGIN
             VALUE "CompanyName", "kukuruzka"
             VALUE "FileDescription", "materialgram Updater"
             VALUE "FileVersion", "7.3.1.0"
-            VALUE "LegalCopyright", "github.com/kukuruzka165/materialgram"
+            VALUE "LegalCopyright", "github.com/pachdomenic/materialgram"
             VALUE "ProductName", "materialgram"
             VALUE "ProductVersion", "7.3.1.0"
         END

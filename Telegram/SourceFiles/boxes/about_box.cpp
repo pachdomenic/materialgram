@@ -38,7 +38,7 @@ namespace {
 rpl::producer<TextWithEntities> Text1() {
 	return tr::lng_materialgram_about_text1(
 		lt_features_link,
-		tr::lng_materialgram_about_github(tr::url(u"https://github.com/kukuruzka165/materialgram#features"_q)),
+		tr::lng_materialgram_about_github(tr::url(u"https://github.com/pachdomenic/materialgram#features"_q)),
 		tr::marked);
 }
 
@@ -51,7 +51,7 @@ rpl::producer<TextWithEntities> Text2() {
 		lt_github_link,
 		rpl::single(tr::link(
 			"GitHub",
-			"https://github.com/kukuruzka165/materialgram")),
+			"https://github.com/pachdomenic/materialgram")),
 			tr::marked);
 }
 

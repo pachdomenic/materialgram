@@ -557,7 +557,7 @@ void BuildHelpSection(SectionBuilder &builder) {
 		.title = tr::lng_materialgram_settings_github(),
 		.icon = { &st::menuIconGitHub },
 		.onClick = [=] {
-			UrlClickHandler::Open("https://github.com/kukuruzka165/materialgram/releases");
+			UrlClickHandler::Open("https://github.com/pachdomenic/materialgram/releases");
 		},
 		.keywords = { u"materialgram"_q, u"github"_q, u"releases"_q },
 	});

@@ -486,7 +486,7 @@ LastCrashedWindow::LastCrashedWindow(
 	connect(&_saveReport, &QPushButton::clicked, [=] { saveReport(); });
 	_getApp.setText(u"GET THE LATEST OFFICIAL VERSION OF MATERIAL TELEGRAM"_q);
 	connect(&_getApp, &QPushButton::clicked, [=] {
-		QDesktopServices::openUrl(u"https://github.com/kukuruzka165/materialgram"_q);
+		QDesktopServices::openUrl(u"https://github.com/pachdomenic/materialgram"_q);
 	});
 
 	_send.setText(u"SEND CRASH REPORT"_q);
