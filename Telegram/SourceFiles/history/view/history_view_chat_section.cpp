@@ -910,7 +910,9 @@ ChatWidget::ChatWidget(
 			| PeerUpdateFlag::StarsPerMessage)) {
 			refreshSuggestPostToggle();
 		}
-		if (update.flags & PeerUpdateFlag::IsBlocked) {
+		if ((update.flags & PeerUpdateFlag::IsBlocked)
+			|| ((update.flags & PeerUpdateFlag::StarsPerMessage)
+				&& _peer->isUser())) {
 			refreshAboutView(true);
 		} else if (update.flags & (PeerUpdateFlag::FullInfo
 			| PeerUpdateFlag::Rights
@@ -1909,7 +1911,8 @@ void ChatWidget::setupSwipeReplyAndBack() {
 				? _inner->viewByPosition(still->position())
 				: nullptr;
 			const auto selected = (still && view)
-				? view->selectedQuote(_inner->getSelectedTextSelection(still))
+				? view->selectedReplyQuote(
+					_inner->getSelectedTextSelection(still))
 				: SelectedQuote();
 			const auto exact = selected.item
 				? selected.item
@@ -1924,6 +1927,7 @@ void ChatWidget::setupSwipeReplyAndBack() {
 				.quoteOffset = selected.highlight.quoteOffset,
 				.todoItemId = selected.highlight.todoItemId,
 				.pollOption = selected.highlight.pollOption,
+				.richQuote = selected.highlight.richQuote,
 			});
 		};
 		return result;
@@ -2021,14 +2025,6 @@ bool ChatWidget::confirmSendingFiles(
 				list.files.push_back(Storage::PrepareFolderArchive(folder));
 				confirmSendingFiles(std::move(list), QString());
 			}
-			return true;
-		}
-		if (overrideSendImagesAsPhotos == true
-			&& (Storage::ComputeMimeDataState(data)
-				== Storage::MimeDataState::FilesArchive)) {
-			auto list = Ui::PreparedList();
-			list.files.push_back(Storage::PrepareFilesArchive(urls));
-			confirmSendingFiles(std::move(list), QString());
 			return true;
 		}
 		auto list = Storage::PrepareMediaList(
@@ -2291,7 +2287,8 @@ Api::SendAction ChatWidget::prepareSendAction(
 			if (forum->bot()
 				&& Data::IsBotUserCreatesTopics(_history->peer)) {
 				const auto readyRootId = [&]() -> MsgId {
-					if (const auto id = result.replyTo.messageId) {
+					const auto id = result.replyTo.messageId;
+					if (id.peer == _history->peer->id) {
 						if (const auto item = session().data().message(id)) {
 							return item->topicRootId();
 						}
@@ -2312,8 +2309,13 @@ Api::SendAction ChatWidget::prepareSendAction(
 								std::move(draft));
 						}
 					}
-					result = Api::SendAction(_creatingBotTopic, options);
-					result.replyTo.topicRootId = _creatingBotTopic->rootId();
+					const auto rootId = _creatingBotTopic->rootId();
+					if (!result.replyTo.messageId) {
+						result.replyTo.messageId = FullMsgId(
+							_history->peer->id,
+							rootId);
+					}
+					result.replyTo.topicRootId = rootId;
 				}
 			}
 		}
@@ -6012,6 +6014,9 @@ void ChatWidget::refreshAboutView(bool force) {
 				|| user->isFullLoaded()) {
 				refresh();
 			} else {
+				if (force) {
+					destroy();
+				}
 				session().api().requestFullPeer(user);
 			}
 		} else {

@@ -1763,16 +1763,17 @@ Section DetailsFiller::makeInfo() {
 			usernameLine.text->parentWidget(),
 			st::infoProfileLabeledButtonQr);
 		qrButton->setAccessibleName(tr::lng_group_invite_context_qr(tr::now));
+		const auto rightSkip = st::infoProfileLabeledButtonQrRightSkip;
+		const auto showQr = [=, show = controller->uiShow()] {
+			Ui::DefaultShowFillPeerQrBoxCallback(show, user);
+			return false;
+		};
 		UsernamesValue(_peer) | rpl::on_next([=](const auto &u) {
 			qrButton->setVisible(!u.empty());
 		}, qrButton->lifetime());
-		const auto rightSkip = st::infoProfileLabeledButtonQrRightSkip;
 		fitLabelToButton(qrButton, usernameLine.text, rightSkip);
 		fitLabelToButton(qrButton, usernameLine.subtext, rightSkip);
-		qrButton->setClickedCallback([=, show = controller->uiShow()] {
-			Ui::DefaultShowFillPeerQrBoxCallback(show, user);
-			return false;
-		});
+		qrButton->setClickedCallback(showQr);
 
 		if (!user->isBot()) {
 			tracker.track(result->add(
@@ -3507,26 +3508,6 @@ void BuildProfileDetailsSections(
 		DetailsFiller filler(controller, &stack, peer, origin);
 		filler.buildSections();
 	}
-}
-
-void AddDetails(
-		not_null<Ui::VerticalLayout*> container,
-		not_null<Controller*> controller,
-		not_null<PeerData*> peer,
-		Data::ForumTopic *topic,
-		Data::SavedSublist *sublist,
-		Origin origin) {
-	auto layout = object_ptr<Ui::VerticalLayout>(container);
-	auto stack = SectionStack(layout.data());
-	BuildProfileDetailsSections(
-		stack,
-		controller,
-		peer,
-		topic,
-		sublist,
-		origin);
-	stack.finalize();
-	container->add(std::move(layout));
 }
 
 } // namespace Profile

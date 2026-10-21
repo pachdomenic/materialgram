@@ -4133,7 +4133,7 @@ void ListWidget::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 	request.pointState = _overState.pointState;
 	request.quote = (_overElement
 		&& _selectedTextItem == _overElement->data())
-		? _overElement->selectedQuote(_selectedTextSelection)
+		? _overElement->selectedReplyQuote(_selectedTextSelection)
 		: SelectedQuote();
 	request.selectedText = _selectedText;
 	request.selectedItems = collectSelectedItems();
@@ -5348,6 +5348,9 @@ std::unique_ptr<QMimeData> ListWidget::prepareDrag() {
 		pressedView,
 		_pressItemExact ? _pressItemExact : pressedItem,
 		_pressState);
+	if (uponSelected && hasCopyRestrictionForSelected()) {
+		return nullptr;
+	}
 
 	auto urls = QList<QUrl>();
 	const auto selectedText = [&] {
@@ -5390,6 +5393,9 @@ std::unique_ptr<QMimeData> ListWidget::prepareDrag() {
 		const auto exactItem = _pressItemExact
 			? _pressItemExact
 			: pressedItem;
+		if (hasCopyRestriction(exactItem)) {
+			return nullptr;
+		}
 		if (forwardSelection) {
 			forwardIds = collectSelectedIds();
 		} else if (_mouseCursorState == CursorState::Date) {
@@ -5905,14 +5911,10 @@ auto ListWidget::replyToMessageRequested() const
 void ListWidget::replyToMessageRequestNotify(
 		FullReplyTo to,
 		bool forceAnotherChat) {
-	if (!to.quote.empty()) {
+	if (!to.quote.empty() || to.richQuote) {
 		clearTextSelection();
 	}
 	_requestedToReplyToMessage.fire({ std::move(to), forceAnotherChat });
-}
-
-rpl::producer<FullMsgId> ListWidget::readMessageRequested() const {
-	return _requestedToReadMessage.events();
 }
 
 rpl::producer<FullMsgId> ListWidget::showMessageRequested() const {
