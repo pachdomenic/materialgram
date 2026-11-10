@@ -129,6 +129,15 @@ std::unique_ptr<Data::Forum> BotInfo::takeForumData() {
 	return nullptr;
 }
 
+void BotInfo::setInlineReturnTo(Dialogs::EntryState state) {
+	_inlineReturnThread = state.key.thread();
+	_inlineReturnTo = std::move(state);
+}
+
+Dialogs::EntryState BotInfo::inlineReturnTo() const {
+	return _inlineReturnThread ? _inlineReturnTo : Dialogs::EntryState();
+}
+
 Data::LastseenStatus LastseenFromMTP(
 		const MTPUserStatus &status,
 		Data::LastseenStatus currentStatus) {
@@ -231,18 +240,6 @@ void UserData::setPeerGiftsCount(int count) {
 		_peerGiftsCount = count;
 		session().changes().peerUpdated(this, UpdateFlag::PeerGifts);
 	}
-}
-
-bool UserData::hasPrivateForwardName() const {
-	return !_privateForwardName.isEmpty();
-}
-
-QString UserData::privateForwardName() const {
-	return _privateForwardName;
-}
-
-void UserData::setPrivateForwardName(const QString &name) {
-	_privateForwardName = name;
 }
 
 const std::optional<QString> &UserData::gramAddress() const {
@@ -657,10 +654,6 @@ bool UserData::isPremium() const {
 	return flags() & UserDataFlag::Premium;
 }
 
-bool UserData::isBotInlineGeo() const {
-	return flags() & UserDataFlag::BotInlineGeo;
-}
-
 bool UserData::isBot() const {
 	return botInfo != nullptr;
 }
@@ -757,10 +750,6 @@ void UserData::setStarsRating(Data::StarsRating value) {
 
 Data::StarsRating UserData::starsRating() const {
 	return _starsRating;
-}
-
-bool UserData::canAddContact() const {
-	return canShareThisContact() && !isContact();
 }
 
 bool UserData::canShareThisContactFast() const {
@@ -1001,8 +990,6 @@ void ApplyUserUpdate(
 		user->setThemeToken(QString());
 	}
 	user->setTranslationDisabled(update.is_translations_disabled());
-	user->setPrivateForwardName(
-		update.vprivate_forward_name().value_or_empty());
 
 	if (const auto info = user->botInfo.get()) {
 		const auto group = update.vbot_group_admin_rights()

@@ -16,9 +16,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_user_names.h"
 #include "dialogs/dialogs_key.h"
 #include "base/flags.h"
+#include "base/weak_ptr.h"
 
 namespace Data {
 class Forum;
+class Thread;
 struct BotCommand;
 struct BusinessDetails;
 struct WalletCard;
@@ -69,6 +71,9 @@ struct BotInfo {
 	[[nodiscard]] Data::Forum *forum() const;
 	[[nodiscard]] std::unique_ptr<Data::Forum> takeForumData();
 
+	void setInlineReturnTo(Dialogs::EntryState state);
+	[[nodiscard]] Dialogs::EntryState inlineReturnTo() const;
+
 	QString description;
 	QString inlinePlaceholder;
 	std::vector<Data::BotCommand> commands;
@@ -86,7 +91,6 @@ struct BotInfo {
 	QColor botAppColorBodyNight = QColor(0, 0, 0, 0);
 
 	QString startToken;
-	Dialogs::EntryState inlineReturnTo;
 
 	ChatAdminRights groupAdminRights;
 	ChatAdminRights channelAdminRights;
@@ -114,6 +118,9 @@ struct BotInfo {
 
 private:
 	std::unique_ptr<Data::Forum> _forum;
+	Dialogs::EntryState _inlineReturnTo;
+	// A topic or sublist can be freed without a destroyed() event.
+	base::weak_ptr<Data::Thread> _inlineReturnThread;
 
 };
 
@@ -202,7 +209,6 @@ public:
 	[[nodiscard]] bool isScam() const;
 	[[nodiscard]] bool isFake() const;
 	[[nodiscard]] bool isPremium() const;
-	[[nodiscard]] bool isBotInlineGeo() const;
 	[[nodiscard]] bool isBot() const;
 	[[nodiscard]] bool isSupport() const;
 	[[nodiscard]] bool isInaccessible() const;
@@ -234,7 +240,6 @@ public:
 	[[nodiscard]] Data::StarsRating starsRating() const;
 
 	[[nodiscard]] bool canShareThisContact() const;
-	[[nodiscard]] bool canAddContact() const;
 
 	// In Data::Session::processUsers() we check only that.
 	// When actually trying to share contact we perform
@@ -286,10 +291,6 @@ public:
 
 	[[nodiscard]] int peerGiftsCount() const;
 	void setPeerGiftsCount(int count);
-
-	[[nodiscard]] bool hasPrivateForwardName() const;
-	[[nodiscard]] QString privateForwardName() const;
-	void setPrivateForwardName(const QString &name);
 
 	// Disengaged means no source has answered about this user yet; engaged
 	// and empty means a source answered and this user has no wallet; engaged
@@ -362,7 +363,6 @@ private:
 	std::unique_ptr<Data::BusinessDetails> _businessDetails;
 	std::vector<Data::UnavailableReason> _unavailableReasons;
 	QString _phone;
-	QString _privateForwardName;
 	std::optional<QString> _gramAddress;
 	std::unique_ptr<Ui::BotVerifyDetails> _botVerifyDetails;
 	std::unique_ptr<Data::WalletCard> _walletCard;

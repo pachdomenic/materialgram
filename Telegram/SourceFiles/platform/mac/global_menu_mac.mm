@@ -13,6 +13,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "window/window_session_controller.h"
 #include "window/main_window.h"
 #include "main/main_session.h"
+#include "history/admin_log/history_admin_log_inner.h"
+#include "history/view/history_view_list_widget.h"
 #include "history/history_inner_widget.h"
 #include "boxes/peer_list_controllers.h"
 #include "boxes/about_box.h"
@@ -141,10 +143,14 @@ void SendKeySequence(
 		Qt::Key key,
 		Qt::KeyboardModifiers modifiers = Qt::NoModifier) {
 	const auto focused = QApplication::focusWidget();
+	const auto copy = (key == Qt::Key_C)
+		&& (modifiers == Qt::ControlModifier);
 	if (qobject_cast<QLineEdit*>(focused)
 		|| qobject_cast<QTextEdit*>(focused)
 		|| qobject_cast<QLabel*>(focused)
-		|| dynamic_cast<HistoryInner*>(focused)) {
+		|| dynamic_cast<HistoryInner*>(focused)
+		|| (copy && dynamic_cast<HistoryView::ListWidget*>(focused))
+		|| (copy && dynamic_cast<AdminLog::InnerWidget*>(focused))) {
 		QApplication::postEvent(
 			focused,
 			new QKeyEvent(QEvent::KeyPress, key, modifiers));
@@ -156,7 +162,7 @@ void SendKeySequence(
 
 // Same name Qt uses for the native "Hide %1" / "Quit %1" items.
 [[nodiscard]] QString BundleApplicationName() {
-	const auto name = [[NSBundle mainBundle]
+	const id name = [[NSBundle mainBundle]
 		objectForInfoDictionaryKey:@"CFBundleName"];
 	return [name isKindOfClass:[NSString class]]
 		? QString::fromNSString(name)
@@ -191,7 +197,7 @@ bool Manager::clipboardHasText() {
 void Manager::retranslate() {
 	if (const auto loaderClass = NSClassFromString(@"QCocoaMenuLoader")) {
 		if ([loaderClass respondsToSelector:@selector(sharedMenuLoader)]) {
-			if (const auto loader = [loaderClass performSelector:@selector(sharedMenuLoader)]) {
+			if (const id loader = [loaderClass performSelector:@selector(sharedMenuLoader)]) {
 				if ([loader respondsToSelector:@selector(qtTranslateApplicationMenu)]) {
 					[loader performSelector:@selector(qtTranslateApplicationMenu)];
 				}
@@ -346,6 +352,12 @@ void Manager::recomputeState() {
 	} else if (const auto list = dynamic_cast<HistoryInner*>(focused)) {
 		canCopy = list->canCopySelected();
 		canDelete = list->canDeleteSelected();
+	} else if (const auto list = dynamic_cast<HistoryView::ListWidget*>(
+			focused)) {
+		canCopy = list->canCopySelected();
+	} else if (const auto list = dynamic_cast<AdminLog::InnerWidget*>(
+			focused)) {
+		canCopy = list->canCopySelected();
 	}
 
 	widget->updateIsActive();
@@ -655,6 +667,8 @@ void Manager::buildWindowMenu(QMenu *window) {
 				w->widget()->showFromTray();
 			}
 		});
+
+	[NSApp setWindowsMenu:window->toNSMenu()];
 }
 
 void Manager::buildMenu() {
@@ -686,6 +700,7 @@ void Manager::create() {
 void Manager::destroy() {
 	_scheduledUpdate.reset();
 	_lifetime.destroy();
+	[NSApp setWindowsMenu:nil];
 	_menuBar.reset();
 	_file = _edit = _window = nullptr;
 	_languageBound = false;

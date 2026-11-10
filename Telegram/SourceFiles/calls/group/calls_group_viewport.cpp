@@ -13,6 +13,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0) && !defined DESKTOP_APP_DISABLE_PRIVATE_QT_API
 #include "calls/group/calls_group_viewport_rhi.h"
 #include "ui/rhi/rhi_renderer.h"
+#include <rhi/qrhi.h>
 #endif
 #include "calls/group/calls_group_common.h"
 #include "calls/group/calls_group_call.h"
@@ -71,7 +72,8 @@ Viewport::Viewport(
 
 Viewport::~Viewport() {
 	if (_borrowed) {
-		if (_opengl) {
+		// QRhi sets _opengl too, but must drop its QRhi cleanup callback.
+		if (_opengl && !_qrhi) {
 			const auto w = static_cast<QOpenGLWidget*>(widget().get());
 			w->makeCurrent();
 			const auto context = w->context();
@@ -293,7 +295,8 @@ void Viewport::add(
 		VideoTileTrack track,
 		rpl::producer<QSize> trackSize,
 		rpl::producer<bool> pinned,
-		bool self) {
+		bool self,
+		bool shown) {
 	// Tiles are added async (see Panel::setupVideo), so a quick
 	// deactivate + activate of the same endpoint queues two additions,
 	// while the removal between them is a no-op (no tile added yet).
@@ -306,7 +309,8 @@ void Viewport::add(
 		std::move(trackSize),
 		std::move(pinned),
 		[=] { updateMyWidgetPart(); },
-		self));
+		self,
+		shown));
 
 	_tiles.back()->trackSizeValue(
 	) | rpl::filter([](QSize size) {
@@ -1012,8 +1016,13 @@ void Viewport::ensureBorrowedRenderer() {
 
 void Viewport::ensureBorrowedCleared() {
 	Expects(_borrowed != nullptr);
-	Expects(!_opengl);
+	Expects(!_opengl || _qrhi);
 
+#if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0) && !defined DESKTOP_APP_DISABLE_PRIVATE_QT_API
+	if (const auto rhi = base::take(_borrowedRhi)) {
+		rhi->removeCleanupCallback(this);
+	}
+#endif
 	base::take(_borrowedRenderer);
 }
 
@@ -1036,6 +1045,20 @@ Ui::Rhi::Renderer *Viewport::ensureBorrowedRhi(
 	}
 	if (const auto r = dynamic_cast<Ui::Rhi::Renderer*>(
 			_borrowedRenderer.get())) {
+		if (_borrowedRhi != rhi) {
+			if (_borrowedRhi) {
+				_borrowedRhi->removeCleanupCallback(this);
+			}
+			r->releaseResources();
+			_borrowedRhi = rhi;
+			rhi->addCleanupCallback(this, [=](QRhi*) {
+				_borrowedRhi = nullptr;
+				if (const auto renderer = dynamic_cast<Ui::Rhi::Renderer*>(
+						_borrowedRenderer.get())) {
+					renderer->releaseResources();
+				}
+			});
+		}
 		r->initialize(rhi, rt, cb);
 		return r;
 	}
@@ -1055,7 +1078,11 @@ void Viewport::borrowedPaintOnscreen(
 		QRhi *rhi,
 		QRhiRenderTarget *rt,
 		QRhiCommandBuffer *cb) {
-	if (const auto r = ensureBorrowedRhi(rhi, rt, cb)) {
+	if (_borrowedRhi != rhi) {
+		return;
+	}
+	if (const auto r = dynamic_cast<Ui::Rhi::Renderer*>(
+			_borrowedRenderer.get())) {
 		r->renderOnscreen(rhi, rt, cb);
 	}
 }

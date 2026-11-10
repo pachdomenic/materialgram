@@ -95,7 +95,8 @@ public:
 		VideoTileTrack track,
 		rpl::producer<QSize> trackSize,
 		rpl::producer<bool> pinned,
-		bool self);
+		bool self,
+		bool shown);
 	void remove(const VideoEndpoint &endpoint);
 	void removeByRow(not_null<MembersRow*> row);
 	void showLarge(const VideoEndpoint &endpoint);
@@ -234,6 +235,7 @@ private:
 	Ui::RpWidgetWrap * const _borrowed = nullptr;
 	QRect _borrowedGeometry;
 	std::unique_ptr<Ui::GL::Renderer> _borrowedRenderer;
+	QRhi *_borrowedRhi = nullptr;
 	QMetaObject::Connection _borrowedConnection;
 
 	rpl::lifetime _lifetime;

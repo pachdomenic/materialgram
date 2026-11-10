@@ -54,8 +54,6 @@ InfoTopBar {
 	storiesUnpin: IconButton;
 	search: IconButton;
 	searchRow: SearchFieldRow;
-	highlightBg: color;
-	highlightDuration: int;
 	radius: pixels;
 }
 
@@ -261,8 +259,6 @@ infoTopBar: InfoTopBar {
 	storiesUnpin: infoTopBarUnpinStories;
 	search: infoTopBarSearch;
 	searchRow: infoTopBarSearchRow;
-	highlightBg: windowBgOver;
-	highlightDuration: 240;
 	radius: 0px;
 }
 infoTopBarScale: 0.7;
@@ -1118,10 +1114,8 @@ inviteLinkRevokedTitlePadding: margins(22px, 16px, 10px, 4px);
 inviteLinkLimitMargin: margins(22px, 8px, 22px, 8px);
 inviteLinkSubscriptionSize: 18px;
 
-inviteLinkQrPixel: 8px;
 inviteLinkQrSkip: 24px;
 inviteLinkQrMargin: margins(0px, 0px, 0px, 13px);
-inviteLinkQrValuePadding: margins(22px, 0px, 22px, 12px);
 
 inviteLinkCreditsField: InputField(defaultInputField) {
 	textMargins: margins(23px, 10px, 0px, 0px);
@@ -1350,9 +1344,6 @@ collectionSubTabs: SubTabs(defaultSubTabs) {
 
 earnTonIconSize: 16px;
 earnTonIconMargin: margins(0px, 2px, 0px, 0px);
-
-infoMusicButtonRipple: universalRippleAnimation;
-infoMusicButtonPadding: margins(16px, 6px, 13px, 6px);
 
 memberTagPillPadding: margins(5px, -1px, 5px, 0px);
 

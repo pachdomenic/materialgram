@@ -277,10 +277,20 @@ bool FocusAssistBlocks = false;
 
 // Thanks https://www.withinrafael.com/2019/09/19/determine-if-your-app-is-in-a-focus-assist-profiles-priority-list/
 void QueryFocusAssist() {
+	static auto unavailable = false;
+	if (unavailable) {
+		return;
+	}
+	auto error = HRESULT();
 	const auto quietHoursSettings = base::WinRT::TryCreateInstance<
 		IQuietHoursSettings
-	>(CLSID_QuietHoursSettings, CLSCTX_LOCAL_SERVER);
+	>(CLSID_QuietHoursSettings, CLSCTX_LOCAL_SERVER, nullptr, &error);
 	if (!quietHoursSettings) {
+		if (error == REGDB_E_CLASSNOTREG) {
+			unavailable = true;
+			LOG(("Focus Assist: Class not registered, "
+				"disabling queries until restart."));
+		}
 		if (FocusAssistBlocks) {
 			LOG(("Focus Assist: Unavailable."));
 			FocusAssistBlocks = false;
@@ -562,12 +572,7 @@ void Manager::Private::clearFromItem(not_null<HistoryItem*> item) {
 		return;
 	}
 
-	auto i = _notifications.find(ContextId{
-		.sessionId = item->history()->session().uniqueId(),
-		.peerId = item->history()->peer->id,
-		.topicRootId = item->topicRootId(),
-		.monoforumPeerId = item->sublistPeerId(),
-	});
+	auto i = _notifications.find(ItemContextId(item));
 	if (i == _notifications.cend()) {
 		return;
 	}
@@ -609,11 +614,7 @@ void Manager::Private::clearFromSublist(
 		return;
 	}
 
-	const auto i = _notifications.find(ContextId{
-		.sessionId = sublist->session().uniqueId(),
-		.peerId = sublist->owningHistory()->peer->id,
-		.monoforumPeerId = sublist->sublistPeer()->id,
-	});
+	const auto i = _notifications.find(SublistContextId(sublist));
 	if (i != _notifications.cend()) {
 		const auto temp = base::take(i->second);
 		_notifications.erase(i);
