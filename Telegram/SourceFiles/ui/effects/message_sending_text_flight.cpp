@@ -223,13 +223,12 @@ void ApplyTopFade(QImage &image, not_null<InputField*> field) {
 	if (PaintsOutsideBubble(view, context)) {
 		return whole;
 	}
-	const auto &st = context.st->messageStyle(view->hasOutLayout(), false);
-	const auto tail = std::max(st.tailLeft.width(), st.tailRight.width());
+	// WHY: materialgram bubbles have no tails, MessageStyle tails are unset.
 	const auto body = view->innerGeometry();
 	return whole.intersected(QRect(
-		body.x() - tail,
+		body.x(),
 		0,
-		body.width() + 2 * tail,
+		body.width(),
 		whole.height()));
 }
 
