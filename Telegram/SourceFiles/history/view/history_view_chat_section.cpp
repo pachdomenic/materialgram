@@ -101,7 +101,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_msg_id.h"
 #include "data/data_saved_messages.h"
 #include "data/data_saved_sublist.h"
-#include "data/data_ai_compose_tones.h"
 #include "data/data_session.h"
 #include "data/data_user.h"
 #include "data/data_chat.h"
@@ -116,7 +115,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_shared_media.h"
 #include "data/data_send_action.h"
 #include "data/data_premium_limits.h"
-#include "main/main_app_config.h"
 #include "data/notify/data_notify_settings.h"
 #include "storage/storage_folder_archive.h"
 #include "storage/storage_media_prepare.h"
@@ -3422,9 +3420,6 @@ SendMenu::Details ChatWidget::sendMenuDetails() const {
 		: HistoryView::CanScheduleUntilOnline(_peer)
 		? Type::ScheduledToUser
 		: Type::Scheduled;
-	const auto aiComposeAllowed =
-		!_composeControls->getTextWithAppliedMarkdown().text.isEmpty()
-		&& !session().data().aiComposeTones().list().empty();
 	return SendMenu::Details{
 		.type = type,
 		.barePeerId = (_sublist
@@ -3432,7 +3427,6 @@ SendMenu::Details ChatWidget::sendMenuDetails() const {
 			: _history)->peer->id.value,
 		.bareTopicRootId = _topic ? _topic->rootId().bare : 0,
 		.effectAllowed = _peer->isUser(),
-		.aiComposeAllowed = aiComposeAllowed,
 	};
 }
 

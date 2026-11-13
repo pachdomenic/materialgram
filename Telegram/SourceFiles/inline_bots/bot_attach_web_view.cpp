@@ -1333,7 +1333,7 @@ void WebViewInstance::requestMain() {
 		_bot->inputUser(),
 		MTP_string(_button.startCommand),
 		MTP_dataJSON(MTP_bytes(botThemeParams().json)),
-		MTP_string("tdesktop")
+		MTP_string("android")
 	)).done([=](const MTPWebViewResult &result) {
 		show({
 			.result = ParseWebViewResult(result),
@@ -1384,7 +1384,7 @@ void WebViewInstance::requestChatJoin() {
 		MTP_flags(Flag::f_theme_params),
 		MTP_long(join.queryId),
 		MTP_dataJSON(MTP_bytes(botThemeParams().json)),
-		MTP_string("tdesktop")
+		MTP_string("android")
 	)).done([=](const MTPWebViewResult &result) {
 		_requestId = 0;
 		show({

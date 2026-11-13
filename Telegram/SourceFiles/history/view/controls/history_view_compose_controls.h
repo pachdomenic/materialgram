@@ -414,7 +414,8 @@ private:
 	void updateDiscardRichDraftGeometry();
 	void setupSendMenu(
 		not_null<Ui::RpWidget*> button,
-		Fn<void(Api::SendOptions)> send);
+		Fn<void(Api::SendOptions)> send,
+		bool withAiCompose);
 	bool updateReplaceMediaButton();
 	void startMediaReplace();
 	void updateOuterGeometry(QRect rect);

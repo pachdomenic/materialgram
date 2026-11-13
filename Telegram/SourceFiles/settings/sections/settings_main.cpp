@@ -117,7 +117,6 @@ public:
 private:
 	void setupChildGeometry();
 	void initViewers();
-	void updatePhoneText();
 	void refreshNameGeometry(int newWidth);
 	void refreshUsernameGeometry(int newWidth);
 	void refreshQrButtonGeometry(int newWidth);
