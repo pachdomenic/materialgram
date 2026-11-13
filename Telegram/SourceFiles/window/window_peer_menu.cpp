@@ -904,7 +904,8 @@ void Filler::addScreenshotAction() {
 					MTPint(),
 					MTPInputPeer(),
 					MTPint(),
-					MTPbytes()),
+					MTPbytes(),
+					MTPVector<MTPRichText>()),
 				MTP_long(base::RandomValue<uint64>())
 			)).done([=](const MTPUpdates &result) {
 				peer->session().api().applyUpdates(result);
