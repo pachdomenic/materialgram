@@ -49,6 +49,7 @@ class EmptyPainter;
 class Element;
 class GramReadLine;
 class TranslateTracker;
+class MediaPreloader;
 class ReadMetricsTracker;
 struct PinnedId;
 struct SelectedQuote;
@@ -736,6 +737,8 @@ private:
 	bool _scrollDateAfterDayCrossing = false;
 	ClickHandlerPtr _scrollDateLink;
 	ClickHandlerPtr _forumThreadBarLink;
+
+	const std::unique_ptr<HistoryView::MediaPreloader> _mediaPreloader;
 
 	[[nodiscard]] HistoryView::ElementOverlayHost &ensureOverlayHost();
 	std::unique_ptr<HistoryView::ElementOverlayHost> _overlayHost;

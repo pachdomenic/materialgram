@@ -340,6 +340,27 @@ private:
 
 };
 
+class MediaPreloader final {
+public:
+	using Enumerate = Fn<void(const Fn<void(not_null<Element*>, int)> &)>;
+
+	explicit MediaPreloader(Enumerate enumerate);
+
+	void visibleAreaUpdated(int top, int bottom);
+
+private:
+	void preload();
+
+	const Enumerate _enumerate;
+	base::Timer _timer;
+	base::flat_set<FullMsgId> _preloaded;
+	base::flat_set<DocumentId> _emoji;
+	int _visibleTop = 0;
+	int _visibleBottom = 0;
+	rpl::lifetime _lifetime;
+
+};
+
 class ListWidget final
 	: public Ui::RpWidget
 	, public ElementDelegate
@@ -1158,6 +1179,7 @@ private:
 	base::Timer _touchScrollTimer;
 	TouchScroll _touchElastic;
 	Ui::MiddleClickAutoscroll _middleClickAutoscroll;
+	MediaPreloader _mediaPreloader;
 
 	rpl::event_stream<FullMsgId> _requestedToEditMessage;
 	rpl::event_stream<ReplyToMessageRequest> _requestedToReplyToMessage;

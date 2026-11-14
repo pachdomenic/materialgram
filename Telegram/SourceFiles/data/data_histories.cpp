@@ -919,36 +919,25 @@ void Histories::deleteMessages(
 	if (!keepLocally) {
 		session().deletedMessages().forget(history->peer->id, ids);
 	}
-	const auto totalIds = ids.count();
-	const auto numBatches = (totalIds + MaxSelectedItems - 1) / MaxSelectedItems;
-	auto processBatch = [&](auto batchIndex, Fn<void()> finish) {
-		auto startIndex = batchIndex * MaxSelectedItems;
-		auto endIndex = qMin((batchIndex + 1) * MaxSelectedItems, totalIds);
-		QVector<MTPint> batchIds(ids.begin() + startIndex, ids.begin() + endIndex);
-		sendRequest(history, RequestType::Delete, [=](Fn<void()> finishBatch) {
-			const auto done = [=](const MTPmessages_AffectedMessages& result) {
-				session().api().applyAffectedMessages(history->peer, result);
-				finishBatch();
-				history->requestChatListMessage();
-			};
-			if (const auto channel = history->peer->asChannel()) {
-				return session().api().request(MTPchannels_DeleteMessages(
-					channel->inputChannel(),
-					MTP_vector<MTPint>(batchIds)
-				)).done(done).fail(finishBatch).send();
-			} else {
-				using Flag = MTPmessages_DeleteMessages::Flag;
-				return session().api().request(MTPmessages_DeleteMessages(
-					MTP_flags(revoke ? Flag::f_revoke : Flag(0)),
-					MTP_vector<MTPint>(batchIds)
-				)).done(done).fail(finishBatch).send();
-			}
-		});
-	};
-
-	for (int batchIndex = 0; batchIndex < numBatches; ++batchIndex) {
-		processBatch(batchIndex, nullptr);
-	}
+	sendRequest(history, RequestType::Delete, [=](Fn<void()> finish) {
+		const auto done = [=](const MTPmessages_AffectedMessages &result) {
+			session().api().applyAffectedMessages(history->peer, result);
+			finish();
+			history->requestChatListMessage();
+		};
+		if (const auto channel = history->peer->asChannel()) {
+			return session().api().request(MTPchannels_DeleteMessages(
+				channel->inputChannel(),
+				MTP_vector<MTPint>(ids)
+			)).done(done).fail(finish).send();
+		} else {
+			using Flag = MTPmessages_DeleteMessages::Flag;
+			return session().api().request(MTPmessages_DeleteMessages(
+				MTP_flags(revoke ? Flag::f_revoke : Flag(0)),
+				MTP_vector<MTPint>(ids)
+			)).done(done).fail(finish).send();
+		}
+	});
 }
 
 void Histories::deleteAllMessages(
@@ -1135,11 +1124,13 @@ void Histories::deleteMessages(
 	}
 
 	for (const auto &[history, ids] : idsByPeer) {
-		history->owner().histories().deleteMessages(
-			history,
-			ids,
-			revoke,
-			keepLocally);
+		for (auto i = 0; i < ids.size(); i += MaxSelectedItems) {
+			history->owner().histories().deleteMessages(
+				history,
+				ids.mid(i, MaxSelectedItems),
+				revoke,
+				keepLocally);
+		}
 	}
 	for (const auto &[peer, ids] : scheduledIdsByPeer) {
 		peer->session().api().request(MTPmessages_DeleteScheduledMessages(
