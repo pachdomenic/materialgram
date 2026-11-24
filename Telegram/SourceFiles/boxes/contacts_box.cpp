@@ -45,7 +45,20 @@ public:
 		int y,
 		int outerWidth) override;
 
+	QSize rightActionSize() const override;
+	QMargins rightActionMargins() const override;
+	bool rightActionDisabled() const override;
+	void rightActionPaint(
+		Painter &p,
+		int x,
+		int y,
+		int outerWidth,
+		bool selected,
+		bool actionSelected) override;
+
 private:
+	[[nodiscard]] bool isMutual() const;
+
 	const Fn<bool()> _selecting;
 	Ui::RoundCheckbox _check;
 
@@ -80,6 +93,43 @@ void SelectableContactRow::paintUserpicOverlay(
 		+ st.checkbox.selectWidth
 		- st::defaultPeerListCheck.size;
 	_check.paint(p, x + shift, y + shift, outerWidth);
+}
+
+bool SelectableContactRow::isMutual() const {
+	const auto user = peer()->asUser();
+	return user && (user->flags() & UserDataFlag::MutualContact);
+}
+
+QSize SelectableContactRow::rightActionSize() const {
+	return isMutual() ? st::contactsMutualIcon.size() : QSize();
+}
+
+QMargins SelectableContactRow::rightActionMargins() const {
+	if (!isMutual()) {
+		return QMargins();
+	}
+	const auto &item = st::contactsWithStories.item;
+	return QMargins(
+		st::contactsCheckPosition.x(),
+		(item.height - st::contactsMutualIcon.height()) / 2,
+		item.photoPosition.x(),
+		0);
+}
+
+bool SelectableContactRow::rightActionDisabled() const {
+	return true;
+}
+
+void SelectableContactRow::rightActionPaint(
+		Painter &p,
+		int x,
+		int y,
+		int outerWidth,
+		bool selected,
+		bool actionSelected) {
+	if (isMutual()) {
+		st::contactsMutualIcon.paint(p, x, y, outerWidth);
+	}
 }
 
 class ContactsListController final

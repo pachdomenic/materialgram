@@ -636,7 +636,7 @@ public:
 	}
 
 	QSize rightActionSize() const override {
-		return isMutual() ? st::menuIconGroups.size() : QSize();
+		return isMutual() ? st::contactsMutualIcon.size() : QSize();
 	}
 
 	QMargins rightActionMargins() const override {
@@ -646,7 +646,7 @@ public:
 			(st::contactsPadding.top()
 				+ st::contactsPhotoSize
 				+ st::contactsPadding.bottom()
-				- st::menuIconGroups.height()) / 2,
+				- st::contactsMutualIcon.height()) / 2,
 			st::defaultPeerListItem.photoPosition.x()
 				+ st::contactsCheckPosition.x(),
 			0);
@@ -664,7 +664,7 @@ public:
 			bool selected,
 			bool actionSelected) override {
 		if (isMutual()) {
-			st::menuIconGroups.paint(p, x, y, outerWidth);
+			st::contactsMutualIcon.paint(p, x, y, outerWidth);
 		}
 	}
 
