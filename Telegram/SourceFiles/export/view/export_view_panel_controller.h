@@ -11,6 +11,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "export/view/export_view_content.h"
 #include "base/unique_qptr.h"
 #include "base/timer.h"
+#include "base/weak_ptr.h"
 
 namespace Ui {
 class SeparatePanel;
@@ -31,7 +32,7 @@ void ResolveSettings(not_null<Main::Session*> session, Settings &settings);
 
 class Panel;
 
-class PanelController {
+class PanelController final : public base::has_weak_ptr {
 public:
 	PanelController(
 		not_null<Main::Session*> session,

@@ -597,6 +597,7 @@ struct ApiWrap::ChatProcess : AbstractMessagesProcess {
 
 	int localSplitIndex = 0;
 	int32 largestIdPlusOne = 1;
+	int32 deletedInjectedTill = 0;
 };
 
 struct ApiWrap::TopicProcess : AbstractMessagesProcess {
@@ -2428,6 +2429,9 @@ void ApiWrap::startMessagesSlice(Data::MessagesSlice &&slice) {
 	if (slice.list.empty()) {
 		process->lastSlice = true;
 	}
+	if (_chatProcess) {
+		injectDeletedMessages(slice);
+	}
 	process->slice = std::move(slice);
 	process->hydrationIndex = 0;
 	process->fileIndex = 0;
@@ -2436,6 +2440,77 @@ void ApiWrap::startMessagesSlice(Data::MessagesSlice &&slice) {
 	process->messageFileWorkMessageIndex = -1;
 
 	resumeMessagesSlice();
+}
+
+void ApiWrap::setDeletedMessages(
+		std::shared_ptr<Data::DeletedMessagesSnapshot> deleted) {
+	_deletedMessages = std::move(deleted);
+}
+
+void ApiWrap::injectDeletedMessages(Data::MessagesSlice &slice) {
+	Expects(_chatProcess != nullptr);
+	Expects(_settings != nullptr);
+
+	if (!_deletedMessages) {
+		return;
+	}
+	const auto &info = _chatProcess->info;
+	if (info.splits[_chatProcess->localSplitIndex] < 0) {
+		return;
+	}
+	const auto i = _deletedMessages->chats.find(info.peerId);
+	if (i == end(_deletedMessages->chats)) {
+		return;
+	}
+	const auto finalSlice = _chatProcess->lastSlice
+		&& (_chatProcess->localSplitIndex + 1 == int(info.splits.size()));
+	const auto from = _chatProcess->deletedInjectedTill;
+	const auto till = finalSlice
+		? std::numeric_limits<int32>::max()
+		: slice.list.empty()
+		? from
+		: slice.list.back().id;
+	if (till <= from) {
+		return;
+	}
+	_chatProcess->deletedInjectedTill = till;
+	auto existing = base::flat_set<int32>();
+	for (const auto &message : slice.list) {
+		existing.emplace(message.id);
+	}
+	auto added = false;
+	for (auto &stored : i->second.list) {
+		if (stored.id <= from || stored.id > till) {
+			continue;
+		} else if (existing.contains(stored.id)) {
+			continue;
+		} else if (info.onlyMyMessages && !stored.out) {
+			continue;
+		} else if (_settings->singlePeerFrom
+			&& stored.date < _settings->singlePeerFrom) {
+			continue;
+		} else if (_settings->singlePeerTill
+			&& stored.date >= _settings->singlePeerTill) {
+			continue;
+		}
+		auto message = std::move(stored);
+		const auto prefix = [&](Data::File &file) {
+			if (!file.suggestedPath.isEmpty()) {
+				file.suggestedPath = info.relativePath + file.suggestedPath;
+			}
+		};
+		prefix(message.file());
+		prefix(message.thumb().file);
+		slice.list.push_back(std::move(message));
+		added = true;
+	}
+	if (!added) {
+		return;
+	}
+	ranges::sort(slice.list, ranges::less(), &Data::Message::id);
+	for (const auto &[id, peer] : i->second.peers) {
+		slice.peers.emplace(id, peer);
+	}
 }
 
 void ApiWrap::resumeMessagesSlice() {
@@ -3374,7 +3449,9 @@ bool ApiWrap::processFileLoad(
 	} else if (Data::SkipMessageByDate(*policy.message, *_settings)) {
 		file.skipReason = SkipReason::DateLimits;
 		return true;
-	} else if (!file.location && file.content.isEmpty()) {
+	} else if (!file.location
+		&& file.content.isEmpty()
+		&& file.localPath.isEmpty()) {
 		file.skipReason = SkipReason::Unavailable;
 		return true;
 	} else if ((_settings->media.types & policy.type) != policy.type) {
@@ -3402,7 +3479,9 @@ bool ApiWrap::processFileLoad(
 	if (!file.relativePath.isEmpty()
 		|| file.skipReason != SkipReason::None) {
 		return true;
-	} else if (!file.location && file.content.isEmpty()) {
+	} else if (!file.location
+		&& file.content.isEmpty()
+		&& file.localPath.isEmpty()) {
 		file.skipReason = SkipReason::Unavailable;
 		return true;
 	} else if (writePreloadedFile(file, origin)) {
@@ -3445,7 +3524,27 @@ bool ApiWrap::writePreloadedFile(
 
 	using namespace Output;
 
-	if (const auto path = _fileCache->find(file.location)) {
+	if (!file.localPath.isEmpty()) {
+		auto local = QFile(file.localPath);
+		if (!local.open(QIODevice::ReadOnly)) {
+			file.skipReason = Data::File::SkipReason::Unavailable;
+			return true;
+		}
+		const auto process = prepareFileProcess(file, origin);
+		while (!local.atEnd()) {
+			const auto block = local.read(1024 * 1024);
+			if (block.isEmpty()) {
+				break;
+			}
+			const auto result = process->file.writeBlock(block);
+			if (!result) {
+				ioError(result);
+				return true;
+			}
+		}
+		file.relativePath = process->relativePath;
+		return true;
+	} else if (const auto path = _fileCache->find(file.location)) {
 		file.relativePath = *path;
 		return true;
 	} else if (!file.content.isEmpty()) {

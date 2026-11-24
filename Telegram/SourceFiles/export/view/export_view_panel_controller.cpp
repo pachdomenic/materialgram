@@ -9,6 +9,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "export/view/export_view_settings.h"
 #include "export/view/export_view_progress.h"
+#include "export/export_deleted_messages.h"
 #include "export/export_manager.h"
 #include "ui/widgets/labels.h"
 #include "ui/widgets/separate_panel.h"
@@ -205,7 +206,13 @@ void PanelController::showSettings() {
 	settings->startClicks(
 	) | rpl::on_next([=]() {
 		showProgress();
-		_process->startExport(*_settings, PrepareEnvironment(_session));
+		const auto settings = *_settings;
+		PrepareDeletedMessages(_session, settings, crl::guard(this, [=](
+				std::shared_ptr<Data::DeletedMessagesSnapshot> deleted) {
+			auto environment = PrepareEnvironment(_session);
+			environment.deletedMessages = std::move(deleted);
+			_process->startExport(settings, environment);
+		}));
 	}, settings->lifetime());
 
 	settings->cancelClicks(

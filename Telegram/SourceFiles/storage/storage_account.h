@@ -104,6 +104,12 @@ public:
 	[[nodiscard]] QByteArray readEditHistory();
 	void writeDeletedMessages(const QByteArray &serialized);
 	[[nodiscard]] QByteArray readDeletedMessages();
+	void removeDeletedMessages();
+	[[nodiscard]] auto readDeletedMessagesJournal()
+		-> std::optional<std::vector<QByteArray>>;
+	void appendDeletedMessagesJournal(const std::vector<QByteArray> &records);
+	bool rewriteDeletedMessagesJournal(
+		const std::vector<QByteArray> &records);
 
 	void registerDraftSource(
 		not_null<History*> history,
@@ -253,6 +259,10 @@ public:
 	void reset();
 
 private:
+	[[nodiscard]] QString deletedMessagesJournalPath() const;
+	[[nodiscard]] QByteArray encryptDeletedMessagesRecord(
+		const QByteArray &record) const;
+
 	enum class ReadMapResult {
 		Success,
 		IncorrectPasscode,

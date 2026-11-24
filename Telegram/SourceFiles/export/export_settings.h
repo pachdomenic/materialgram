@@ -119,7 +119,12 @@ struct Settings {
 
 };
 
+namespace Data {
+struct DeletedMessagesSnapshot;
+} // namespace Data
+
 struct Environment {
+	std::shared_ptr<Data::DeletedMessagesSnapshot> deletedMessages;
 	QString internalLinksDomain;
 	QByteArray aboutTelegram;
 	QByteArray aboutContacts;

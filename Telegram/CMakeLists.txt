@@ -706,6 +706,8 @@ PRIVATE
     data/components/ephemeral_messages.h
     data/components/deleted_messages.cpp
     data/components/deleted_messages.h
+    data/components/deleted_messages_export.cpp
+    data/components/deleted_messages_export.h
     data/components/edit_history.cpp
     data/components/edit_history.h
     data/components/factchecks.cpp
@@ -1030,6 +1032,8 @@ PRIVATE
     editor/video/video_timeline_seeker.h
     editor/video_item_timeline.cpp
     editor/video_item_timeline.h
+    export/export_deleted_messages.cpp
+    export/export_deleted_messages.h
     export/export_manager.cpp
     export/export_manager.h
     export/view/export_view_content.cpp

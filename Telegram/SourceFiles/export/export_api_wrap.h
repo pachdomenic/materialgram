@@ -28,6 +28,7 @@ struct SessionsList;
 struct DialogsInfo;
 struct DialogInfo;
 struct MessagesSlice;
+struct DeletedMessagesSnapshot;
 struct Message;
 struct Story;
 struct FileOrigin;
@@ -118,6 +119,8 @@ public:
 	void finishExport(FnMut<void()> done);
 	void skipFile(uint64 randomId);
 	void cancelExportFast();
+	void setDeletedMessages(
+		std::shared_ptr<Data::DeletedMessagesSnapshot> deleted);
 
 	~ApiWrap();
 
@@ -221,6 +224,7 @@ private:
 		int limit,
 		FnMut<void(MTPmessages_Messages&&)> done);
 	void startMessagesSlice(Data::MessagesSlice &&slice);
+	void injectDeletedMessages(Data::MessagesSlice &slice);
 	void resumeMessagesSlice();
 	void hydrateMessageDone(
 		bool topic,
@@ -340,6 +344,7 @@ private:
 	Output::Stats *_stats = nullptr;
 
 	std::unique_ptr<Settings> _settings;
+	std::shared_ptr<Data::DeletedMessagesSnapshot> _deletedMessages;
 	MTPInputUser _user = MTP_inputUserSelf();
 
 	std::unique_ptr<StartProcess> _startProcess;

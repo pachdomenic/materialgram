@@ -43,6 +43,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "webview/webview_interface.h"
 #include "window/themes/window_theme.h"
 
+#include <QtCore/QSaveFile>
+
 namespace Storage {
 namespace {
 
@@ -61,6 +63,8 @@ constexpr auto kDefaultStickerInstallDate = TimeId(1);
 constexpr auto kSinglePeerTypeUserOld = qint32(1);
 constexpr auto kSinglePeerTypeChatOld = qint32(2);
 constexpr auto kSinglePeerTypeChannelOld = qint32(3);
+
+const auto kDeletedJournalMagic = QByteArray("TDJ\x01", 4);
 constexpr auto kSinglePeerTypeUser = qint32(8 + 1);
 constexpr auto kSinglePeerTypeChat = qint32(8 + 2);
 constexpr auto kSinglePeerTypeChannel = qint32(8 + 3);
@@ -1291,6 +1295,114 @@ QByteArray Account::readDeletedMessages() {
 	auto serialized = QByteArray();
 	file.stream >> serialized;
 	return CheckStreamStatus(file.stream) ? serialized : QByteArray();
+}
+
+void Account::removeDeletedMessages() {
+	for (const auto suffix : { '0', '1', 's' }) {
+		QFile::remove(_basePath + u"deleted"_q + suffix);
+	}
+}
+
+QString Account::deletedMessagesJournalPath() const {
+	return _basePath + u"deleted_db"_q;
+}
+
+QByteArray Account::encryptDeletedMessagesRecord(
+		const QByteArray &record) const {
+	EncryptedDescriptor data(Serialize::bytearraySize(record));
+	data.stream << record;
+	const auto encrypted = PrepareEncrypted(data, _localKey);
+	auto result = QByteArray();
+	result.reserve(sizeof(quint32) + encrypted.size());
+	const auto size = quint32(encrypted.size());
+	result.append(reinterpret_cast<const char*>(&size), sizeof(size));
+	result.append(encrypted);
+	return result;
+}
+
+auto Account::readDeletedMessagesJournal()
+-> std::optional<std::vector<QByteArray>> {
+	Expects(_localKey != nullptr);
+
+	auto file = QFile(deletedMessagesJournalPath());
+	if (!file.exists()) {
+		return std::nullopt;
+	} else if (!file.open(QIODevice::ReadWrite)) {
+		LOG(("App Error: could not open deleted messages journal."));
+		return std::vector<QByteArray>();
+	}
+	const auto magic = file.read(kDeletedJournalMagic.size());
+	if (magic != kDeletedJournalMagic) {
+		LOG(("App Error: bad deleted messages journal header."));
+		return std::vector<QByteArray>();
+	}
+	auto result = std::vector<QByteArray>();
+	auto validEnd = file.pos();
+	while (true) {
+		auto size = quint32();
+		if (file.read(reinterpret_cast<char*>(&size), sizeof(size))
+			!= qint64(sizeof(size))) {
+			break;
+		}
+		const auto encrypted = file.read(size);
+		if (encrypted.size() != qint64(size)) {
+			break;
+		}
+		auto data = EncryptedDescriptor();
+		if (!DecryptLocal(data, encrypted, _localKey)) {
+			break;
+		}
+		auto record = QByteArray();
+		data.stream >> record;
+		if (data.stream.status() != QDataStream::Ok) {
+			break;
+		}
+		result.push_back(std::move(record));
+		validEnd = file.pos();
+	}
+	if (validEnd < file.size()) {
+		LOG(("App Warning: truncating deleted messages journal tail."));
+		file.resize(validEnd);
+	}
+	return result;
+}
+
+void Account::appendDeletedMessagesJournal(
+		const std::vector<QByteArray> &records) {
+	Expects(_localKey != nullptr);
+
+	if (records.empty()) {
+		return;
+	}
+	auto file = QFile(deletedMessagesJournalPath());
+	const auto fresh = !file.exists() || !file.size();
+	if (!file.open(QIODevice::WriteOnly | QIODevice::Append)) {
+		LOG(("App Error: could not append deleted messages journal."));
+		return;
+	}
+	auto bytes = fresh ? kDeletedJournalMagic : QByteArray();
+	for (const auto &record : records) {
+		bytes.append(encryptDeletedMessagesRecord(record));
+	}
+	file.write(bytes);
+	file.flush();
+}
+
+bool Account::rewriteDeletedMessagesJournal(
+		const std::vector<QByteArray> &records) {
+	Expects(_localKey != nullptr);
+
+	QDir().mkpath(_basePath);
+	auto file = QSaveFile(deletedMessagesJournalPath());
+	if (!file.open(QIODevice::WriteOnly)) {
+		LOG(("App Error: could not rewrite deleted messages journal."));
+		return false;
+	}
+	file.write(kDeletedJournalMagic);
+	for (const auto &record : records) {
+		file.write(encryptDeletedMessagesRecord(record));
+	}
+	return file.commit();
 }
 
 std::unique_ptr<MTP::Config> Account::readMtpConfig() {

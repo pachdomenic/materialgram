@@ -300,6 +300,7 @@ void ControllerObject::startExport(
 	}
 	_settings = NormalizeSettings(settings);
 	_environment = environment;
+	_api.setDeletedMessages(environment.deletedMessages);
 	_settings.singleTopicRootId = _topicRootId;
 	_settings.singleTopicPeerId = _topicPeerId;
 

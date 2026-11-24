@@ -1864,6 +1864,16 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_tukigram_deleted_skip_chats" = "Excluded chats";
 "lng_tukigram_deleted_skip_chats_none" = "None";
 "lng_tukigram_deleted_exceptions_about" = "Deleted messages in these chats disappear as usual.";
+"lng_tukigram_deleted_view" = "View deleted messages";
+"lng_tukigram_deleted_view_empty" = "No deleted messages have been saved yet.";
+"lng_tukigram_deleted_count#one" = "{count} deleted message";
+"lng_tukigram_deleted_count#other" = "{count} deleted messages";
+"lng_tukigram_deleted_export" = "Export deleted messages";
+"lng_tukigram_deleted_export_empty" = "There are no deleted messages to export.";
+"lng_tukigram_deleted_export_progress" = "Exporting deleted messages…";
+"lng_tukigram_deleted_export_failed" = "Could not write the deleted messages export.";
+"lng_tukigram_deleted_export_done#one" = "Exported {count} deleted message to {path}";
+"lng_tukigram_deleted_export_done#other" = "Exported {count} deleted messages to {path}";
 "lng_tukigram_preview_out" = "It's morning in Tokyo 😎";
 "lng_tukigram_preview_in" = "I hope you're enjoying your day as much as I am.";
 "lng_tukigram_appearance_title" = "Appearance";

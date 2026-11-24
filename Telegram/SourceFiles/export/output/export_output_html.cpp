@@ -4513,13 +4513,18 @@ auto HtmlWriter::Wrap::pushMessage(
 		return QByteArray();
 	}();
 
-	const auto className = wrap
+	const auto className = QByteArray(wrap
 		? "message default clearfix"
-		: "message default clearfix joined";
-	auto block = pushTag("div", {
+		: "message default clearfix joined")
+		+ (message.deleted ? " deleted" : "");
+	auto attributes = std::map<QByteArray, QByteArray>{
 		{ "class", className },
-		{ "id", "message" + NumberToString(message.id) }
-	});
+		{ "id", "message" + NumberToString(message.id) },
+	};
+	if (message.deleted) {
+		attributes.emplace("style", "opacity: 0.6");
+	}
+	auto block = pushTag("div", std::move(attributes));
 	if (wrap) {
 		block.append(pushDiv("pull_left userpic_wrap"));
 		block.append(pushUserpic(userpic));
@@ -4528,8 +4533,12 @@ auto HtmlWriter::Wrap::pushMessage(
 	block.append(pushDiv("body"));
 	block.append(pushTag("div", {
 		{ "class", "pull_right date details" },
-		{ "title", FormatDateTime(message.date, true) },
+		{ "title", (message.deleted ? "Deleted, " : "")
+			+ FormatDateTime(message.date, true) },
 	}));
+	if (message.deleted) {
+		block.append(SerializeString("\xF0\x9F\x97\x91 deleted "));
+	}
 	block.append(FormatTimeText(message.date));
 	block.append(popTag());
 	if (wrap) {

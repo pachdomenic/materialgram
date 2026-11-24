@@ -24,9 +24,15 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 namespace Data {
 namespace {
 
-constexpr auto kSaveDelay = 5 * crl::time(1000);
+constexpr auto kSaveDelay = crl::time(1000);
 constexpr auto kFormatVersion = 1;
-constexpr auto kMaxPerPeer = 5000;
+constexpr auto kCompactMinimum = 256;
+
+enum class JournalRecord : qint32 {
+	Put,
+	Forget,
+	ForgetAll,
+};
 
 constexpr auto kFlagOut = quint32(1 << 0);
 constexpr auto kFlagPost = quint32(1 << 1);
@@ -60,7 +66,7 @@ DeletedMessages::DeletedMessages(not_null<Main::Session*> session)
 }
 
 DeletedMessages::~DeletedMessages() {
-	if (_saveTimer.isActive()) {
+	if (!_pending.empty()) {
 		save();
 	}
 }
@@ -70,13 +76,22 @@ void DeletedMessages::remember(not_null<HistoryItem*> item) {
 		return;
 	}
 	ensureLoaded();
-	auto &list = _messages[item->history()->peer->id];
-	list[item->id] = serialize(item);
-	while (int(list.size()) > kMaxPerPeer) {
-		list.erase(begin(list));
+	const auto peer = item->history()->peer->id;
+	auto serialized = serialize(item);
+	_messages[peer][item->id] = serialized;
+
+	auto record = QByteArray();
+	{
+		auto stream = QDataStream(&record, QIODevice::WriteOnly);
+		stream.setVersion(QDataStream::Qt_5_1);
+		stream
+			<< qint32(JournalRecord::Put)
+			<< quint64(SerializePeerId(peer))
+			<< qint64(item->id.bare)
+			<< serialized;
 	}
-	scheduleSave();
-	_changes.fire_copy(item->history()->peer->id);
+	pushRecord(std::move(record));
+	_changes.fire_copy(peer);
 }
 
 void DeletedMessages::forget(PeerId peer, const QVector<MTPint> &ids) {
@@ -85,25 +100,49 @@ void DeletedMessages::forget(PeerId peer, const QVector<MTPint> &ids) {
 	if (i == end(_messages)) {
 		return;
 	}
-	auto changed = false;
+	auto removed = std::vector<MsgId>();
 	for (const auto &id : ids) {
-		changed = i->second.remove(MsgId(id.v)) || changed;
+		if (i->second.remove(MsgId(id.v))) {
+			removed.push_back(MsgId(id.v));
+		}
 	}
 	if (i->second.empty()) {
 		_messages.erase(i);
 	}
-	if (changed) {
-		scheduleSave();
-		_changes.fire_copy(peer);
+	if (removed.empty()) {
+		return;
 	}
+	auto record = QByteArray();
+	{
+		auto stream = QDataStream(&record, QIODevice::WriteOnly);
+		stream.setVersion(QDataStream::Qt_5_1);
+		stream
+			<< qint32(JournalRecord::Forget)
+			<< quint64(SerializePeerId(peer))
+			<< qint32(removed.size());
+		for (const auto &id : removed) {
+			stream << qint64(id.bare);
+		}
+	}
+	pushRecord(std::move(record));
+	_changes.fire_copy(peer);
 }
 
 void DeletedMessages::forgetAll(PeerId peer) {
 	ensureLoaded();
-	if (_messages.remove(peer)) {
-		scheduleSave();
-		_changes.fire_copy(peer);
+	if (!_messages.remove(peer)) {
+		return;
 	}
+	auto record = QByteArray();
+	{
+		auto stream = QDataStream(&record, QIODevice::WriteOnly);
+		stream.setVersion(QDataStream::Qt_5_1);
+		stream
+			<< qint32(JournalRecord::ForgetAll)
+			<< quint64(SerializePeerId(peer));
+	}
+	pushRecord(std::move(record));
+	_changes.fire_copy(peer);
 }
 
 void DeletedMessages::restore(
@@ -166,6 +205,42 @@ std::vector<MsgId> DeletedMessages::ids(PeerId peer) {
 		return {};
 	}
 	return i->second | ranges::views::keys | ranges::to_vector;
+}
+
+std::vector<PeerId> DeletedMessages::peers() {
+	ensureLoaded();
+	return _messages | ranges::views::keys | ranges::to_vector;
+}
+
+int DeletedMessages::count(PeerId peer) {
+	ensureLoaded();
+	const auto i = _messages.find(peer);
+	return (i == end(_messages)) ? 0 : int(i->second.size());
+}
+
+int DeletedMessages::totalCount() {
+	ensureLoaded();
+	auto result = 0;
+	for (const auto &[peer, list] : _messages) {
+		result += int(list.size());
+	}
+	return result;
+}
+
+std::vector<DeletedStoredMessage> DeletedMessages::messages(PeerId peer) {
+	ensureLoaded();
+	const auto i = _messages.find(peer);
+	if (i == end(_messages)) {
+		return {};
+	}
+	auto result = std::vector<DeletedStoredMessage>();
+	result.reserve(i->second.size());
+	for (const auto &[id, serialized] : i->second) {
+		if (auto parsed = parse(id, serialized)) {
+			result.push_back(std::move(*parsed));
+		}
+	}
+	return result;
 }
 
 HistoryItem *DeletedMessages::lookup(
@@ -251,10 +326,9 @@ QByteArray DeletedMessages::serialize(not_null<HistoryItem*> item) const {
 	return result;
 }
 
-HistoryItem *DeletedMessages::deserialize(
-		not_null<History*> history,
+std::optional<DeletedStoredMessage> DeletedMessages::parse(
 		MsgId id,
-		const QByteArray &serialized) {
+		const QByteArray &serialized) const {
 	auto stream = QDataStream(serialized);
 	stream.setVersion(QDataStream::Qt_5_1);
 
@@ -288,46 +362,26 @@ HistoryItem *DeletedMessages::deserialize(
 		>> spoiler
 		>> type;
 	if (stream.status() != QDataStream::Ok) {
-		return nullptr;
+		return std::nullopt;
 	}
-
-	const auto fromId = DeserializePeerId(from);
-	auto messageFlags = MessageFlags();
-	if (flags & kFlagOut) {
-		messageFlags |= MessageFlag::Outgoing;
-	}
-	if (flags & kFlagPost) {
-		messageFlags |= MessageFlag::Post;
-	}
-	if (flags & kFlagInvertMedia) {
-		messageFlags |= MessageFlag::InvertMedia;
-	}
-	if (fromId && fromId != history->peer->id) {
-		messageFlags |= MessageFlag::HasFromId;
-	}
-	if (!author.isEmpty()) {
-		messageFlags |= MessageFlag::HasPostAuthor;
-	}
-	auto fields = HistoryItemCommonFields{
+	auto result = DeletedStoredMessage{
 		.id = id,
-		.flags = messageFlags,
-		.from = fromId,
-		.replyTo = {
-			.messageId = FullMsgId(
-				DeserializePeerId(replyPeer),
-				MsgId(replyMsg)),
-			.topicRootId = MsgId(topicRootId),
-			.monoforumPeerId = DeserializePeerId(monoforumPeer),
-		},
 		.date = TimeId(date),
-		.postAuthor = author,
+		.from = DeserializePeerId(from),
+		.author = author,
+		.replyTo = FullMsgId(DeserializePeerId(replyPeer), MsgId(replyMsg)),
+		.topicRootId = MsgId(topicRootId),
+		.monoforumPeerId = DeserializePeerId(monoforumPeer),
 		.groupedId = groupedId,
-		.mediaSpoiler = (spoiler != 0),
-	};
-	const auto caption = TextWithEntities{
-		text,
-		TextUtilities::ConvertTextTagsToEntities(
-			TextUtilities::DeserializeTags(tags, text.size())),
+		.text = TextWithEntities{
+			text,
+			TextUtilities::ConvertTextTagsToEntities(
+				TextUtilities::DeserializeTags(tags, text.size())),
+		},
+		.out = ((flags & kFlagOut) != 0),
+		.post = ((flags & kFlagPost) != 0),
+		.invertMedia = ((flags & kFlagInvertMedia) != 0),
+		.spoiler = (spoiler != 0),
 	};
 
 	if (type == qint32(StoredMedia::Photo)) {
@@ -356,39 +410,86 @@ HistoryItem *DeletedMessages::deserialize(
 			}
 			image.bytesCount = bytesCount;
 		}
-		if (stream.status() != QDataStream::Ok) {
-			return nullptr;
+		if (stream.status() == QDataStream::Ok) {
+			result.photo = _session->data().photo(
+				photoId,
+				access,
+				fileReference,
+				photoDate,
+				dc,
+				(hasStickers != 0),
+				inlineThumbnail,
+				images[0],
+				images[1],
+				images[2],
+				ImageWithLocation(),
+				ImageWithLocation(),
+				crl::time(0));
 		}
-		const auto photo = history->owner().photo(
-			photoId,
-			access,
-			fileReference,
-			photoDate,
-			dc,
-			(hasStickers != 0),
-			inlineThumbnail,
-			images[0],
-			images[1],
-			images[2],
-			ImageWithLocation(),
-			ImageWithLocation(),
-			crl::time(0));
-		return history->makeMessage(std::move(fields), photo, caption);
 	} else if (type == qint32(StoredMedia::Document)) {
 		const auto document = Serialize::Document::readFromStream(
 			_session,
 			appVersion,
 			stream);
 		if (document && stream.status() == QDataStream::Ok) {
-			return history->makeMessage(
-				std::move(fields),
-				not_null(document),
-				caption);
+			result.document = document;
 		}
+	}
+	return result;
+}
+
+HistoryItem *DeletedMessages::deserialize(
+		not_null<History*> history,
+		MsgId id,
+		const QByteArray &serialized) {
+	const auto parsed = parse(id, serialized);
+	if (!parsed) {
+		return nullptr;
+	}
+	auto messageFlags = MessageFlags();
+	if (parsed->out) {
+		messageFlags |= MessageFlag::Outgoing;
+	}
+	if (parsed->post) {
+		messageFlags |= MessageFlag::Post;
+	}
+	if (parsed->invertMedia) {
+		messageFlags |= MessageFlag::InvertMedia;
+	}
+	if (parsed->from && parsed->from != history->peer->id) {
+		messageFlags |= MessageFlag::HasFromId;
+	}
+	if (!parsed->author.isEmpty()) {
+		messageFlags |= MessageFlag::HasPostAuthor;
+	}
+	auto fields = HistoryItemCommonFields{
+		.id = id,
+		.flags = messageFlags,
+		.from = parsed->from,
+		.replyTo = {
+			.messageId = parsed->replyTo,
+			.topicRootId = parsed->topicRootId,
+			.monoforumPeerId = parsed->monoforumPeerId,
+		},
+		.date = parsed->date,
+		.postAuthor = parsed->author,
+		.groupedId = parsed->groupedId,
+		.mediaSpoiler = parsed->spoiler,
+	};
+	if (const auto photo = parsed->photo) {
+		return history->makeMessage(
+			std::move(fields),
+			not_null(photo),
+			parsed->text);
+	} else if (const auto document = parsed->document) {
+		return history->makeMessage(
+			std::move(fields),
+			not_null(document),
+			parsed->text);
 	}
 	return history->makeMessage(
 		std::move(fields),
-		caption,
+		parsed->text,
 		MTP_messageMediaEmpty());
 }
 
@@ -397,7 +498,24 @@ void DeletedMessages::ensureLoaded() {
 		return;
 	}
 	_loaded = true;
-	const auto serialized = _session->local().readDeletedMessages();
+	auto &local = _session->local();
+	if (const auto records = local.readDeletedMessagesJournal()) {
+		for (const auto &record : *records) {
+			applyRecord(record);
+		}
+		_journalRecords = int(records->size());
+		compactIfNeeded();
+		return;
+	}
+	loadLegacy(local.readDeletedMessages());
+	const auto records = snapshotRecords();
+	if (local.rewriteDeletedMessagesJournal(records)) {
+		_journalRecords = int(records.size());
+		local.removeDeletedMessages();
+	}
+}
+
+void DeletedMessages::loadLegacy(const QByteArray &serialized) {
 	if (serialized.isEmpty()) {
 		return;
 	}
@@ -431,25 +549,98 @@ void DeletedMessages::ensureLoaded() {
 	}
 }
 
+void DeletedMessages::applyRecord(const QByteArray &record) {
+	auto stream = QDataStream(record);
+	stream.setVersion(QDataStream::Qt_5_1);
+	auto type = qint32();
+	auto serializedPeer = quint64();
+	stream >> type >> serializedPeer;
+	if (stream.status() != QDataStream::Ok) {
+		return;
+	}
+	const auto peer = DeserializePeerId(serializedPeer);
+	switch (JournalRecord(type)) {
+	case JournalRecord::Put: {
+		auto msg = qint64();
+		auto data = QByteArray();
+		stream >> msg >> data;
+		if (stream.status() == QDataStream::Ok) {
+			_messages[peer][MsgId(msg)] = std::move(data);
+		}
+	} break;
+	case JournalRecord::Forget: {
+		auto count = qint32();
+		stream >> count;
+		const auto i = _messages.find(peer);
+		for (auto j = 0; j < count && stream.status() == QDataStream::Ok; ++j) {
+			auto msg = qint64();
+			stream >> msg;
+			if (i != end(_messages)) {
+				i->second.remove(MsgId(msg));
+			}
+		}
+		if (i != end(_messages) && i->second.empty()) {
+			_messages.erase(i);
+		}
+	} break;
+	case JournalRecord::ForgetAll:
+		_messages.remove(peer);
+		break;
+	}
+}
+
+void DeletedMessages::pushRecord(QByteArray record) {
+	_pending.push_back(std::move(record));
+	scheduleSave();
+}
+
+std::vector<QByteArray> DeletedMessages::snapshotRecords() const {
+	auto result = std::vector<QByteArray>();
+	for (const auto &[peer, list] : _messages) {
+		for (const auto &[msgId, data] : list) {
+			auto record = QByteArray();
+			{
+				auto stream = QDataStream(&record, QIODevice::WriteOnly);
+				stream.setVersion(QDataStream::Qt_5_1);
+				stream
+					<< qint32(JournalRecord::Put)
+					<< quint64(SerializePeerId(peer))
+					<< qint64(msgId.bare)
+					<< data;
+			}
+			result.push_back(std::move(record));
+		}
+	}
+	return result;
+}
+
+void DeletedMessages::compactIfNeeded() {
+	auto live = 0;
+	for (const auto &[peer, list] : _messages) {
+		live += int(list.size());
+	}
+	if (_journalRecords <= 2 * live + kCompactMinimum) {
+		return;
+	}
+	const auto records = snapshotRecords();
+	if (_session->local().rewriteDeletedMessagesJournal(records)) {
+		_journalRecords = int(records.size());
+	}
+}
+
 void DeletedMessages::scheduleSave() {
 	_saveTimer.callOnce(kSaveDelay);
 }
 
 void DeletedMessages::save() {
 	_saveTimer.cancel();
-	auto serialized = QByteArray();
-	{
-		auto stream = QDataStream(&serialized, QIODevice::WriteOnly);
-		stream.setVersion(QDataStream::Qt_5_1);
-		stream << qint32(kFormatVersion) << qint32(_messages.size());
-		for (const auto &[peer, list] : _messages) {
-			stream << quint64(SerializePeerId(peer)) << qint32(list.size());
-			for (const auto &[msgId, data] : list) {
-				stream << qint64(msgId.bare) << data;
-			}
-		}
+	if (_pending.empty()) {
+		return;
 	}
-	_session->local().writeDeletedMessages(serialized);
+	const auto records = base::take(_pending);
+	_session->local().appendDeletedMessagesJournal(records);
+	_journalRecords += int(records.size());
+	compactIfNeeded();
 }
 
 } // namespace Data

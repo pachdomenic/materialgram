@@ -1582,6 +1582,9 @@ QByteArray SerializeMessage(
 		pushBare("edited", SerializeDate(message.edited));
 		pushBare("edited_unixtime", SerializeDateRaw(message.edited));
 	}
+	if (message.deleted) {
+		pushBare("deleted", "true");
+	}
 
 	const auto wrapPeerId = [&](PeerId peerId) {
 		if (const auto chat = peerToChat(peerId)) {

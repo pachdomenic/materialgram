@@ -13,12 +13,16 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "boxes/peer_list_controllers.h"
 #include "core/application.h"
 #include "core/core_settings.h"
+#include "core/file_utilities.h"
 #include "core/version.h"
+#include "data/components/deleted_messages.h"
+#include "data/components/deleted_messages_export.h"
 #include "data/data_session.h"
 #include "data/data_user.h"
 #include "history/history.h"
 #include "history/history_item.h"
 #include "history/view/history_view_bottom_info.h"
+#include "history/view/history_view_deleted_section.h"
 #include "history/view/history_view_element.h"
 #include "lang/lang_keys.h"
 #include "main/main_session.h"
@@ -40,6 +44,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/widgets/labels.h"
 #include "ui/wrap/vertical_layout.h"
 #include "window/section_widget.h"
+#include "window/main_window.h"
+#include "window/window_controller.h"
 #include "window/window_session_controller.h"
 #include "styles/style_chat.h"
 #include "styles/style_edit_peer_members.h"
@@ -814,6 +820,109 @@ void AddDeletedExceptions(SectionBuilder &builder) {
 	});
 }
 
+class DeletedChatsController final : public PeerListController {
+public:
+	explicit DeletedChatsController(
+		not_null<Window::SessionController*> window);
+
+	Main::Session &session() const override;
+	void prepare() override;
+	void rowClicked(not_null<PeerListRow*> row) override;
+
+private:
+	const not_null<Window::SessionController*> _window;
+
+};
+
+DeletedChatsController::DeletedChatsController(
+	not_null<Window::SessionController*> window)
+: _window(window) {
+}
+
+Main::Session &DeletedChatsController::session() const {
+	return _window->session();
+}
+
+void DeletedChatsController::prepare() {
+	delegate()->peerListSetTitle(tr::lng_tukigram_deleted_view());
+	auto &deleted = session().deletedMessages();
+	auto peers = deleted.peers();
+	ranges::sort(peers, ranges::greater(), [&](PeerId id) {
+		return deleted.count(id);
+	});
+	for (const auto &id : peers) {
+		const auto peer = session().data().peerLoaded(id);
+		if (!peer) {
+			continue;
+		}
+		auto row = std::make_unique<PeerListRow>(peer);
+		row->setCustomStatus(tr::lng_tukigram_deleted_count(
+			tr::now,
+			lt_count,
+			deleted.count(id)));
+		delegate()->peerListAppendRow(std::move(row));
+	}
+	if (!delegate()->peerListFullRowsCount()) {
+		setDescriptionText(tr::lng_tukigram_deleted_view_empty(tr::now));
+	}
+	delegate()->peerListRefreshRows();
+}
+
+void DeletedChatsController::rowClicked(not_null<PeerListRow*> row) {
+	const auto history = session().data().history(row->peer());
+	_window->hideLayer();
+	_window->showSection(
+		std::make_shared<HistoryView::DeletedMemento>(history));
+}
+
+void ShowDeletedChatsBox(not_null<Window::SessionController*> controller) {
+	controller->show(Box<PeerListBox>(
+		std::make_unique<DeletedChatsController>(controller),
+		[](not_null<PeerListBox*> box) {
+			box->addButton(tr::lng_close(), [=] { box->closeBox(); });
+		}));
+}
+
+void StartDeletedExport(not_null<Window::SessionController*> controller) {
+	const auto session = &controller->session();
+	if (!session->deletedMessages().totalCount()) {
+		controller->showToast(tr::lng_tukigram_deleted_export_empty(tr::now));
+		return;
+	}
+	const auto weak = base::make_weak(controller);
+	FileDialog::GetFolder(
+		controller->window().widget().get(),
+		tr::lng_tukigram_deleted_export(tr::now),
+		QString(),
+		[=](QString &&folder) {
+			const auto strong = weak.get();
+			if (!strong || folder.isEmpty()) {
+				return;
+			}
+			strong->showToast(tr::lng_tukigram_deleted_export_progress(
+				tr::now));
+			Data::ExportDeletedMessages(
+				&strong->session(),
+				folder,
+				[=](Data::DeletedExportResult result) {
+					const auto strong = weak.get();
+					if (!strong) {
+						return;
+					} else if (result.failed) {
+						strong->showToast(
+							tr::lng_tukigram_deleted_export_failed(tr::now));
+						return;
+					}
+					strong->showToast(tr::lng_tukigram_deleted_export_done(
+						tr::now,
+						lt_count,
+						result.messages,
+						lt_path,
+						QDir::toNativeSeparators(result.path)));
+				});
+		});
+}
+
 void AddDeletedOptions(SectionBuilder &builder) {
 	const auto settings = &Core::App().settings();
 
@@ -834,6 +943,34 @@ void AddDeletedOptions(SectionBuilder &builder) {
 
 	const auto controller = builder.controller();
 	if (controller) {
+		const auto session = &controller->session();
+		builder.addButton({
+			.id = u"tukigram/deleted_view"_q,
+			.title = tr::lng_tukigram_deleted_view(),
+			.st = &st::settingsButtonNoIcon,
+			.label = rpl::single(
+				rpl::empty
+			) | rpl::then(
+				session->deletedMessages().changes() | rpl::to_empty
+			) | rpl::map([=] {
+				return QString::number(
+					session->deletedMessages().totalCount());
+			}),
+			.onClick = [=] { ShowDeletedChatsBox(controller); },
+			.keywords = { u"tukigram"_q, u"deleted"_q, u"view"_q },
+		});
+		builder.addButton({
+			.id = u"tukigram/deleted_export"_q,
+			.title = tr::lng_tukigram_deleted_export(),
+			.st = &st::settingsButtonNoIcon,
+			.onClick = [=] { StartDeletedExport(controller); },
+			.keywords = {
+				u"tukigram"_q,
+				u"deleted"_q,
+				u"export"_q,
+				u"json"_q,
+			},
+		});
 		builder.add([=](const WidgetContext &ctx) {
 			return SectionBuilder::WidgetToAdd{
 				.widget = object_ptr<DeletedPreview>(ctx.container, controller),

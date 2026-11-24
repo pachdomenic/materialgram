@@ -441,6 +441,7 @@ struct File {
 	QByteArray content;
 
 	QString suggestedPath;
+	QString localPath;
 
 	QString relativePath;
 	SkipReason skipReason = SkipReason::None;
@@ -1314,6 +1315,7 @@ struct Message {
 	bool out = false;
 	std::vector<std::vector<HistoryMessageMarkupButton>> inlineButtonRows;
 	std::optional<RichMessage> richMessage;
+	bool deleted = false;
 
 	File &file();
 	const File &file() const;
@@ -1439,6 +1441,20 @@ struct MessagesSlice {
 	std::vector<Message> list;
 	std::map<PeerId, Peer> peers;
 };
+
+struct DeletedChat {
+	std::vector<Message> list;
+	std::map<PeerId, Peer> peers;
+};
+
+struct DeletedMessagesSnapshot {
+	std::map<PeerId, DeletedChat> chats;
+};
+
+std::vector<TextPart> ParseText(
+	const MTPstring &data,
+	const QVector<MTPMessageEntity> &entities);
+QString DocumentFolder(const Document &data);
 
 MessagesSlice ParseMessagesSlice(
 	ParseMediaContext &context,
