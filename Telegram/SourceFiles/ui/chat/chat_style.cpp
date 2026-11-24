@@ -1617,15 +1617,15 @@ void FillComplexEllipse(
 	p.drawEllipse(rect);
 }
 
-void ApplyMessageWidthPercent(int percent) {
-	if (percent == 100) {
+void ApplyMessageWidth(int px, int defaultPx) {
+	if (px == defaultPx || defaultPx <= 0) {
 		return;
 	}
 	// WHY: generated style values are plain ints behind const references,
 	// so widening them once right after the styles start reaches every
 	// message layout without patching codegen.
 	const auto widen = [&](const int &value) {
-		const_cast<int&>(value) = value * percent / 100;
+		const_cast<int&>(value) = value * px / defaultPx;
 	};
 	widen(st::msgMaxWidth);
 	widen(st::maxMediaSize);
@@ -1639,7 +1639,7 @@ int BubbleRadiusFromPixels(int px) {
 }
 
 void ApplyBubbleRadius(int large, int small) {
-	// Same approach as ApplyMessageWidthPercent: every corner cache reads
+	// Same approach as ApplyMessageWidth: every corner cache reads
 	// these values lazily, so this must run before anything is painted.
 	const auto apply = [](const int &value, int px) {
 		const_cast<int&>(value) = BubbleRadiusFromPixels(px);

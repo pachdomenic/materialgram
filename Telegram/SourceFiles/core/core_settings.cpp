@@ -1487,16 +1487,41 @@ void Settings::addFromSerialized(
 	_deletedTransparent = !readPref<bool>(kDeletedOpaqueKey);
 	_monospaceFontFamily = QString::fromUtf8(
 		readPref<QByteArray>(kMonospaceFontKey));
+	_customFontSize = std::clamp(
+		readPref<int>(kCustomFontSizeKey, kCustomFontSizeDefault),
+		kCustomFontSizeMin,
+		kCustomFontSizeMax);
 	_messageSeconds = readPref<bool>(kMessageSecondsKey);
 	_hideFolderBadges = readPref<bool>(kHideFolderBadgesKey);
-	_messageWidthPercent = std::clamp(
-		readPref<int>(kMessageWidthKey, 100),
+	// Older builds stored these two as percents of the default size.
+	const auto readPixels = [&](
+			const auto &pxKey,
+			const auto &percentKey,
+			int defaultPx,
+			int min,
+			int max,
+			int step) {
+		auto px = readPref<int>(pxKey, -1);
+		if (px < 0) {
+			px = defaultPx * readPref<int>(percentKey, 100) / 100;
+		}
+		px = std::clamp(px, min, max);
+		return min + ((px - min + step / 2) / step) * step;
+	};
+	_messageWidth = readPixels(
+		kMessageWidthPxKey,
+		kMessageWidthKey,
+		kMessageWidthDefault,
 		kMessageWidthMin,
-		kMessageWidthMax);
-	_videoMessageSizePercent = std::clamp(
-		readPref<int>(kVideoMessageSizeKey, 100),
+		kMessageWidthMax,
+		kMessageWidthStep);
+	_videoMessageSize = readPixels(
+		kVideoMessageSizePxKey,
+		kVideoMessageSizeKey,
+		kVideoMessageSizeDefault,
 		kVideoMessageSizeMin,
-		kVideoMessageSizeMax);
+		kVideoMessageSizeMax,
+		kVideoMessageSizeStep);
 	_bubbleRadiusLarge = std::clamp(
 		readPref<int>(kBubbleRadiusLargeKey, kBubbleRadiusLargeDefault),
 		kBubbleRadiusMin,
@@ -1650,6 +1675,14 @@ void Settings::setMonospaceFontFamily(const QString &value) {
 	writePref<QByteArray>(kMonospaceFontKey, value.toUtf8());
 }
 
+void Settings::setCustomFontSize(int value) {
+	_customFontSize = std::clamp(
+		value,
+		kCustomFontSizeMin,
+		kCustomFontSizeMax);
+	writePref<int>(kCustomFontSizeKey, _customFontSize);
+}
+
 void Settings::setMessageSeconds(bool value) {
 	if (_messageSeconds == value) {
 		return;
@@ -1687,12 +1720,9 @@ void Settings::setHideFolderBadges(bool value) {
 	writePref<bool>(kHideFolderBadgesKey, value);
 }
 
-void Settings::setMessageWidthPercent(int value) {
-	_messageWidthPercent = std::clamp(
-		value,
-		kMessageWidthMin,
-		kMessageWidthMax);
-	writePref<int>(kMessageWidthKey, _messageWidthPercent);
+void Settings::setMessageWidth(int value) {
+	_messageWidth = std::clamp(value, kMessageWidthMin, kMessageWidthMax);
+	writePref<int>(kMessageWidthPxKey, _messageWidth);
 }
 
 void Settings::setBubbleRadiusLarge(int value) {
@@ -1705,13 +1735,13 @@ void Settings::setBubbleRadiusSmall(int value) {
 	writePref<int>(kBubbleRadiusSmallKey, _bubbleRadiusSmall);
 }
 
-void Settings::setVideoMessageSizePercent(int value) {
+void Settings::setVideoMessageSize(int value) {
 	value = std::clamp(value, kVideoMessageSizeMin, kVideoMessageSizeMax);
-	if (_videoMessageSizePercent == value) {
+	if (_videoMessageSize == value) {
 		return;
 	}
-	_videoMessageSizePercent = value;
-	writePref<int>(kVideoMessageSizeKey, value);
+	_videoMessageSize = value;
+	writePref<int>(kVideoMessageSizePxKey, value);
 	_messageLayoutChanges.fire({});
 }
 

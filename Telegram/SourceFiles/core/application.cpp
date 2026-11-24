@@ -322,6 +322,8 @@ void Application::run() {
 
 	style::SetCustomFont(settings().customFontFamily());
 	style::SetCustomMonospaceFont(settings().monospaceFontFamily());
+	style::SetCustomFontScale(settings().customFontSize()
+		/ double(Core::Settings::kCustomFontSizeDefault));
 	style::internal::StartFonts();
 
 	if (!Test::ApplyStartupOverrides()) {
@@ -352,7 +354,9 @@ void Application::run() {
 	QCoreApplication::instance()->installTranslator(_translator.get());
 
 	style::StartManager(cScale());
-	Ui::ApplyMessageWidthPercent(settings().messageWidthPercent());
+	Ui::ApplyMessageWidth(
+		settings().messageWidth(),
+		Core::Settings::kMessageWidthDefault);
 	Ui::ApplyBubbleRadius(
 		settings().bubbleRadiusLarge(),
 		settings().bubbleRadiusSmall());

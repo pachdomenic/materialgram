@@ -829,7 +829,7 @@ void FillComplexEllipse(
 	not_null<const ChatStyle*> st,
 	QRect rect);
 
-void ApplyMessageWidthPercent(int percent);
+void ApplyMessageWidth(int px, int defaultPx);
 [[nodiscard]] int BubbleRadiusFromPixels(int px);
 void ApplyBubbleRadius(int large, int small);
 

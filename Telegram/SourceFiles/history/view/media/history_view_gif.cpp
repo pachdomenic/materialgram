@@ -156,8 +156,9 @@ using ::Media::ValidFrameSize;
 }
 
 [[nodiscard]] int VideoMessageMaxSize() {
-	const auto percent = Core::App().settings().videoMessageSizePercent();
-	return st::maxVideoMessageSize * percent / 100;
+	using Settings = Core::Settings;
+	const auto px = Core::App().settings().videoMessageSize();
+	return st::maxVideoMessageSize * px / Settings::kVideoMessageSizeDefault;
 }
 
 } // namespace

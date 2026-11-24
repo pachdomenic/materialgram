@@ -582,7 +582,7 @@ struct ValueSliderArgs {
 	Fn<void(int)> chosen;
 	QStringList keywords;
 	Fn<void(int)> changing;
-	QString suffix = u"%"_q;
+	QString suffix = u"px"_q;
 };
 
 void AddValueSlider(SectionBuilder &builder, ValueSliderArgs &&args) {
@@ -1242,6 +1242,31 @@ void BuildAppearanceCategory(SectionBuilder &builder) {
 		},
 		.keywords = { u"tukigram"_q, u"font"_q, u"family"_q },
 	});
+	AddValueSlider(builder, {
+		.id = u"tukigram/font_size"_q,
+		.title = tr::lng_tukigram_font_size(),
+		.min = Core::Settings::kCustomFontSizeMin,
+		.max = Core::Settings::kCustomFontSizeMax,
+		.step = 1,
+		.current = settings->customFontSize(),
+		.chosen = [=](int px) {
+			if (px == settings->customFontSize()) {
+				return;
+			}
+			settings->setCustomFontSize(px);
+			Core::App().saveSettingsDelayed();
+			if (controller) {
+				ShowRestartBox(controller);
+			}
+		},
+		.keywords = {
+			u"tukigram"_q,
+			u"font"_q,
+			u"size"_q,
+			u"scale"_q,
+			u"text"_q,
+		},
+	});
 	builder.addButton({
 		.id = u"tukigram/mono_font"_q,
 		.title = tr::lng_tukigram_mono_font(),
@@ -1310,7 +1335,6 @@ void BuildAppearanceCategory(SectionBuilder &builder) {
 			u"round"_q,
 		},
 		.changing = [=](int px) { *large = px; },
-		.suffix = u"px"_q,
 	});
 	AddValueSlider(builder, {
 		.id = u"tukigram/bubble_radius_small"_q,
@@ -1331,7 +1355,6 @@ void BuildAppearanceCategory(SectionBuilder &builder) {
 			u"corner"_q,
 		},
 		.changing = [=](int px) { *small = px; },
-		.suffix = u"px"_q,
 	});
 	builder.addButton({
 		.title = tr::lng_tukigram_bubble_restart(),
@@ -1359,13 +1382,13 @@ void BuildAppearanceCategory(SectionBuilder &builder) {
 		.title = tr::lng_tukigram_message_width(),
 		.min = Core::Settings::kMessageWidthMin,
 		.max = Core::Settings::kMessageWidthMax,
-		.step = 10,
-		.current = settings->messageWidthPercent(),
-		.chosen = [=](int percent) {
-			if (percent == settings->messageWidthPercent()) {
+		.step = Core::Settings::kMessageWidthStep,
+		.current = settings->messageWidth(),
+		.chosen = [=](int px) {
+			if (px == settings->messageWidth()) {
 				return;
 			}
-			settings->setMessageWidthPercent(percent);
+			settings->setMessageWidth(px);
 			Core::App().saveSettingsDelayed();
 			if (controller) {
 				ShowRestartBox(controller);
@@ -1382,10 +1405,10 @@ void BuildAppearanceCategory(SectionBuilder &builder) {
 		.title = tr::lng_tukigram_video_message_size(),
 		.min = Core::Settings::kVideoMessageSizeMin,
 		.max = Core::Settings::kVideoMessageSizeMax,
-		.step = 10,
-		.current = settings->videoMessageSizePercent(),
-		.chosen = [=](int percent) {
-			settings->setVideoMessageSizePercent(percent);
+		.step = Core::Settings::kVideoMessageSizeStep,
+		.current = settings->videoMessageSize(),
+		.chosen = [=](int px) {
+			settings->setVideoMessageSize(px);
 			Core::App().saveSettingsDelayed();
 		},
 		.keywords = { u"tukigram"_q, u"round"_q, u"video"_q, u"circle"_q },

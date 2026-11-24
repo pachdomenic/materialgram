@@ -50,9 +50,12 @@ inline constexpr auto kEditHistoryDisabledKey
 inline constexpr auto kDeletedMarkKey = "deleted-mark"_cs;
 inline constexpr auto kDeletedOpaqueKey = "deleted-opaque"_cs;
 inline constexpr auto kMonospaceFontKey = "monospace-font"_cs;
+inline constexpr auto kCustomFontSizeKey = "custom-font-size"_cs;
 inline constexpr auto kMessageSecondsKey = "message-seconds"_cs;
 inline constexpr auto kMessageWidthKey = "message-width"_cs;
+inline constexpr auto kMessageWidthPxKey = "message-width-px"_cs;
 inline constexpr auto kVideoMessageSizeKey = "video-message-size"_cs;
+inline constexpr auto kVideoMessageSizePxKey = "video-message-size-px"_cs;
 inline constexpr auto kBubbleRadiusLargeKey = "bubble-radius-large"_cs;
 inline constexpr auto kBubbleRadiusSmallKey = "bubble-radius-small"_cs;
 inline constexpr auto kHideFolderBadgesKey = "hide-folder-badges"_cs;
@@ -259,10 +262,19 @@ public:
 	[[nodiscard]] rpl::producer<> deletedAppearanceChanges() const {
 		return _deletedAppearanceChanges.events();
 	}
-	static constexpr auto kMessageWidthMin = 100;
-	static constexpr auto kMessageWidthMax = 300;
-	static constexpr auto kVideoMessageSizeMin = 50;
-	static constexpr auto kVideoMessageSizeMax = 180;
+	// Defaults match msgMaxWidth, maxVideoMessageSize (chat.style)
+	// and fsize (basic.style), in unscaled pixels.
+	static constexpr auto kMessageWidthDefault = 430;
+	static constexpr auto kMessageWidthMin = 430;
+	static constexpr auto kMessageWidthMax = 1290;
+	static constexpr auto kMessageWidthStep = 10;
+	static constexpr auto kVideoMessageSizeDefault = 240;
+	static constexpr auto kVideoMessageSizeMin = 120;
+	static constexpr auto kVideoMessageSizeMax = 440;
+	static constexpr auto kVideoMessageSizeStep = 10;
+	static constexpr auto kCustomFontSizeDefault = 13;
+	static constexpr auto kCustomFontSizeMin = 10;
+	static constexpr auto kCustomFontSizeMax = 20;
 	static constexpr auto kBubbleRadiusMin = 0;
 	static constexpr auto kBubbleRadiusMax = 24;
 	static constexpr auto kBubbleRadiusLargeDefault = 16;
@@ -271,14 +283,18 @@ public:
 		return _monospaceFontFamily;
 	}
 	void setMonospaceFontFamily(const QString &value);
+	[[nodiscard]] int customFontSize() const {
+		return _customFontSize;
+	}
+	void setCustomFontSize(int value);
 	[[nodiscard]] bool messageSeconds() const {
 		return _messageSeconds;
 	}
 	void setMessageSeconds(bool value);
-	[[nodiscard]] int messageWidthPercent() const {
-		return _messageWidthPercent;
+	[[nodiscard]] int messageWidth() const {
+		return _messageWidth;
 	}
-	void setMessageWidthPercent(int value);
+	void setMessageWidth(int value);
 	[[nodiscard]] int bubbleRadiusLarge() const {
 		return _bubbleRadiusLarge;
 	}
@@ -287,10 +303,10 @@ public:
 		return _bubbleRadiusSmall;
 	}
 	void setBubbleRadiusSmall(int value);
-	[[nodiscard]] int videoMessageSizePercent() const {
-		return _videoMessageSizePercent;
+	[[nodiscard]] int videoMessageSize() const {
+		return _videoMessageSize;
 	}
-	void setVideoMessageSizePercent(int value);
+	void setVideoMessageSize(int value);
 	[[nodiscard]] rpl::producer<> messageLayoutChanges() const {
 		return _messageLayoutChanges.events();
 	}
@@ -1244,11 +1260,12 @@ private:
 	bool _deletedTransparent = true;
 	rpl::event_stream<> _deletedAppearanceChanges;
 	QString _monospaceFontFamily;
+	int _customFontSize = kCustomFontSizeDefault;
 	bool _messageSeconds = false;
-	int _messageWidthPercent = 100;
+	int _messageWidth = kMessageWidthDefault;
 	int _bubbleRadiusLarge = kBubbleRadiusLargeDefault;
 	int _bubbleRadiusSmall = kBubbleRadiusSmallDefault;
-	int _videoMessageSizePercent = 100;
+	int _videoMessageSize = kVideoMessageSizeDefault;
 	rpl::event_stream<> _messageLayoutChanges;
 	rpl::variable<bool> _hideFolderBadges = false;
 	std::array<bool, kGhostOptionCount> _ghostOptions = {};
