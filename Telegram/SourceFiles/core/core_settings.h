@@ -45,6 +45,8 @@ inline constexpr auto kKeepSelfDestructingMediaKey
 	= "keep-self-destructing-media"_cs;
 inline constexpr auto kSelfDestructingNoReadKey
 	= "self-destructing-no-read"_cs;
+inline constexpr auto kRestoreSelfDestructingMediaKey
+	= "restore-self-destructing-media"_cs;
 inline constexpr auto kEditHistoryDisabledKey
 	= "edit-history-disabled"_cs;
 inline constexpr auto kDeletedMarkKey = "deleted-mark"_cs;
@@ -246,6 +248,10 @@ public:
 		return _markSelfDestructingRead;
 	}
 	void setMarkSelfDestructingRead(bool value);
+	[[nodiscard]] bool restoreSelfDestructingMedia() const {
+		return _restoreSelfDestructingMedia;
+	}
+	void setRestoreSelfDestructingMedia(bool value);
 	[[nodiscard]] bool saveEditHistory() const {
 		return _saveEditHistory;
 	}
@@ -1255,6 +1261,7 @@ private:
 	bool _forwardProtectedMessages = false;
 	bool _keepSelfDestructingMedia = false;
 	bool _markSelfDestructingRead = true;
+	bool _restoreSelfDestructingMedia = false;
 	bool _saveEditHistory = true;
 	QString _deletedMark = DefaultDeletedMark();
 	bool _deletedTransparent = true;

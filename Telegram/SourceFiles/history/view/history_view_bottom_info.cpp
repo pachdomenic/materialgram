@@ -42,8 +42,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 namespace HistoryView {
 namespace {
 
-[[nodiscard]] QString KeptTtlMediaMark() {
-	return QString::fromUtf8("\xf0\x9f\x94\xa5\xf0\x9f\x94\xa5\xf0\x9f\x94\xa5");
+[[nodiscard]] QString KeptTtlMediaMark(bool viewed) {
+	return viewed
+		? QString::fromUtf8("\xf0\x9f\x91\x80")
+		: QString::fromUtf8("\xf0\x9f\x94\xa5");
 }
 
 void AppendEmojiMark(
@@ -598,7 +600,8 @@ void BottomInfo::layoutDateText() {
 		AppendEmojiMark(marked, helper, deletedMark);
 	}
 	if (_data.flags & Data::Flag::KeptTtlMedia) {
-		AppendEmojiMark(marked, helper, KeptTtlMediaMark());
+		const auto viewed = (_data.flags & Data::Flag::KeptTtlViewed);
+		AppendEmojiMark(marked, helper, KeptTtlMediaMark(bool(viewed)));
 	}
 	if (const auto count = _data.stars) {
 		marked.append(
@@ -778,6 +781,9 @@ BottomInfo::Data BottomInfoDataFromMessage(not_null<Message*> message) {
 	}
 	if (item->showsKeptTtlMedia()) {
 		result.flags |= Flag::KeptTtlMedia;
+		if (SelfDestructingMediaViewed(item)) {
+			result.flags |= Flag::KeptTtlViewed;
+		}
 	}
 	if (IsAnchoredEphemeral(item)) {
 		result.flags |= Flag::Updated;

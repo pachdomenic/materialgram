@@ -430,6 +430,9 @@ public:
 	void contributeToSlowmode(TimeId realDate = 0);
 
 	void clearMediaAsExpired();
+	void restoreKeptTtlMedia(
+		std::unique_ptr<Data::Media> media,
+		TextWithEntities caption);
 
 	void addToUnreadThings(HistoryUnreadThings::AddType type);
 	void destroyHistoryEntry();

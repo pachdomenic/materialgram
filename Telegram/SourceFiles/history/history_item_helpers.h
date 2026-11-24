@@ -176,6 +176,13 @@ void StripQuoteOnlyReply(
 	FullReplyTo &replyTo);
 // materialgram: keeps a file copy when self-destructing media would burn.
 void SaveSelfDestructingCopy(not_null<HistoryItem*> item);
+[[nodiscard]] bool SelfDestructingMediaViewed(not_null<HistoryItem*> item);
+void MarkSelfDestructingViewed(not_null<HistoryItem*> item);
+void RestoreSelfDestructingCopy(
+	not_null<HistoryItem*> item,
+	TimeId ttlSeconds,
+	bool video,
+	TextWithEntities caption);
 void ConfirmDeleteSelectedEphemeral(
 	std::shared_ptr<ChatHelpers::Show> show,
 	std::vector<not_null<HistoryItem*>> items,

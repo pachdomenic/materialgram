@@ -1424,6 +1424,7 @@ void OverlayWidget::markTimedMediaRead() {
 	} else if (item->isIncomingUnreadMedia()) {
 		item->history()->session().api().markContentsRead(item);
 	}
+	MarkSelfDestructingViewed(item);
 }
 
 void OverlayWidget::checkSingleViewMediaBurn() {

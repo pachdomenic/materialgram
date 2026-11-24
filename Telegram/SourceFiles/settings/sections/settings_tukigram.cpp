@@ -902,6 +902,13 @@ void AddMediaOptions(SectionBuilder &builder) {
 		[=] { return settings->markSelfDestructingRead(); },
 		[=](bool value) { settings->setMarkSelfDestructingRead(value); },
 		{ u"tukigram"_q, u"self-destructing"_q, u"viewed"_q, u"read"_q });
+	AddToggle(
+		builder,
+		u"tukigram/ttl_restore"_q,
+		tr::lng_materialgram_settings_ttl_restore(),
+		[=] { return settings->restoreSelfDestructingMedia(); },
+		[=](bool value) { settings->setRestoreSelfDestructingMedia(value); },
+		{ u"tukigram"_q, u"self-destructing"_q, u"restore"_q, u"restart"_q });
 }
 
 void BuildProfileCategory(SectionBuilder &builder) {

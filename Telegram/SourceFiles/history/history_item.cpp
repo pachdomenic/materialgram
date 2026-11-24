@@ -125,12 +125,43 @@ template <typename T>
 	if (item->out() || item->hasUnreadMediaFlag()) {
 		return false;
 	}
-	return media.match([](const MTPDmessageMediaPhoto &data) {
-		return data.vttl_seconds().has_value();
-	}, [](const MTPDmessageMediaDocument &data) {
-		return data.vttl_seconds().has_value();
+	const auto keep = Core::App().settings().keepSelfDestructingMedia();
+	return media.match([&](const MTPDmessageMediaPhoto &data) {
+		return data.vttl_seconds().has_value()
+			&& !(keep && data.vphoto());
+	}, [&](const MTPDmessageMediaDocument &data) {
+		return data.vttl_seconds().has_value()
+			&& !(keep && data.vdocument() && data.is_video());
 	}, [](const auto &) {
 		return false;
+	});
+}
+
+void RestoreKeptTtlMedia(
+		not_null<HistoryItem*> item,
+		const MTPDmessage &data) {
+	const auto media = data.vmedia();
+	if (!media || item->out()) {
+		return;
+	}
+	const auto caption = [&] {
+		return TextWithEntities{
+			qs(data.vmessage()),
+			Api::EntitiesFromMTP(
+				&item->history()->session(),
+				data.ventities().value_or_empty()),
+		};
+	};
+	media->match([&](const MTPDmessageMediaPhoto &photo) {
+		if (const auto ttl = photo.vttl_seconds()) {
+			RestoreSelfDestructingCopy(item, ttl->v, false, caption());
+		}
+	}, [&](const MTPDmessageMediaDocument &document) {
+		const auto ttl = document.vttl_seconds();
+		if (ttl && document.is_video()) {
+			RestoreSelfDestructingCopy(item, ttl->v, true, caption());
+		}
+	}, [](const auto &) {
 	});
 }
 
@@ -632,6 +663,7 @@ HistoryItem::HistoryItem(
 		createServiceFromMtp(data);
 		setReactions(data.vreactions());
 		applyTTL(data);
+		RestoreKeptTtlMedia(this, data);
 	} else if (checked == MediaCheckResult::HasStoryMention) {
 		setMedia(*data.vmedia());
 		createServiceFromMtp(data);
@@ -1960,6 +1992,9 @@ void HistoryItem::markMediaAndMentionRead() {
 
 	if (wasUnreadMedia) {
 		invalidateChatListEntry();
+		if (showsKeptTtlMedia()) {
+			_history->owner().notifyItemDataChange(this);
+		}
 	}
 
 	if (mentionsMe()) {
@@ -3108,6 +3143,20 @@ void HistoryItem::updateForwardedInfo(const MTPMessageFwdHeader *fwd) {
 	});
 }
 
+void HistoryItem::restoreKeptTtlMedia(
+		std::unique_ptr<Data::Media> media,
+		TextWithEntities caption) {
+	if (_media || !isService() || !media) {
+		return;
+	}
+	RemoveComponents(HistoryServiceData::Bit()
+		| HistoryServiceSelfDestruct::Bit());
+	_media = std::move(media);
+	setText(std::move(caption));
+	addToSharedMediaIndex();
+	finishEdition(-1);
+}
+
 void HistoryItem::applyEditionToHistoryCleared() {
 	const auto rootId = topicRootId();
 	const auto topicPost = (rootId != Data::ForumTopic::kGeneralId);
@@ -3155,6 +3204,7 @@ void HistoryItem::clearMediaAsExpired() {
 		unarmMediaDestroy();
 		RemoveComponents(HistoryServiceSelfDestruct::Bit());
 		SaveSelfDestructingCopy(this);
+		_history->owner().notifyItemDataChange(this);
 		_history->owner().requestItemRepaint(this);
 		return;
 	}

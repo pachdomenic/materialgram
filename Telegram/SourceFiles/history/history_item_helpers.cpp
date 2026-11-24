@@ -16,6 +16,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "calls/calls_instance.h"
 #include "core/application.h"
 #include "core/click_handler_types.h" // ClickHandlerContext.
+#include "core/file_location.h"
 #include "data/components/ephemeral_messages.h"
 #include "data/components/sponsored_messages.h"
 #include "data/notify/data_notify_settings.h"
@@ -54,14 +55,17 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/core_settings.h"
 #include "core/file_utilities.h"
 #include "settings/settings_credits_graphics.h"
+#include "storage/localimageloader.h"
 #include "storage/storage_account.h"
 #include "ui/boxes/confirm_box.h"
 #include "ui/boxes/emoji_stake_box.h" // InsufficientTonBox
+#include "ui/chat/attach/attach_prepare.h"
 #include "ui/controls/ton_common.h"
 #include "ui/text/format_values.h"
 #include "ui/text/text_utilities.h"
 #include "ui/toast/toast.h"
 #include "ui/widgets/checkbox.h"
+#include "ui/image/image_location_factory.h"
 #include "ui/item_text_options.h"
 #include "wallet/wallet_fiat.h"
 #include "window/window_controller.h"
@@ -798,26 +802,51 @@ TextWithEntities TakeQuoteOnlyReply(
 	return DropDisallowedCustomEmoji(history->peer, std::move(result));
 }
 
-void SaveSelfDestructingCopy(not_null<HistoryItem*> item) {
-	const auto media = item->media();
-	if (!media) {
-		return;
-	}
-	const auto session = &item->history()->session();
+namespace {
+
+[[nodiscard]] QString SelfDestructingFolder(
+		not_null<Main::Session*> session) {
 	auto root = Core::App().settings().downloadPath();
 	if (root.isEmpty()) {
 		root = File::DefaultDownloadPath(session);
 	} else if (root == FileDialog::Tmp()) {
 		root = session->local().tempDirectory();
 	}
-	const auto folder = QDir(root).filePath(u"self-destructing"_q);
+	return QDir(root).filePath(u"self-destructing"_q);
+}
+
+[[nodiscard]] QString SelfDestructingName(not_null<HistoryItem*> item) {
+	return QString::number(item->history()->peer->id.value)
+		+ '_'
+		+ QString::number(item->id.bare);
+}
+
+[[nodiscard]] QString FindSelfDestructingCopy(not_null<HistoryItem*> item) {
+	const auto folder = QDir(
+		SelfDestructingFolder(&item->history()->session()));
+	const auto list = folder.entryList(
+		{ SelfDestructingName(item) + u".*"_q },
+		QDir::Files);
+	return list.isEmpty() ? QString() : folder.filePath(list.front());
+}
+
+[[nodiscard]] base::flat_map<FullMsgId, bool> &SelfDestructingViewedCache() {
+	static auto result = base::flat_map<FullMsgId, bool>();
+	return result;
+}
+
+} // namespace
+
+void SaveSelfDestructingCopy(not_null<HistoryItem*> item) {
+	const auto media = item->media();
+	if (!media) {
+		return;
+	}
+	const auto folder = SelfDestructingFolder(&item->history()->session());
 	if (!QDir().mkpath(folder)) {
 		return;
 	}
-	const auto base = QDir(folder).filePath(
-		QString::number(item->history()->peer->id.value)
-		+ '_'
-		+ QString::number(item->id.bare));
+	const auto base = QDir(folder).filePath(SelfDestructingName(item));
 	if (const auto photo = media->photo()) {
 		const auto path = base + u".jpg"_q;
 		const auto view = photo->activeMediaView();
@@ -834,6 +863,98 @@ void SaveSelfDestructingCopy(not_null<HistoryItem*> item) {
 			document->save(item->fullId(), path);
 		}
 	}
+}
+
+bool SelfDestructingMediaViewed(not_null<HistoryItem*> item) {
+	if (!item->hasUnreadMediaFlag()) {
+		return true;
+	}
+	auto &cache = SelfDestructingViewedCache();
+	const auto id = item->fullId();
+	const auto i = cache.find(id);
+	if (i != end(cache)) {
+		return i->second;
+	}
+	const auto result = !FindSelfDestructingCopy(item).isEmpty();
+	cache.emplace(id, result);
+	return result;
+}
+
+void MarkSelfDestructingViewed(not_null<HistoryItem*> item) {
+	if (!item->showsKeptTtlMedia()) {
+		return;
+	}
+	SelfDestructingViewedCache()[item->fullId()] = true;
+	SaveSelfDestructingCopy(item);
+	item->history()->owner().notifyItemDataChange(item);
+}
+
+void RestoreSelfDestructingCopy(
+		not_null<HistoryItem*> item,
+		TimeId ttlSeconds,
+		bool video,
+		TextWithEntities caption) {
+	const auto &settings = Core::App().settings();
+	if (item->out()
+		|| !settings.keepSelfDestructingMedia()
+		|| !settings.restoreSelfDestructingMedia()) {
+		return;
+	}
+	const auto path = FindSelfDestructingCopy(item);
+	if (path.isEmpty()) {
+		return;
+	}
+	const auto session = &item->history()->session();
+	const auto itemId = item->fullId();
+	const auto task = std::make_shared<FileLoadTask>(FileLoadTask::Args{
+		.session = session,
+		.filepath = path,
+		.type = video ? SendMediaType::File : SendMediaType::Photo,
+		.to = FileLoadTo(0, {}, {}, 0),
+		.caption = {},
+	});
+	crl::async([=, weak = base::make_weak(session)]() mutable {
+		task->process({ .generateGoodThumbnail = false });
+		crl::on_main(std::move(weak), [=] {
+			const auto result = task->peekResult();
+			const auto item = session->data().message(itemId);
+			if (!item || !result) {
+				return;
+			}
+			const auto owner = &session->data();
+			auto media = std::unique_ptr<Data::Media>();
+			if (result->type == SendMediaType::Photo
+				&& !result->photoThumbs.empty()) {
+				const auto photo = owner->processPhoto(
+					result->photo,
+					result->photoThumbs);
+				media = std::make_unique<Data::MediaPhoto>(
+					item,
+					photo,
+					Data::MediaPhoto::Args{ .ttlSeconds = ttlSeconds });
+			} else if (result->type == SendMediaType::File) {
+				const auto document = result->thumb.isNull()
+					? owner->processDocument(result->document)
+					: owner->processDocument(
+						result->document,
+						Images::FromImageInMemory(
+							result->thumb,
+							"JPG",
+							result->thumbbytes));
+				if (!document->isVideoFile()) {
+					return;
+				}
+				document->setLocation(Core::FileLocation(path));
+				media = std::make_unique<Data::MediaFile>(
+					item,
+					document,
+					Data::MediaFile::Args{ .ttlSeconds = ttlSeconds });
+			}
+			if (media) {
+				item->restoreKeptTtlMedia(std::move(media), caption);
+			}
+		});
+	});
 }
 
 void ConfirmDeleteSelectedEphemeral(

@@ -1471,6 +1471,8 @@ void Settings::addFromSerialized(
 	_forwardProtectedMessages = readPref<bool>(kForwardProtectedMessagesKey);
 	_keepSelfDestructingMedia = readPref<bool>(kKeepSelfDestructingMediaKey);
 	_markSelfDestructingRead = !readPref<bool>(kSelfDestructingNoReadKey);
+	_restoreSelfDestructingMedia = readPref<bool>(
+		kRestoreSelfDestructingMediaKey);
 	_saveEditHistory = !readPref<bool>(kEditHistoryDisabledKey);
 	_deletedSkipChannels = readPref<bool>(kDeletedSkipChannelsKey);
 	_deletedSkipBots = readPref<bool>(kDeletedSkipBotsKey);
@@ -1641,6 +1643,11 @@ void Settings::setKeepSelfDestructingMedia(bool value) {
 void Settings::setMarkSelfDestructingRead(bool value) {
 	_markSelfDestructingRead = value;
 	writePref<bool>(kSelfDestructingNoReadKey, !value);
+}
+
+void Settings::setRestoreSelfDestructingMedia(bool value) {
+	_restoreSelfDestructingMedia = value;
+	writePref<bool>(kRestoreSelfDestructingMediaKey, value);
 }
 
 void Settings::setSaveEditHistory(bool value) {
@@ -2196,6 +2203,7 @@ void Settings::resetOnLastLogout() {
 	_forwardProtectedMessages = false;
 	_keepSelfDestructingMedia = false;
 	_markSelfDestructingRead = true;
+	_restoreSelfDestructingMedia = false;
 	_saveEditHistory = true;
 	_deletedMark = DefaultDeletedMark();
 	_deletedTransparent = true;
