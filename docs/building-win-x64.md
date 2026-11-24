@@ -38,7 +38,7 @@ Go to ***BuildPath*\\materialgram\\Telegram** and run (using [your **api_id** an
 
 * Open ***BuildPath*\\materialgram\\out\\Telegram.sln** in Visual Studio 2022
 * Select Telegram project and press Build > Build Telegram (Debug and Release configurations)
-* The result materialgram.exe will be located in **D:\TBuild\materialgram\out\Debug** (and **Release**)
+* The result TukiGram.exe will be located in **D:\TBuild\materialgram\out\Debug** (and **Release**)
 
 ### Qt Visual Studio Tools
 

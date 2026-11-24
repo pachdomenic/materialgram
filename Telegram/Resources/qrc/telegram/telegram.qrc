@@ -98,6 +98,6 @@
   </qresource>
   <qresource prefix="/misc">
     <file alias="default_shortcuts-custom.json">../../default_shortcuts-custom.json</file>
-    <file alias="io.github.kukuruzka165.materialgram.desktop">../../../../lib/xdg/io.github.kukuruzka165.materialgram.desktop</file>
+    <file alias="io.github.pachdomenic.tukigram.desktop">../../../../lib/xdg/io.github.pachdomenic.tukigram.desktop</file>
   </qresource>
 </RCC>

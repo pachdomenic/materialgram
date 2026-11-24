@@ -992,7 +992,7 @@ void MainWindow::updateTitle() {
 		: Dialogs::Key();
 	const auto thread = key ? key.thread() : nullptr;
 	if (!thread) {
-		setTitle((user.isEmpty() ? u"materialgram"_q : user) + added + suffix);
+		setTitle((user.isEmpty() ? u"TukiGram"_q : user) + added + suffix);
 		return;
 	}
 	const auto history = thread->owningHistory();

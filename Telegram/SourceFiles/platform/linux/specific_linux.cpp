@@ -51,6 +51,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 namespace {
 
+const auto kAppId = u"io.github.pachdomenic.tukigram"_q;
+const auto kLegacyAppId = u"io.github.kukuruzka165.materialgram"_q;
+
 using namespace gi::repository;
 namespace GObject = gi::repository::GObject;
 using namespace Platform;
@@ -235,7 +238,7 @@ bool GenerateDesktopFile(
 	DEBUG_LOG(("App Info: placing .desktop file to %1").arg(targetPath));
 	if (!QDir(targetPath).exists()) QDir().mkpath(targetPath);
 
-	const auto sourceFile = u":/misc/io.github.kukuruzka165.materialgram.desktop"_q;
+	const auto sourceFile = u":/misc/"_q + kAppId + u".desktop"_q;
 	const auto targetFile = targetPath
 		+ QGuiApplication::desktopFileName()
 		+ u".desktop"_q;
@@ -373,18 +376,21 @@ bool GenerateDesktopFile(
 		hashMd5Hex(d.constData(), d.size(), md5Hash);
 
 		if (!Core::Launcher::Instance().customWorkingDir()) {
-			QFile::remove(u"%1io.github.kukuruzka165.materialgram._%2.desktop"_q.arg(
-				targetPath,
-				md5Hash));
+			for (const auto &id : { kAppId, kLegacyAppId }) {
+				QFile::remove(u"%1%2._%3.desktop"_q.arg(
+					targetPath,
+					id,
+					md5Hash));
+			}
 
 			const auto exePath = QFile::encodeName(
 				cExeDir() + cExeName());
 			hashMd5Hex(exePath.constData(), exePath.size(), md5Hash);
 		}
 
-		QFile::remove(u"%1io.github.kukuruzka165.materialgram.%2.desktop"_q.arg(
-			targetPath,
-			md5Hash));
+		for (const auto &id : { kAppId, kLegacyAppId }) {
+			QFile::remove(u"%1%2.%3.desktop"_q.arg(targetPath, id, md5Hash));
+		}
 	}
 
 	return true;
@@ -441,9 +447,12 @@ bool GenerateServiceFile(bool silent = false) {
 		const auto d = QFile::encodeName(QDir(cWorkingDir()).absolutePath());
 		hashMd5Hex(d.constData(), d.size(), md5Hash);
 
-		QFile::remove(u"%1io.github.kukuruzka165.materialgram._%2.service"_q.arg(
-			targetPath,
-			md5Hash));
+		for (const auto &id : { kAppId, kLegacyAppId }) {
+			QFile::remove(u"%1%2._%3.service"_q.arg(
+				targetPath,
+				id,
+				md5Hash));
+		}
 	}
 
 	XdgDBus::DBusProxy::new_for_bus(
@@ -766,11 +775,12 @@ void start() {
 		}
 
 		if (!Core::UpdaterDisabled()) {
-			return u"io.github.kukuruzka165.materialgram._%1"_q.arg(
+			return u"%1._%2"_q.arg(
+				kAppId,
 				Core::Launcher::Instance().instanceHash().constData());
 		}
 
-		return u"io.github.kukuruzka165.materialgram"_q;
+		return kAppId;
 	}());
 
 	LOG(("App ID: %1").arg(QGuiApplication::desktopFileName()));

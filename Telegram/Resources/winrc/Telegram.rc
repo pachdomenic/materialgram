@@ -60,11 +60,11 @@ BEGIN
     BEGIN
         BLOCK "040904b0"
         BEGIN
-            VALUE "CompanyName", "kukuruzka"
-            VALUE "FileDescription", "materialgram"
+            VALUE "CompanyName", "Tuki"
+            VALUE "FileDescription", "TukiGram"
             VALUE "FileVersion", "7.4.6.0"
             VALUE "LegalCopyright", "github.com/pachdomenic/materialgram"
-            VALUE "ProductName", "materialgram"
+            VALUE "ProductName", "TukiGram"
             VALUE "ProductVersion", "7.4.6.0"
         END
     END

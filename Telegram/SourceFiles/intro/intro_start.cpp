@@ -29,7 +29,7 @@ StartWidget::StartWidget(
 		Window::Theme::KeepApplied();
 	}
 	setMouseTracking(true);
-	setTitleText(rpl::single(u"materialgram"_q));
+	setTitleText(rpl::single(u"TukiGram"_q));
 	setDescriptionText(tr::lng_materialgram_intro_about());
 	show();
 }

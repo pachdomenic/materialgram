@@ -1,24 +1,28 @@
 <div align="center">
 <img src="./docs/assets/icon.png" width="150" align="center">
 
-# [materialgram](https://github.com/pachdomenic/materialgram)
-<a href='https://flathub.org/apps/io.github.kukuruzka165.materialgram'>
-  <img width='175' alt='Download on Flathub' src='https://dl.flathub.org/assets/badges/flathub-badge-en.svg'/>
-</a>
+# [TukiGram](https://github.com/pachdomenic/materialgram)
 
-[![Telegram Channel](https://img.shields.io/badge/channel-blue?logo=telegram&labelColor=gray)](https://t.me/materialgram)
-[![Telegram Group](https://img.shields.io/badge/chat-blue?logo=telegram&labelColor=gray)](https://t.me/materialgram_chat)
-[![AUR](https://img.shields.io/badge/AUR%20package-blue?logo=archlinux&labelColor=gray)](https://aur.archlinux.org/packages?K=materialgram)
 [![GitHub Downloads](https://img.shields.io/github/downloads/pachdomenic/materialgram/total?logo=github)](https://github.com/pachdomenic/materialgram/releases/latest)
 
-[**Telegram Desktop**](https://github.com/telegramdesktop/tdesktop) fork with Material Design and other improvements, which is based on the [Telegram API][telegram_api] and the [MTProto][telegram_proto] secure protocol.
+A fork of [materialgram](https://github.com/kukuruzka165/materialgram), the [**Telegram Desktop**](https://github.com/telegramdesktop/tdesktop) fork with Material Design, adding privacy and message-keeping features. It is based on the [Telegram API][telegram_api] and the [MTProto][telegram_proto] secure protocol.
 
 The source code is published under GPLv3 with OpenSSL exception, the license is available [here][license]
 ![preview](docs/assets/preview.png)
 ![preview](docs/assets/themes.png)
 </div>
 
-## Features
+## TukiGram features
+- Keep deleted messages in an encrypted local database, with a mark, transparency and per-chat exceptions
+- View deleted messages of any chat and export them to JSON; Telegram's chat export includes them marked as deleted
+- Save edit history of messages
+- Keep self-destructing photos and videos, with a 🔥 / 👀 viewed label and restore after restart
+- Open self-destructing media without marking it as viewed
+- Forward messages from protected chats
+- Ghost mode: hide read receipts, story views, online and typing status
+- Adjustable bubble radius, message width, fonts and video message size
+
+## Features from materialgram
 - Included own Material You theme with colorizer ([Day](https://t.me/addtheme/materialgram_day), [Dark](https://t.me/addtheme/materialgram_dark))
 - **Google Sans** font everywhere (except for Arabic characters, they use the **Vazirmatn** font)
 - Material icons instead of default ones
@@ -56,19 +60,6 @@ The source code is published under GPLv3 with OpenSSL exception, the license is 
 - Show photo/file datacenter and original date
 - Show photo platform in media viewer
 - Show more info for unique gifts
-- If you would like to see a new feature in this list, please tell me in the [chat](https://t.me/materialgram_chat)
-
-## For Arch Linux users [@omansh-krishn](https://github.com/omansh-krishn) made a [PKG repository](https://github.com/materialgram/arch.git)
-You can use it right away by adding this to your pacman.conf
-```
-[materialgram]
-SigLevel = Never
-Server = https://$repo.github.io/arch
-```
-Or you can use this script
-```
-sudo sh -c "curl -s https://raw.githubusercontent.com/materialgram/arch/x86_64/installer.sh | bash"
-```
 
 ## Build instructions
 * [Windows 64-bit][win64]

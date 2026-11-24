@@ -83,10 +83,10 @@ void PreviewWindowTitle(Painter &p, const style::palette &palette, QRect body, i
 		constexpr auto kTrafficLightsWidth = 8 + 3 * (12 + 8);
 		p.drawText(
 			titleRect.adjusted(kTrafficLightsWidth, 0, 0, 0),
-			u"materialgram"_q,
+			u"TukiGram"_q,
 			style::al_left);
 	} else {
-		p.drawText(titleRect, u"materialgram"_q, style::al_center);
+		p.drawText(titleRect, u"TukiGram"_q, style::al_center);
 	}
 
 	auto isGraphite = ([NSColor currentControlTint] == NSGraphiteControlTint);

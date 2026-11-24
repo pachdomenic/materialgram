@@ -166,7 +166,7 @@ void SendKeySequence(
 		objectForInfoDictionaryKey:@"CFBundleName"];
 	return [name isKindOfClass:[NSString class]]
 		? QString::fromNSString(name)
-		: u"materialgram"_q;
+		: u"TukiGram"_q;
 }
 
 void ForceDisabled(QAction *action, bool disabled) {
@@ -426,7 +426,7 @@ void Manager::buildAppleMenu(QMenu *main) {
 			});
 		};
 		_about = main->addAction(
-			u"About materialgram"_q,
+			u"About TukiGram"_q,
 			std::move(callback));
 		_about->setMenuRole(QAction::AboutQtRole);
 	}
@@ -672,7 +672,7 @@ void Manager::buildWindowMenu(QMenu *window) {
 }
 
 void Manager::buildMenu() {
-	buildAppleMenu(_menuBar->addMenu(u"materialgram"_q));
+	buildAppleMenu(_menuBar->addMenu(u"TukiGram"_q));
 	_file = _menuBar->addMenu(u"File"_q);
 	buildFileMenu(_file);
 	_edit = _menuBar->addMenu(u"Edit"_q);

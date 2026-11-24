@@ -339,6 +339,23 @@ bool DebugModeEnabled = false;
 	}
 }
 
+[[nodiscard]] QString MigratedAppDataPath() {
+	const auto path = psAppDataPath();
+	const auto now = QDir::cleanPath(path);
+	if (QFileInfo(now).fileName() != AppName.utf16()
+		|| QDir(now).exists(u"tdata"_q)) {
+		return path;
+	}
+	const auto was = QFileInfo(now).absolutePath() + u"/materialgram"_q;
+	if (QDir(was).exists(u"tdata"_q)) {
+		QDir().rmdir(now);
+		if (!QDir().rename(was, now)) {
+			LOG(("App Error: could not move '%1' to '%2'.").arg(was, now));
+		}
+	}
+	return path;
+}
+
 } // namespace
 
 void SetDebugEnabled(bool enabled) {
@@ -364,11 +381,11 @@ void start() {
 	LogsData = new LogsDataFields();
 	if (cWorkingDir().isEmpty()) {
 #if (!defined Q_OS_WIN && !defined _DEBUG) || defined Q_OS_WINRT || defined OS_WIN_STORE || defined OS_MAC_STORE
-		cForceWorkingDir(psAppDataPath());
+		cForceWorkingDir(MigratedAppDataPath());
 #else // (!Q_OS_WIN && !_DEBUG) || Q_OS_WINRT || OS_WIN_STORE || OS_MAC_STORE
 		cForceWorkingDir(cExeDir());
 		if (!LogsData->openMain()) {
-			cForceWorkingDir(psAppDataPath());
+			cForceWorkingDir(MigratedAppDataPath());
 		}
 #endif // (!Q_OS_WIN && !_DEBUG) || Q_OS_WINRT || OS_WIN_STORE || OS_MAC_STORE
 	}

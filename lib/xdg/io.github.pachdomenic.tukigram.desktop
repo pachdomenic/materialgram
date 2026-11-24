@@ -1,15 +1,15 @@
 [Desktop Entry]
-Name=materialgram
-Comment=Unofficial Telegram Desktop with Material Design
-TryExec=materialgram
-Exec=materialgram -- %U
-Icon=io.github.kukuruzka165.materialgram
+Name=TukiGram
+Comment=materialgram fork with extra privacy features
+TryExec=tukigram
+Exec=tukigram -- %U
+Icon=io.github.pachdomenic.tukigram
 Terminal=false
-StartupWMClass=materialgram
+StartupWMClass=TukiGram
 Type=Application
 Categories=Chat;Network;InstantMessaging;Qt;
 MimeType=x-scheme-handler/tg;x-scheme-handler/tonsite;x-scheme-handler/ton;
-Keywords=tg;chat;im;messaging;messenger;sms;tdesktop;telegram;materialgram
+Keywords=tg;chat;im;messaging;messenger;sms;tdesktop;telegram;materialgram;tukigram
 Actions=quit;
 DBusActivatable=true
 SingleMainWindow=true
@@ -17,6 +17,6 @@ X-GNOME-UsesNotifications=true
 X-GNOME-SingleWindow=true
 
 [Desktop Action quit]
-Exec=materialgram -quit
-Name=Quit materialgram
+Exec=tukigram -quit
+Name=Quit TukiGram
 Icon=application-exit

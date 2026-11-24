@@ -1,19 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <component type="desktop">
-    <id>io.github.kukuruzka165.materialgram</id>
+    <id>io.github.pachdomenic.tukigram</id>
     <metadata_license>CC0-1.0</metadata_license>
     <project_license>GPL-3.0</project_license>
-    <name>materialgram</name>
-    <summary>Googlized Telegram</summary>
+    <name>TukiGram</name>
+    <summary>materialgram fork with extra privacy features</summary>
     <description>
-        <p>Telegram Desktop based messenger with Material Design and additional features</p>
+        <p>Telegram Desktop based messenger with Material Design, kept deleted messages and other privacy features</p>
     </description>
     <categories>
         <category>Network</category>
         <category>InstantMessaging</category>
     </categories>
-    <update_contact>kukuruzka165_at_gmail.com</update_contact>
-    <developer_name>kukuruzka165</developer_name>
+    <developer_name>Tuki</developer_name>
     <url type="homepage">https://github.com/pachdomenic/materialgram</url>
     <url type="bugtracker">https://github.com/pachdomenic/materialgram/issues</url>
     <url type="contribute">https://github.com/pachdomenic/materialgram/raw/main/.github/CONTRIBUTING.md</url>
@@ -27,6 +26,7 @@
         <keyword>telegram</keyword>
 		<keyword>tdesktop</keyword>
 		<keyword>materialgram</keyword>
+		<keyword>tukigram</keyword>
         <keyword>messaging</keyword>
         <keyword>messenger</keyword>
         <keyword>chat</keyword>
@@ -72,10 +72,10 @@
         <content_attribute id="money-gambling">none</content_attribute>
         <content_attribute id="money-advertising">moderate</content_attribute>
     </content_rating>
-    <launchable type="desktop-id">io.github.kukuruzka165.materialgram.desktop</launchable>
+    <launchable type="desktop-id">io.github.pachdomenic.tukigram.desktop</launchable>
     <provides>
-        <binary>materialgram</binary>
-		<dbus type="session">io.github.kukuruzka165.materialgram</dbus>
+        <binary>tukigram</binary>
+		<dbus type="session">io.github.pachdomenic.tukigram</dbus>
         <mediatype>x-scheme-handler/tg</mediatype>
 		<mediatype>x-scheme-handler/tonsite</mediatype>
 		<mediatype>x-scheme-handler/ton</mediatype>

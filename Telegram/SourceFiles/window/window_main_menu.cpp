@@ -389,7 +389,7 @@ MainMenu::MainMenu(
 	parentResized();
 
 	_telegram->setMarkedText(tr::link(
-		u"materialgram"_q,
+		u"TukiGram"_q,
 		u"https://github.com/pachdomenic/materialgram"_q));
 	_telegram->setLinksTrusted();
 	// The canary version is too long for the "Version {version}" form.
