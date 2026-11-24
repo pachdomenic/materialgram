@@ -11,14 +11,25 @@ Read the source task's complete `task.md`, project context, dependencies,
 `work/context.md`, `work/plan.md`, `work/split-proposal.md`, `work/result.md`,
 and `work/carried-work.json`. Inspect the complete retained source diff and
 the relevant adjacent code. The proposal is input, not a set of titles to copy
-blindly: refine it into the smallest independently shippable and independently
-testable product boundaries.
+blindly: refine it into the fewest independently shippable and independently
+testable replacements, two unless the proposal shows why one of two would
+still be incoherent for one review and one evidence campaign. Every task pays
+its own context, plan, assessment, review fan-out, Debug build and evidence
+campaign, hours each. Merge proposed parts that share a subsystem, fixtures
+or an evidence campaign, and never cut finer than the proposal: a replacement
+that is still too broad splits again when its own assessment runs.
 
 Each replacement must have one useful outcome, a direct acceptance oracle, and
-enough self-contained context to run without this routing session. Split at
+enough self-contained context to run without this routing session. Split the
+source's requested behavior only. Apply perform-task's review scope (pipeline,
+"Review scope") to every finding the source's reviews raised. A finding that
+is pre-existing on the base is not a replacement's work and never enters its
+acceptance, even when the proposal lists it. Name each such finding in the
+receipt as a discovered follow-up candidate, for ordinary discovered routing
+with its normal filters. Cut at the
 network, persistence, engine, ownership/lifetime, lifecycle, UI, platform, or
-evidence boundaries when they can stand on their own. Keep inseparable APIs and
-their only callers together. Add a final integration task only when integration
+evidence boundary that best separates the work when it can stand on its own.
+Keep inseparable APIs and their only callers together. Add a final integration task only when integration
 has behavior not already proved by the component tasks.
 
 Preserve the source task's project by default. A replacement may leave that

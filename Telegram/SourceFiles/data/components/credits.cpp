@@ -7,8 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "data/components/credits.h"
 
-#include "apiwrap.h"
 #include "api/api_credits.h"
+#include "apiwrap.h"
 #include "data/data_user.h"
 #include "lang/lang_keys.h"
 #include "main/main_app_config.h"
@@ -103,9 +103,10 @@ rpl::producer<CreditsAmount> Credits::balanceValue() const {
 }
 
 void Credits::tonLoad(bool force) {
-	if (_tonRequestId
-		|| (!force
-			&& _tonLastLoaded
+	if (force) {
+		_session->api().request(base::take(_tonRequestId)).cancel();
+	} else if (_tonRequestId
+		|| (_tonLastLoaded
 			&& _tonLastLoaded + kReloadThreshold > crl::now())) {
 		return;
 	}

@@ -6,13 +6,13 @@ For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "iv/markdown/iv_markdown_article_layout_blocks.h"
-#include "iv/markdown/iv_markdown_media_block.h"
+
 #include "iv/markdown/iv_markdown_article_text.h"
+#include "iv/markdown/iv_markdown_media_block.h"
 #include "iv/markdown/iv_markdown_prepare_links.h"
 #include "iv/markdown/iv_markdown_prepare_serialize.h"
-#include "spellcheck/spellcheck_highlight_syntax.h"
-
 #include "lang/lang_keys.h"
+#include "spellcheck/spellcheck_highlight_syntax.h"
 
 #include "styles/style_chat.h"
 #include "styles/style_iv.h"
@@ -688,19 +688,6 @@ void ApplyMessageSkipBlock(not_null<LaidOutBlock*> block, QSize skip) {
 		leaf.updateSkipBlock(skip.width(), skip.height());
 		block->skipBlockLength = leaf.length() - length;
 	}
-}
-
-[[nodiscard]] int LeafCollapsedLineBottom(
-		const Ui::Text::String &leaf,
-		int width,
-		int lines) {
-	if (lines <= 0) {
-		return 0;
-	}
-	const auto geometry = leaf.countLinesGeometry(width);
-	return (lines < int(geometry.size()))
-		? geometry[lines - 1].bottom
-		: 0;
 }
 
 [[nodiscard]] QRect PaddedBand(
@@ -3622,12 +3609,11 @@ LaidOutBlock LayoutGroupedMediaBlock(
 		context);
 	const auto clipped = prepared.quoteAuthor
 		? 0
-		: LeafCollapsedLineBottom(
+		: ConsumeQuoteFoldLines(
+			context.quoteFold,
 			displayLeaf,
-			block->textWidth,
-			context.collapsibleQuoteLines);
-	block->collapsedLinesExceeded = (clipped > 0);
-	if (clipped > 0 && context.collapsibleQuoteCollapsed) {
+			block->textWidth);
+	if (clipped > 0 && context.quoteFold->collapsed) {
 		height = std::min(height, clipped);
 	}
 	block->textRect = QRect(left, top, block->textWidth, height);

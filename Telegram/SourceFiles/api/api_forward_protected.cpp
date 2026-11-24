@@ -466,6 +466,7 @@ void Forwarder::sendVoice(const Unit &unit) {
 		voice ? voice->waveform : VoiceWaveform(),
 		document->duration(),
 		document->isVideoMessage(),
+		nullptr,
 		actionFor(unit),
 		unit.captions.front());
 }

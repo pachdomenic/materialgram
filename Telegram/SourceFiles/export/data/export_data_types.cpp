@@ -276,7 +276,7 @@ std::vector<TextPart> ParseText(
 		const QVector<MTPMessageEntity> &entities) {
 	using Type = TextPart::Type;
 	const auto text = QString::fromUtf8(data.v);
-	const auto size = data.v.size();
+	const auto size = int(text.size());
 	const auto mid = [&](int offset, int length) {
 		return text.mid(offset, length).toUtf8();
 	};
@@ -2816,6 +2816,9 @@ ServiceAction ParseServiceAction(
 			.peerAddress = data.vpeer_address().v,
 			.transactionId = data.vtransaction_id().v,
 			.comment = data.vcomment().value_or_empty(),
+			.onrampProviderName = QString::fromUtf8(
+				data.vonramp_provider_name().value_or_empty()
+			).trimmed().toUtf8(),
 			.commentEncrypted = data.is_comment_encrypted(),
 		};
 	}, [&](const MTPDmessageActionWalletTonConnectRequest &data) {
@@ -2829,6 +2832,11 @@ ServiceAction ParseServiceAction(
 		};
 	}, [&](const MTPDmessageActionNoPaidMessagesTokenUsed &data) {
 		result.content = ActionNoPaidMessagesTokenUsed();
+	}, [](const MTPDmessageActionStarGiftOnchainOffer &data) {
+	}, [&](const MTPDmessageActionBotInvite &data) {
+		auto content = ActionBotInvite();
+		content.inviterId = data.vinviter_id().v;
+		result.content = content;
 	}, [](const MTPDmessageActionEmpty &data) {});
 	return result;
 }

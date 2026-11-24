@@ -22,7 +22,7 @@ every applicable placeholder: `<TASK>`, `<TASK_ID>`, `<WORK_DIR>`,
 
 ## Orchestration Rules
 
-- When delegation is available, use a fresh subagent for Phase 1 (context and plan), Phase 3, each Phase 4 implementation unit, the initial Phase 6 general review, each of the five standard lens reviews, each Phase 6 fix, each focused re-review, and any convergence assessment. Do not switch those phases to same-session midstream because of a timeout or missing artifact.
+- When delegation is available, use a fresh subagent for Phase 1 (context and plan), Phase 3, each Phase 4 implementation unit, the initial Phase 6 general review, each of the five standard lens reviews, each Phase 6 fix, each focused re-review, each requirement check, and any convergence assessment. Do not switch those phases to same-session midstream because of a timeout or missing artifact.
 - Start the initial mandatory general reviewer and all five lens reviewers together when capacity permits. Under a slot limit, queue the complete set and start the next lens as a slot opens; do not let general review select or prune it. Each lens independently reads the task and complete diff, then either proves `NOT_APPLICABLE` compactly or performs the relevant full review. No reviewer sees another's findings. When the host supports continuing the saved general-review agent, send synthesis back to that agent; otherwise use one fresh synthesis agent with the saved general report and all five lens reports instead of making it rediscover the whole review.
 - After a fix, use the focused re-review prompt: one mandatory general reviewer over the fix and affected invariants, plus only lenses whose blocker or prior `NOT_APPLICABLE`/`CLEAN` proof the fix invalidated. Carry every other approval forward.
 - Treat delegation as selected only after the first real phase spawn succeeds; tool presence is insufficient. An immediate depth/capacity/policy rejection before phase work selects same-session checklists and is not a delegated retry.
@@ -57,8 +57,9 @@ every applicable placeholder: `<TASK>`, `<TASK_ID>`, `<WORK_DIR>`,
   once in a fresh Agent with more specific instructions, then once more
   with the failure output; never stop to ask the user.
 - With the `codex` or `codex-default` review provider, Phase 3, every Phase 6
-  review and the convergence and campaign-cap assessments run as Codex CLI
-  leaves instead: start the leaves of one step together, block on
+  review, the requirement checks and the convergence and campaign-cap
+  assessments run as Codex CLI leaves instead: start the leaves of one step
+  together, block on
   `codex_leaf.py wait`, then validate the same completion checks. The general
   reviewer's pass-2 synthesis resumes its pass-1 leaf with `--resume`.
 
@@ -391,20 +392,28 @@ Assess the plan:
    the change, and where it stays contained. The performer reruns Phase 1 as
    a fresh leaf with those lines as input.
 11. Intrinsic scope: decide whether one fresh reviewer and one coherent
-   evidence campaign can judge the final retained result. Strong split signals
-   are multiple parts with their own useful outcome and oracle; a stable
-   dependency order where a later part can consume an earlier approved part;
-   separate network, persistence, concurrency/ownership, engine, lifecycle, or
-   UI boundaries; materially different fixtures or platforms; or a diff too
-   broad for one reviewer to reason about as one invariant set. Phase count,
-   changed-file count, and acceptance count are warning signals, not automatic
-   thresholds. Keep inseparable API-plus-only-caller changes together.
+   evidence campaign can judge the final retained result, and split only when
+   they cannot. Every task pays its own context, plan, assessment, review
+   fan-out, Debug build and evidence campaign, hours each, so a split must buy
+   more than it costs. Strong split signals are separate network, persistence,
+   concurrency/ownership, engine, lifecycle, or UI boundaries whose failures
+   need different analysis; materially different fixtures or platforms; or a
+   diff too broad for one reviewer to reason about as one invariant set.
+   Several parts with their own outcome and oracle, a stable dependency order
+   between them, phase count, changed-file count, and acceptance count are
+   warning signals only: one campaign checks several oracles. Keep inseparable
+   API-plus-only-caller changes together.
 
    When this fails because of the request rather than the proposed approach,
    add `Scope: split-required` to Status, do NOT add `Assessed: yes`, and write
    `<WORK_DIR>/split-proposal.md` with:
    - why one review/test campaign is not coherent;
-   - the smallest independently buildable and testable replacement tasks;
+   - two replacement tasks by default, each independently buildable and
+     testable: a first part that ships and is tested on its own, and the rest
+     built on it, cut where the dependency order is stable. Propose a third
+     only when one of the two would still fail this gate, and say why for it.
+     A replacement that is still too broad splits again when its own
+     assessment runs, so never cut finer in advance;
    - each task's shipped boundary, acceptance oracle, and dependencies;
    - which current source or validated artifacts, if any, can be salvaged;
    - a final integration task only when integration itself has behavior not
@@ -507,19 +516,24 @@ Steps:
    Telegram Debug build, use `<BUILD>`; on WSL that is the repository Docker
    entry point and native Windows CMake must not touch that tree.
 3. If validation succeeds, update plan.md: change `- [ ] Pre-review validation` to `- [x] Pre-review validation`.
-4. If validation fails:
+4. If validation fails (for a Windows build, a nonzero exit or any error line
+   the contract's `Recover a failed build` names, even under exit 0):
    a. Read the error messages carefully
    b. Read the relevant source files
    c. Fix the errors in accordance with the plan and AGENTS.md conventions
-   d. Rebuild and repeat until the build passes
-   e. Update plan.md status when done
+   d. When the failed command wrote the native Windows build tree, recover
+      each such failed build through the contract's `Recover a failed build`
+      on its complete log before building again
+   e. Rebuild and repeat until the build passes
+   f. Update plan.md status when done
 
 Rules:
 - Only fix task-owned validation failures. Do not refactor or improve code beyond what is needed for a passing check.
 - Follow AGENTS.md conventions.
-- If the build fails with C1041, LNK1104, "cannot open output file", or a similar
-  access-denied lock, follow the shared bounded recovery contract. Do not edit
-  source to work around an environment lock.
+- If the build fails with C1041, LNK1104, "cannot open output file", a similar
+  access-denied lock, or a PCH commit or heap failure (C3859, C1076, C1060),
+  follow the shared bounded recovery contract. Do not edit source to work
+  around an environment failure.
 - You are not alone in the codebase. Respect existing changes and do not revert unrelated work.
 
 When finished, report the build result and which files, if any, you changed.
@@ -566,12 +580,45 @@ Fix and re-review until a verdict has no blocking finding; there is no round
 limit. Run the convergence prompt instead of the next ordinary fix at the fifth
 `NEEDS_CHANGES` verdict and then at each checkpoint an assessment names, or
 when the focused reviewer returns `CONVERGENCE_REQUIRED`. Give its rulings to
-every later fix and focused review. No count converts an unresolved finding
-into approval.
+every later fix and focused review. At every fifth verdict that requires
+changes, counted over the whole loop and not restarted by a replan, run the
+requirement check prompt first (pipeline, "Requirement check"). No count
+converts an unresolved finding into approval.
 
 A wording or style suggestion is non-blocking unless it causes incorrect
 behavior, unsafe use, misleading build instructions, a repository-rule
 violation, or a material maintenance defect.
+
+### Review scope block
+
+Append this block to the prompt of every lens, general review, synthesis,
+focused re-review, review fix and convergence assessment. Replace `<BASE>`
+with `refs/ai-tasks/<TASK_ID>/base`. The rule is pipeline "Review scope".
+
+~~~text
+REVIEW SCOPE. Judge this task's change, not the code around it. A finding
+is BLOCKING only when it is attributable to the change:
+- INTRODUCED: code this task wrote, including earlier fix rounds, causes
+  it. On <BASE> it does not happen, and no equivalent existing caller of the
+  same mechanism (a sibling action, the same input) suffers it there; or
+- REQUESTED: the behavior the task asks for is not achieved in a scenario
+  its acceptance names.
+Everything else is PRE-EXISTING, even in the same function, and even when
+the change routes one more caller through shared code that already fails
+the same way for an equivalent caller on <BASE>. A scenario that needs
+input no producer is known to send is PRE-EXISTING unless the change
+itself parses that input. Acceptance wording about shared machinery
+("without crashes", "no stale pointers") means no regression against <BASE>.
+It never makes an existing defect a requirement. The exception is a change
+that materially widens exposure: a rare path made common, or a path no base
+caller can take. That is INTRODUCED; name the new trigger.
+Check the base with `git -C <SOURCE_ROOT> show <BASE>:<path>` before
+calling a finding INTRODUCED. Give every BLOCKING finding a line
+`- Attribution: INTRODUCED <hunk or fix round> | REQUESTED <quoted
+acceptance line>`, with the base evidence. Report PRE-EXISTING defects under
+`## Pre-existing`, each with base evidence and severity. They are
+follow-up candidates: they never request a fix and never decide a verdict.
+~~~
 
 ### Harness tasks
 
@@ -584,7 +631,7 @@ rounds and convergence follow the ordinary rules.
 
 Append the harness bar to the prompt of every lens, general review, synthesis,
 focused re-review and convergence assessment of a harness task. On Codex these
-leaves run on `gpt-6.1-sol`.
+leaves run on `gpt-6.2-sol`.
 
 ~~~text
 HARNESS BAR. This task changes harness or testing code that no user runs
@@ -633,7 +680,8 @@ can be rerun cleanly.
 
 Review only this task's diff under your assigned angle. Search outside the diff
 only after the lens is applicable and when call-site or repository context is
-needed. Do not report pre-existing problems as task findings.
+needed. Apply the review scope block below: a pre-existing problem goes under
+`## Pre-existing`, never under Findings.
 
 A finding is BLOCKING only when it names a concrete wrong result, crash, race,
 security or data-safety failure, material performance regression, violated
@@ -650,8 +698,12 @@ Write <WORK_DIR>/review<R>-<LENS>.md:
 For CLEAN/FINDINGS: relevant full files and adjacent surfaces examined.>
 
 ## Findings
-<For each: title, file/line, Severity: BLOCKING | NON_BLOCKING, concrete
-failure, and specific fix. Omit when empty.>
+<For each: title, file/line, Severity: BLOCKING | NON_BLOCKING, Attribution
+for a BLOCKING one, concrete failure, and specific fix. Omit when empty.>
+
+## Pre-existing
+<Defects equally present on the base: title, base file/line, severity. Omit
+when empty.>
 
 ## Verdict: NOT_APPLICABLE | CLEAN | FINDINGS
 ~~~
@@ -759,9 +811,11 @@ Read:
   the code needed to confirm/drop a finding, validate a NOT_APPLICABLE proof,
   or resolve a contradiction
 
-Independently review correctness, completeness, edge/error paths, unintended
-regressions, integration, proportionality, repository conventions, and the
-evidence design. Do not defer anything to a specialist.
+Independently review this change's correctness, completeness, edge/error
+paths, unintended regressions, integration, proportionality, repository
+conventions, and the evidence design, under the review scope block below.
+Completeness means the requested behavior, not the robustness of the code
+the change passes through. Do not defer anything to a specialist.
 
 Read <WORK_DIR>/health-check.md on pass 1. Its errors (an include into a
 CMake target the including target does not link, where no such include
@@ -795,7 +849,8 @@ state. With `Lenses: none`, also write `review1.md` now; there is no pass 2.
 
 On pass 2, account for all five lenses (on a harness task, the named ones).
 Confirm every finding against the code and drop it when the concrete failure
-does not hold. Accept `NOT_APPLICABLE`
+does not hold. Check each blocking finding's attribution against the base,
+and move a pre-existing one to `## Pre-existing`. Accept `NOT_APPLICABLE`
 only when its complete-diff proof establishes that no owned mechanism changed.
 If that proof contradicts a hunk or is merely a severity estimate, write
 `Incomplete lens: <name> — <owned mechanism>` and return without an
@@ -842,9 +897,12 @@ domain specialist>
 <blocking findings only; omit when approved>
 ## Dropped
 <non-blocking or rejected specialist findings, with reason>
+## Pre-existing
+<every reviewer's pre-existing defects, merged, with base evidence and
+severity; the performer's discovered follow-up candidates>
 
 An APPROVED verdict requires no blocking finding and complete evidence
-reconciliation. NEEDS_CHANGES requires at least one blocking finding.
+reconciliation. Pre-existing entries never affect it. NEEDS_CHANGES requires at least one blocking finding.
 ~~~
 
 ### Focused general re-review
@@ -867,7 +925,8 @@ return `CONVERGENCE_REQUIRED`.
 
 Do not restart the complete-diff review. Verify each repaired blocker, inspect
 the fix for regressions in its actual data/control/lifetime boundary, and check
-that no undeclared path changed. For every prior general and specialist approval,
+that no undeclared path changed. Apply the review scope block below to every
+finding, including a regression you find in code the fix only passes by. For every prior general and specialist approval,
 record `CARRIED` with why the fix did not touch its exact code or invariant, or
 `INVALIDATED` with the concrete changed question. Presence of a broad surface is
 not invalidation.
@@ -892,7 +951,9 @@ Write <WORK_DIR>/review<R>-focused.md and <WORK_DIR>/review<R>.md with:
 <only those actually changed, plus rerun result>
 ## Verdict: APPROVED | NEEDS_CHANGES | MISSING_SPECIALIST | CONVERGENCE_REQUIRED
 ## Changes Required
-<blocking findings only>
+<blocking findings only, each with its Attribution>
+## Pre-existing
+<new pre-existing defects, with base evidence; omit when none>
 
 Return `CONVERGENCE_REQUIRED` rather than `NEEDS_CHANGES` when a finding asks
 to undo an earlier fix or ruling, a fix would grow the change into a subsystem
@@ -908,12 +969,18 @@ You are an independent review-convergence assessor for one Telegram Desktop
 task. You are a leaf and must not delegate or edit source.
 
 Read the task, context.md, assessed plan.md, every canonical review<R>.md, every
-fix result, every earlier review-convergence<C>.md, current owned paths, the
-current complete task diff, and the exact validation/evidence status. Read
-source only as needed to decide disposition.
+fix result, every earlier review-convergence<C>.md and requirement-check<K>.md,
+current owned paths, the current complete task diff, and the exact
+validation/evidence status. Read source only as needed to decide disposition.
 
 The loop exists to make independent reviewers agree on the implementation; a
-round count alone is not a problem. Map the loop: each round's blocking
+round count alone is not a problem. First apply the review scope block below
+to every open blocker and every earlier ruling, checking each against the
+base and not against acceptance wording. Rule each pre-existing finding out
+of the task under `## Rulings`, and list it under `## Pre-existing`. Fix code
+that exists only to repair such findings is out of scope too: when earlier
+rounds added it, choose REPLAN_CURRENT back to the last diff that holds
+only attributable work. Then map the loop: each round's blocking
 findings, whether each was new, recurring, or reopening an earlier fix or
 ruling, and which fix introduced it. Decide whether the open set is narrowing,
 cycling, or regrowing in one mechanism, and why: many genuine special cases,
@@ -938,7 +1005,11 @@ exactly one verdict:
   use this to disguise multiple independent product outcomes as phases.
 - RESCOPE_REQUIRED: why one review/evidence campaign is incoherent and a
   split-proposal.md containing independently buildable/testable replacement
-  tasks, acceptance oracles, dependencies, and salvageable work.
+  tasks, acceptance oracles, dependencies, and salvageable work. Split only
+  the requested behavior: a pre-existing finding never justifies a split,
+  and it never enters a replacement's acceptance. Propose two
+  replacements by default, and a third only when one of the two would still
+  be incoherent, saying why.
 - HARD_STOP: the exact unsafe or unavailable condition and required human
   action, such as funded value, credentials or a server change. Slow
   convergence, a round count or a difficult design is never a HARD_STOP.
@@ -949,6 +1020,8 @@ Decide from the task, project documents and the closest repository precedent,
 preferring existing behavior, and record both sides with the reason. Later
 fixes follow a ruling; later reviewers drop a finding that contradicts it
 unless it brings a concrete failure scenario the ruling did not weigh.
+Copy the resolution of every `RESOLVED` requirement check into `## Rulings`
+unchanged; it is a fixed input, not a question to reopen.
 
 The verdict cannot approve code; only a later review round with no blocking
 finding does.
@@ -959,6 +1032,63 @@ all retained owned source paths, writes the canonical split result, and calls
 `finish --status split-required`. It does not clean or checkpoint source work;
 the scheduler's later split worker assigns the sealed implementation carrier.
 
+### Requirement check
+
+~~~text
+You are an independent requirement checker for one Telegram Desktop task
+whose review loop has reached <N> verdicts that require changes. You are a
+leaf and must not delegate or edit source or task files.
+
+Read the task, context.md, assessed plan.md, decisions.md, every canonical
+review<R>.md, every fix result, every review-convergence<C>.md and every
+earlier requirement-check<K>.md. Read source only as needed.
+
+Decide one question: is the loop failing because the task's requirements, as
+the loop applies them, cannot all hold at once? Look for two requirements
+that no implementation can meet together in some reachable case: fixes that
+satisfy one producing findings under the other, or rulings that switch
+between readings of the task. A hard design, many special cases or a
+regrowing mechanism is not a contradiction.
+
+For a contradiction, trace each side to its origin, as close to the start as
+the records reach, in the queue checkout that holds the task:
+- the task's history: `git log -p --follow` on its task.md back to the commit
+  that created it, and the routing, follow-up and consolidation commits that
+  changed it;
+- the receipt named by `inbox_receipt` in its state.yaml and the owner's words
+  it quotes, and the inbox text in `inbox/backup/` of the checkout that routed
+  it when it still exists there;
+- the investigation, project.md and source-task results or decisions that the
+  receipt and the task cite, and owner decisions recorded since.
+Classify each side as the owner's own words in the initial requirements, or
+as an interpretation added later: by the routing or planner that drafted the
+task, a follow-up or consolidation, plan.md or decisions.md, a convergence
+ruling, or a reviewer's demand.
+
+Write <WORK_DIR>/requirement-check<K>.md with the requirements compared, the
+loop evidence, each side's origin with its quote and location, and exactly
+one verdict:
+
+## Verdict: CONSISTENT | RESOLVED | OWNER_QUESTION
+
+- CONSISTENT: no contradiction; say why the loop's failures are not one.
+- RESOLVED: at least one side is an interpretation. Under `## Resolution`,
+  decide how it resolves: which requirement gives way, what the code does
+  instead, and which task text, decisions and rulings it supersedes. Decide
+  from the earliest statement of intent, then the project and the closest
+  repository precedent, preferring the simpler mechanism when both serve
+  that intent. Record both sides and the reason.
+- OWNER_QUESTION: both sides are the owner's own words in the initial
+  requirements. Give the two quotes with their locations, why no reading
+  meets both, and the resolutions the owner would choose between.
+~~~
+
+On `CONSISTENT` the loop continues. On `RESOLVED` the performer records the
+resolution in `decisions.md` as superseding the task text it names, notes the
+override in `result.md`, and runs the convergence prompt next even when no
+checkpoint is due. On `OWNER_QUESTION` it publishes the `HARD_STOP` task-local
+`Block` with the question as its reason.
+
 ### Review fix
 
 ~~~text
@@ -968,7 +1098,9 @@ must not delegate.
 Read context.md, plan.md, review<R>.md, AGENTS.md, REVIEW.md, the `## Rulings`
 of every review-convergence<C>.md, and every source file named by a blocking
 finding. Implement only "Changes Required", following those rulings.
-Do not implement Dropped or non-blocking notes. Stay inside owned-paths.txt and
+Do not implement Dropped, Pre-existing or non-blocking notes. Make the
+narrowest change that removes the attributed failure. Change shared
+machinery only where that failure lives, never to repair its other callers. Stay inside owned-paths.txt and
 do not edit AI artifacts.
 
 After editing, run the cheapest validation that can catch breakage in the fixed
@@ -1178,7 +1310,7 @@ For review iterations, include the iteration and lens in the file name, for exam
 For a review or assessment phase under the `codex` or `codex-default` review
 provider, replace step 2 with one `codex_leaf.py start` per leaf — working
 directory `WORK_DIR`, `workspace-write` sandbox, `--no-project-doc`, the
-selected `--effort`, `--model` where the effort policy's lens models pin one,
+selected `--effort`, `--model` where the effort policy's review models pin one,
 `--home default` under `codex-default`, and the
 Codex CLI leaves preamble before the prompt — followed by
 foreground `codex_leaf.py wait` calls until they all finish. Steps 3 and 4 are
@@ -1210,7 +1342,7 @@ Use this pattern conceptually for delegated phases:
    `fork_turns: "none"` unless a small recent-turn fork is required. Pass
    the selected `reasoning_effort` when supported, per the shared phase
    effort policy; omit `model` to inherit the parent model, except where
-   the policy's lens models pin one.
+   the policy's review models pin one.
 3. Wait for the child's final result under the shared Codex completion and
    recovery contract. Keep heartbeat and progress checks out of the parent.
 4. Validate the expected artifacts or code changes after completion with small

@@ -47,8 +47,9 @@ on your own: a missing `work` login is reported, not replaced with `~/.codex`.
 Select effort with [phase effort](phase-effort.md) and pass it as `--effort`
 (`medium`, `high` or `xhigh`; review and assessment phases default to
 `xhigh`). Pass `--model` only where
-[lens models](phase-effort.md#lens-models) pin one (the reuse, structure and
-performance lenses, and every review and assessment leaf of a harness task);
+[review models](phase-effort.md#review-models) pin one (every review and
+assessment leaf: `gpt-6.2-sol` for the reuse, structure and performance
+lenses and for every leaf of a harness task, `gpt-6.2-astra` for the rest);
 otherwise the leaf uses the model configured for the
 user's Codex CLI. Record the effort and any pinned model in the phase result
 `NOTES:`.
@@ -71,7 +72,11 @@ with `danger-full-access` or a sandbox bypass.
 On Windows the sandbox runs commands as a separate local user. The helper
 marks repositories safe for git through the child's environment only, so the
 leaf can run read-only git commands on `SOURCE_ROOT`; never change the user's
-global git configuration for it.
+global git configuration for it. It also drops
+`%LOCALAPPDATA%\Microsoft\WindowsApps` from the leaf's `PATH`: under
+`[windows] sandbox = "unelevated"` Codex would pick the Store `pwsh.exe` alias
+there as its shell, which the restricted token cannot start, so every writing
+command failed with `CreateProcessAsUserW failed: 5`.
 
 ## Prompt
 

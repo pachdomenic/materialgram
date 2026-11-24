@@ -187,6 +187,7 @@ work/review1.md                # canonical first-review verdict
 work/review<R>-focused.md      # mandatory focused general re-review, R > 1
 work/review<R>-<specialist>.md # only specialists invalidated by the fix
 work/review-convergence<C>.md  # loop diagnosis at a checkpoint or cycle
+work/requirement-check<K>.md   # self-contradiction check per 5 failed rounds
 work/test-design.md            # assessed evidence contract, reconciled after diff
 work/test.md
 work/test-cap-assessment-*.md  # independent focused-recovery decision at a campaign cap
@@ -266,9 +267,9 @@ prompts, plus the host-specific orchestration rules.
   with the parent's concrete justification that the phase has no complexity.
   Apply the host mapping, including Claude's `opus` pin for `medium` or
   justified `high` work.
-- On Claude Code, assessment, every review and the convergence and
-  campaign-cap assessments run as Codex CLI leaves unless the invocation opted
-  out; see the Claude adapter's review and assessment provider. Prompts,
+- On Claude Code, assessment, every review, the requirement checks and the
+  convergence and campaign-cap assessments run as Codex CLI leaves unless the
+  invocation opted out; see the Claude adapter's review and assessment provider. Prompts,
   artifacts, completion checks and verdict handling are unchanged.
 - Keep implementation units sequential unless the assessed plan proves
   disjoint write sets and capacity makes parallel edits safe.
@@ -313,13 +314,13 @@ Run sequentially:
    the approach against the closest repository precedent and its containment
    against the shared modules it touches, and reject over-engineering rather
    than refining it. Before approving the plan, apply the intrinsic-scope gate:
-   if it contains several useful boundaries with separate acceptance or
-   evidence, stable dependency order, or materially different subsystems and
-   failure analysis, write `work/split-proposal.md`, record
-   `Scope: split-required`, and stop before source edits. Phase count and line
-   count are warning signals, not automatic decisions; the decisive question
-   is whether one fresh reviewer and one coherent evidence campaign can judge
-   the retained result. On layout tasks verify the visual contract's anchors
+   if one fresh reviewer and one coherent evidence campaign cannot judge the
+   retained result, because it spans materially different subsystems and
+   failure analysis, fixtures or platforms, write `work/split-proposal.md`
+   with two replacements by default, record `Scope: split-required`, and stop
+   before source edits. Several useful parts with their own acceptance, a
+   stable dependency order, phase count and line count are warning signals,
+   not automatic decisions: each extra task costs a whole campaign. On layout tasks verify the visual contract's anchors
    and derivation; on a fast-path plan verify the sizing itself. Require
    `Phases: <N>` and `Assessed: yes`, or a recorded `Fast-Path: rejected` /
    `Approach: rejected` outcome that reruns Phase 1 as a fresh leaf — an
@@ -362,7 +363,9 @@ Run sequentially:
    a broad surface is not enough to replay it. Reconcile only invalidated
    evidence checks and rerun only affected validation. The loop runs until
    the reviewers agree; at the convergence checkpoints below an independent
-   assessor diagnoses it and continues, replans or rescopes it.
+   assessor diagnoses it and continues, replans or rescopes it, and every
+   fifth verdict that needs changes a requirement check first asks whether
+   the task contradicts itself.
 6. **Normalize.** On native non-WSL Windows, normalize only task-owned source,
    header, style, localization, and build/config text to CRLF without BOM,
    preserving content and trailing-newline state, then rerun the selected
@@ -426,6 +429,49 @@ a recall checklist for their initial applicability scan. Assessment rejects
 ceremony as well as under-testing: it removes evidence checks that cannot be
 affected by the task.
 
+### Review scope
+
+Review judges this task's change, with the same revert test that bounds its
+evidence and its `Unverified:` line. Every reviewer, the synthesis, every
+focused re-review, every fix, every convergence assessment and every split
+applies it. A blocking finding must be one of:
+
+- **INTRODUCED** — the failure comes from code this task wrote, including
+  earlier fix rounds: on the base it does not happen, and no equivalent
+  existing caller of the same mechanism suffers it there.
+- **REQUESTED** — the behavior the task asks for is not achieved in a
+  scenario its acceptance names.
+
+Everything else is **PRE-EXISTING**, including:
+
+- a defect the change passes by, in the same file or function;
+- a defect of shared machinery that the change routes one more caller
+  through, when the base already shows that defect for an equivalent caller
+  (a sibling action, the same mechanism, the same input). Joining a
+  mechanism the way its existing clients use it inherits its known
+  behavior, not its debt;
+- a scenario that needs input no producer is known to send, unless the
+  change itself parses it.
+
+Acceptance wording about shared machinery ("without crashes", "no stale
+pointers", "no effect on another message") means no regression against the
+base. It never makes an existing defect of that machinery a requirement of
+this task.
+
+A pre-existing defect is still reported, under `## Pre-existing` with base
+evidence, and the performer lists the worthwhile ones as discovered
+follow-ups. A crash or data loss there is a follow-up with that severity.
+It never requests a fix, never counts toward a review verdict, and never
+enters a split replacement's acceptance. The exception is a change that
+materially widens exposure, such as turning a rare path into a common one,
+or reaching the defect through a path no base caller can take. That is
+INTRODUCED, and the finding must name the new trigger.
+
+The reason is the same as for evidence. The codebase is far larger than
+any task. A review that follows attention rather than the diff has no
+natural stopping point. Every repair past the boundary is new code that
+needs its own review, so the loop regrows from its own fixes.
+
 ### Harness tasks
 
 A harness task changes test or workflow infrastructure, not the product. Every
@@ -460,8 +506,9 @@ scaled to what the code is for:
   non-blocking notes. Every review, synthesis, focused review and convergence
   prompt of a harness task carries this bar (phase prompts, "Harness tasks").
 - **Models.** On Codex, the plan assessment, every review and synthesis, the
-  convergence assessments and the evidence assessments of a harness task run
-  on `gpt-6.1-sol` ([phase effort](../../../shared/phase-effort.md#lens-models)).
+  requirement checks, the convergence assessments and the evidence
+  assessments of a harness task run on `gpt-6.2-sol`
+  ([phase effort](../../../shared/phase-effort.md#review-models)).
 - **Evidence.** The harness self-test, or one consumer run, shows that the
   helper gives its consumers what they need.
 
@@ -496,8 +543,11 @@ ends where it began — with the code unchanged and the behaviour confirmed.
 
 The general reviewer reads every changed file in full and owns correctness,
 completeness, adjacent integration, unintended regressions, proportionality,
-repository conventions, and evidence adequacy. It cannot defer a concern to a
-specialist. This is the mandatory safety net.
+repository conventions, and evidence adequacy, all of the change under
+[review scope](#review-scope). It cannot defer a concern to a specialist.
+This is the mandatory safety net. Synthesis checks each blocking finding's
+attribution against the base, and moves a pre-existing one to
+`## Pre-existing`.
 
 Each lens first reads the task specification and complete task diff — every
 hunk, not necessarily every changed file in full — and chooses one result:
@@ -583,10 +633,16 @@ assessment when any of these holds:
   assessed plan did not include; or
 - the reviewer can no longer state which prior approvals remain valid.
 
-The assessor reads the whole loop: which findings were new, which recur or
-reopen earlier ones, which fixes introduced the next round's defects, and
-whether the open set is narrowing. It writes `review-convergence<C>.md` with
-exactly one disposition:
+The assessor first applies [review scope](#review-scope) to every open
+blocker and every earlier ruling. It checks each against the base, not
+against acceptance wording. A pre-existing finding is ruled out of the
+task. Fix code that exists only to repair such findings is itself out of
+scope. When earlier rounds added it, the disposition is `REPLAN_CURRENT`
+back to the last diff that holds only attributable work. Then the assessor
+reads the whole loop: which findings were new, which recur or reopen
+earlier ones, which fixes introduced the next round's defects, and whether
+the open set is narrowing. It writes `review-convergence<C>.md` with exactly
+one disposition:
 
 - `CONTINUE` — convergence is real but slow, such as a mechanism with many
   special cases where each round finds new, narrower defects and resolved
@@ -598,8 +654,10 @@ exactly one disposition:
   validated boundary and a replacement plan for that mechanism. The replanned
   code gets a focused general review plus the lenses it touches, approvals
   outside it carry forward, and the verdict count restarts.
-- `RESCOPE_REQUIRED` — the task contains independently testable product
-  boundaries; write or update `split-proposal.md` and stop automatic work.
+- `RESCOPE_REQUIRED` — the task's requested behavior contains independently
+  testable product boundaries; write or update `split-proposal.md` and stop
+  automatic work. Pre-existing findings never justify a split, and never
+  become a replacement's acceptance.
 - `HARD_STOP` — an exact unsafe or unavailable condition needs human action,
   such as a fix that needs funded value, credentials or a server change. Slow
   convergence, a round count or a hard design is never a hard stop. The task
@@ -620,6 +678,52 @@ stayed resolved and the open set narrowed or moved to new, narrower cases.
 Otherwise it chooses `REPLAN_CURRENT` or `RESCOPE_REQUIRED`. An older
 assessment that allowed only one final focused round reads as `CONTINUE` with
 the default checkpoint; its final round no longer stops the loop.
+
+### Requirement check
+
+A convergence ruling can only choose between readings of the task. When the
+task's requirements cannot all hold at once, every reading leaves a reviewer
+a valid finding and the loop cannot converge. So at every fifth canonical
+verdict that requires changes, counted over the whole loop and not restarted
+by a replan (the fifth, the tenth and so on), a fresh independent checker
+first asks whether the task contradicts itself.
+
+The checker reads the loop the convergence assessor reads and looks for two
+requirements that no implementation can meet together in a reachable case:
+fixes that satisfy one producing findings under the other, or rulings that
+switch between readings. A hard design, many special cases or a regrowing
+mechanism is not a contradiction. Finding one, it traces each side to its
+origin, as close to the start as the records reach:
+
+- the task's history in the queue checkout, back to the commit that created
+  `task.md`, and the routing, follow-up and consolidation commits that
+  changed it;
+- the receipt named by `inbox_receipt` in `state.yaml` and the owner's words
+  it quotes, and the inbox text in `inbox/backup/` of the checkout that routed
+  it, where it still exists;
+- the investigation, `project.md` and source-task records that the receipt
+  and the task cite, and owner decisions recorded since.
+
+Each side is either the owner's own words in the initial requirements, or an
+interpretation added later: by the routing or planner that drafted the task,
+a follow-up or consolidation, plan.md or decisions.md, a convergence ruling,
+or a reviewer's demand. It writes `requirement-check<K>.md` with one verdict:
+
+- `CONSISTENT` — no contradiction. The loop continues, and a convergence
+  assessment due at the same verdict runs as usual.
+- `RESOLVED` — at least one side is an interpretation. The checker decides
+  how the contradiction resolves, from the earliest statement of intent, then
+  the project and the closest repository precedent, preferring the simpler
+  mechanism when both serve that intent: which requirement gives way, what
+  the code does instead, and which task text, decisions and rulings this
+  supersedes. The performer records it in `decisions.md`, notes the override
+  in `result.md`, and runs a convergence assessment next even when none is
+  due; that assessment copies the resolution into its rulings unchanged.
+- `OWNER_QUESTION` — both sides are the owner's own words in the initial
+  requirements. The task publishes the same task-local `Block` as
+  `HARD_STOP`, giving the two quotes with their locations, why no reading
+  meets both, and the resolutions the owner would choose between. It is set
+  aside for the owner; the run continues with other work.
 
 ### Evidence selection
 
@@ -729,10 +833,17 @@ The performer owns commit boundaries. The workspace helper's `source-commit`
 command is the standard mechanism: it enforces this section's contract —
 every dirty path verified against the union of owned write sets, only explicit
 paths staged, never `git add -A`, the exact three-line message — in one
-deterministic call. Commit an intended submodule first, manually, only when
-its preflight was clean and all of its changes belong to this task, then stage
-the superproject pointer; the helper refuses dirty submodule pointers so an
-unintended one can never slip into an attempt.
+deterministic call. A task that moves a submodule pin commits inside the
+submodule first, by hand, only when its preflight was clean and all of its
+changes belong to this task. It names the submodule path itself, such as
+`Telegram/ThirdParty/widget-sandbox`, in `work/owned-paths.txt` and runs
+`source-commit` as for any other commit; staging the pin by hand is not
+needed. The helper records the submodule's checked-out commit with the other
+owned paths, then marks green and mirrors as usual. So that an unintended
+pointer can never slip into an attempt, it refuses, before staging anything, a
+moved pin the owned write set does not name exactly (an owned parent directory
+or a file inside does not name it) and a submodule with uncommitted changes,
+untracked files and moved or dirty nested submodules included.
 
 After every commit, `source-commit` force-pushes the checkout's `HEAD` to
 `refs/heads/ai-<checkout-tag>` on the `private` remote, for example
@@ -740,11 +851,12 @@ After every commit, `source-commit` force-pushes the checkout's `HEAD` to
 pre-approval attempts and fixes after testing included, so other checkouts can
 look at work in progress. Nobody works on it and it is never a lineage source:
 the checkout stays on whatever branch it has checked out, and the next commit
-from any branch overwrites the mirror. A checkout without a `private` remote
-skips the mirror. A failed or timed-out push only shows up in the helper's
-`mirror` result: it never fails the commit or blocks the task, so note it in
-the result `NOTES:` and continue. Do not push the mirror by hand, with a lease,
-or from any other point in the workflow.
+from any branch overwrites the mirror. The push never recurses into submodules:
+a moved pin reaches the mirror, but the submodule commit it names does not. A
+checkout without a `private` remote skips the mirror. A failed or timed-out
+push only shows up in the helper's `mirror` result: it never fails the commit
+or blocks the task, so note it in the result `NOTES:` and continue. Do not push
+the mirror by hand, with a lease, or from any other point in the workflow.
 
 Every implementation or implementation-fix commit message is exactly:
 
@@ -975,7 +1087,11 @@ project skips these steps):
 3. Run `workspace.py project-push --task <TASK_ID>`, with `--rewritten` after
    a base rebase, and `--base-fix <base_fix> --base <remote>/<branch>` when a
    base fix exists: that fix is fast-forwarded onto the base branch first.
-   Submodule branches are pushed before tdesktop. After a base rebase the
+   Submodule branches are pushed before tdesktop. A submodule project
+   branch left from an earlier cycle, whose every commit the pin already
+   carries under another hash, is rebased onto the pin, which drops them:
+   the push moves it to the pin under a lease, and a sync builds on the pin
+   instead of it. After a base rebase the
    new submodule commits go first to this checkout's own staging branch
    `_staging/<slug>/<checkout-tag>`, so every pin is fetchable, then tdesktop
    moves under its lease, then the submodule project branches; if one of
@@ -1172,9 +1288,12 @@ delays finishing the work actually in hand.
   it never waits for the owner. The
   publication helper rejects a test block whose report still says `TEST_FLAW`,
   cites the run cap, or lacks the required recovery-exhaustion record.
-- A Windows file-lock build error follows the shared bounded exact-checkout
-  recovery, including its delayed retries. Only its exhausted or unsafe outcome
-  stops the run; the task remains `in-progress`.
+- Every failed Windows Debug build of the task's tree (pre-review and final
+  validation, `project-sync` and rebase builds, evidence and overlay builds)
+  follows the shared bounded exact-checkout recovery before the next build:
+  its failed compile objects always, and a file lock with its delayed retries.
+  Only its exhausted, unresolved or unsafe outcome stops the run; the task
+  remains `in-progress`.
 - Never ask the owner during a `continue` run. Decide, record the decision in
   `work/decisions.md`, and continue. The only global stops are a server scheme
   mismatch and a missing golden test account; unexplained dirty source that

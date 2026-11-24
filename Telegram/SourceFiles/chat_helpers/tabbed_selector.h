@@ -8,15 +8,17 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #pragma once
 
 #include "api/api_common.h"
+#include "base/object_ptr.h"
 #include "chat_helpers/compose/compose_features.h"
-#include "ui/rp_widget.h"
+#include "data/data_message_reaction_id.h"
+#include "emoji.h"
+#include "mtproto/sender.h"
 #include "ui/controls/swipe_handler_data.h"
 #include "ui/effects/animations.h"
 #include "ui/effects/message_sending_animation_common.h"
 #include "ui/effects/panel_animation.h"
 #include "ui/cached_round_corners.h"
-#include "mtproto/sender.h"
-#include "base/object_ptr.h"
+#include "ui/rp_widget.h"
 
 namespace InlineBots {
 struct ResultSelected;
@@ -74,7 +76,7 @@ struct PhotoChosen {
 };
 
 struct EmojiChosen {
-	EmojiPtr emoji;
+	EmojiPtr emoji = nullptr;
 	Ui::MessageSendingAnimationFrom messageSendingFrom;
 };
 
@@ -83,11 +85,13 @@ using InlineChosen = InlineBots::ResultSelected;
 enum class TabbedSelectorMode {
 	Full,
 	EmojiOnly,
+	UnicodeEmojiOnly,
 	CustomEmojiOnly,
 	CustomEmojiAndGifs,
 	StickersOnly,
 	StickersAndGifs,
 	MediaEditor,
+	StoriesEditor,
 	EmojiStatus,
 	ChannelStatus,
 	BackgroundEmoji,
@@ -145,14 +149,20 @@ public:
 	[[nodiscard]] Main::Session &session() const;
 	[[nodiscard]] PauseReason level() const;
 
+	[[nodiscard]] bool hasEmojiTab() const;
+	[[nodiscard]] bool hasGifsTab() const;
 	[[nodiscard]] rpl::producer<EmojiChosen> emojiChosen() const;
 	[[nodiscard]] rpl::producer<FileChosen> customEmojiChosen() const;
 	[[nodiscard]] rpl::producer<FileChosen> fileChosen() const;
 	[[nodiscard]] rpl::producer<PhotoChosen> photoChosen() const;
 	[[nodiscard]] rpl::producer<InlineChosen> inlineResultChosen() const;
 	[[nodiscard]] rpl::producer<> photoRequests() const;
+	[[nodiscard]] auto reactionRequests() const
+		-> rpl::producer<Data::ReactionId>;
 	[[nodiscard]] rpl::producer<> audioRequests() const;
 	[[nodiscard]] rpl::producer<> linkRequests() const;
+	[[nodiscard]] rpl::producer<> locationRequests() const;
+	[[nodiscard]] rpl::producer<> weatherRequests() const;
 
 	[[nodiscard]] rpl::producer<> cancelled() const;
 	[[nodiscard]] rpl::producer<> checkForHide() const;
@@ -259,9 +269,7 @@ private:
 	bool full() const;
 	bool mediaEditor() const;
 	bool tabbed() const;
-	bool hasEmojiTab() const;
 	bool hasStickersTab() const;
-	bool hasGifsTab() const;
 	bool hasMasksTab() const;
 	Tab createTab(SelectorTab type, int index);
 

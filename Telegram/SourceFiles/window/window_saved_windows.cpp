@@ -21,11 +21,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_thread.h"
 #include "data/data_user.h"
 #include "dialogs/ui/restore_windows_offer.h"
-#include "history/history.h"
 #include "history/admin_log/history_admin_log_section.h"
 #include "history/view/history_view_chat_section.h"
 #include "history/view/history_view_pinned_section.h"
 #include "history/view/history_view_scheduled_section.h"
+#include "history/history.h"
 #include "info/media/info_media_widget.h"
 #include "lang/lang_keys.h"
 #include "main/main_account.h"
@@ -37,12 +37,13 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "storage/storage_account.h"
 #include "storage/storage_shared_media.h"
 #include "ui/layers/layer_widget.h"
-#include "ui/ui_utility.h"
 #include "ui/wrap/fade_wrap.h"
+#include "ui/ui_utility.h"
 #include "window/window_columns.h"
 #include "window/window_controller.h"
 #include "window/window_restore_shell.h"
 #include "window/window_session_controller.h"
+
 #include "styles/style_basic.h"
 #include "styles/style_dialogs.h"
 
@@ -1714,12 +1715,22 @@ void SavedWindows::replayChats(
 			&& entries.front().thread == windowThread)) {
 		return;
 	}
+	const auto &first = entries.front();
+	const auto firstPlain = (first.section == SavedChatSection::Chat)
+		&& !first.rootId;
+	const auto overWindowChat = alreadyShown
+		&& (controller->activeChatCurrent().thread() == windowThread)
+		&& (firstPlain
+			? ((first.thread->asHistory() != nullptr)
+				&& (first.thread != windowThread))
+			: (first.thread == windowThread));
 	const auto makeParams = [](SectionShow::Way way) {
 		auto params = SectionShow(
 			way,
 			anim::type::instant,
 			anim::activation::background);
 		params.allowDuplicateInStack = true;
+		params.preferCurrentWindow = true;
 		return params;
 	};
 	if (window->id().hasChatsList()
@@ -1730,7 +1741,7 @@ void SavedWindows::replayChats(
 			makeParams(SectionShow::Way::ClearStack));
 	}
 	for (auto i = 0, size = int(entries.size()); i != size; ++i) {
-		const auto params = makeParams(i
+		const auto params = makeParams((i || overWindowChat)
 			? SectionShow::Way::Forward
 			: SectionShow::Way::ClearStack);
 		const auto thread = entries[i].thread;
